@@ -145,6 +145,20 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .exp b{font-family:var(--f-display);font-size:16px}
 .exp span{font-size:13px;color:var(--muted)}
 .muted{color:var(--muted)}
+.edited{font-size:12.5px!important;margin-top:2px!important}
+.pill.ok{background:var(--accent-soft);color:var(--accent)}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--chord);color:#fff;font-size:11px;font-weight:700;margin-left:4px}
+.menu{display:grid;gap:6px}
+.menu button{justify-content:flex-start;width:100%}
+.chg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px}
+.chg.unread{border-color:var(--accent);background:var(--accent-soft)}
+.chg small{color:var(--muted)}
+.act{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.act.create,.act.import{color:var(--ok)}.act.delete{color:var(--danger)}
+.diff{font-family:var(--f-mono);font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-height:360px;overflow:auto}
+.diff .add{background:color-mix(in srgb,var(--ok) 18%,transparent);display:block}
+.diff .del{background:color-mix(in srgb,var(--danger) 16%,transparent);display:block;text-decoration:line-through;opacity:.85}
+.urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -213,7 +227,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
   </div>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
-  <button class="nota" id="auth" data-act="auth" style="font-family:var(--f-ui);font-weight:600">Director</button>
+  <button class="nota" id="auth" data-act="auth" style="font-family:var(--f-ui);font-weight:600">Ingresar</button>
 </div></header>
 <main id="view"><div class="loading">Abriendo Voz de la Novia…</div></main>
 <footer class="foot">Tabernáculo Shalom Adonai · Voz de la Novia</footer>
@@ -316,14 +330,14 @@ function convertChordsOverLyrics(text){
 }
 
 /* ============ Almacenamiento (servidor) ============ */
-const S={mode:'loading',songs:new Map(),programs:new Map(),canWrite:false,token:null,error:false};
+const S={mode:'loading',songs:new Map(),programs:new Map(),canWrite:false,isAdmin:false,user:null,token:null,error:false,unread:0};
 function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch{ return d; } }
 function lsSet(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,JSON.stringify(v)); }catch{} }
 function newId(p){ return p+'-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function strip(o){ const c={...o}; delete c.id; return c; }
 async function api(path,opt={}){
   const headers={'Content-Type':'application/json'}; if(S.token) headers.Authorization='Bearer '+S.token;
-  const r=await fetch(path,{...opt,headers}); if(r.status===401){ const err=new Error('auth'); err.code=401; throw err; }
+  const r=await fetch(path,{...opt,headers}); if(r.status===401||r.status===403){ const err=new Error('auth'); err.code=r.status; throw err; }
   if(!r.ok) throw new Error('http '+r.status); return r.status===204?null:r.json();
 }
 let lastSig='';
@@ -335,41 +349,44 @@ async function loadData(){
 }
 async function initStore(){
   S.token=lsGet('vdn-token',null);
-  if(S.token){ try{ const c=await api('/api/check'); S.canWrite=!!c.editor; if(!S.canWrite){ S.token=null; lsSet('vdn-token',null);} }catch{ S.canWrite=false; } }
+  if(S.token){ try{ const c=await api('/api/me'); setUser(c.user); if(!c.user){ S.token=null; lsSet('vdn-token',null);} }catch{ setUser(null); } }
   await loadData();
   setInterval(()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); },15000);
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); });
 }
-function lostAuth(){ S.canWrite=false; S.token=null; lsSet('vdn-token',null); toast('Tu sesión de director terminó. Vuelve a entrar para editar.'); render(); }
+function setUser(u){ S.user=u||null; S.canWrite=!!u; S.isAdmin=!!u&&u.role==='admin'; if(S.isAdmin&&window.teamPoll) teamPoll(); }
+function lostAuth(){ setUser(null); S.token=null; lsSet('vdn-token',null); toast('Tu sesión terminó. Vuelve a ingresar para editar.'); render(); }
 async function writeDoc(col,obj){
-  if(!S.canWrite){ toast('Entra como director para editar.'); return false; }
+  if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return false; }
   obj.updatedAt=Date.now();
   try{ await api(`/api/${col}/${encodeURIComponent(obj.id)}`,{method:'PUT',body:JSON.stringify(strip(obj))}); }
   catch(e){ if(e.code===401) lostAuth(); else toast('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.'); return false; }
   (col==='songs'?S.songs:S.programs).set(obj.id,obj); lastSig=''; return true;
 }
 async function removeDoc(col,id){
-  if(!S.canWrite){ toast('Entra como director para editar.'); return; }
+  if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return; }
   try{ await api(`/api/${col}/${encodeURIComponent(id)}`,{method:'DELETE'}); (col==='songs'?S.songs:S.programs).delete(id); lastSig=''; }
-  catch(e){ if(e.code===401) lostAuth(); else toast('No se pudo borrar.'); }
+  catch(e){ if(e.code===401) lostAuth(); else if(e.code===403) toast('Solo el administrador puede borrar canciones.'); else toast('No se pudo borrar.'); }
 }
 function openLogin(){
-  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><form class="modal" id="login-form" role="dialog" aria-label="Entrar como director" data-stop>
-    <header><h3>Entrar como director</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
-    <div class="body" style="display:grid;gap:12px"><label class="f">Contraseña<input id="login-pw" type="password" autocomplete="current-password" required></label>
-    <p id="login-err" class="confirm" hidden></p><button class="btn pri" type="submit" style="justify-content:center">Entrar</button></div></form></div>`;
-  setTimeout(()=>$('#login-pw').focus(),30);
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><form class="modal" id="login-form" role="dialog" aria-label="Ingresar" data-stop style="width:min(400px,100%)">
+    <header><h3>Ingresar</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:12px">
+      <label class="f">Usuario<input id="login-user" autocomplete="username" autocapitalize="none" required placeholder="Ej. jose"></label>
+      <label class="f">Contraseña<input id="login-pw" type="password" autocomplete="current-password" required></label>
+      <p id="login-err" class="confirm" hidden></p><button class="btn pri" type="submit" style="justify-content:center">Ingresar</button></div></form></div>`;
+  setTimeout(()=>$('#login-user').focus(),30);
   $('#login-form').addEventListener('submit',async ev=>{ ev.preventDefault(); const err=$('#login-err');
-    try{ const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('#login-pw').value})});
+    try{ const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#login-user').value.trim().toLowerCase(),password:$('#login-pw').value})});
       if(r.status===429){ err.textContent='Demasiados intentos. Espera unos minutos.'; err.hidden=false; return; }
-      if(!r.ok){ err.textContent='Contraseña incorrecta.'; err.hidden=false; return; }
-      const d=await r.json(); S.token=d.token; lsSet('vdn-token',d.token); S.canWrite=true; closeModal(); render(); toast('Modo director activado.');
+      if(!r.ok){ err.textContent='Usuario o contraseña incorrectos.'; err.hidden=false; return; }
+      const d=await r.json(); S.token=d.token; lsSet('vdn-token',d.token); setUser(d.user); closeModal(); render(); toast(`Hola, ${d.user.name}.`);
     }catch{ err.textContent='No hay conexión con el servidor.'; err.hidden=false; } });
 }
-function authButton(){ const b=$('#auth'); if(b){ b.textContent=S.canWrite?'Salir':'Director'; b.title=S.canWrite?'Salir del modo director':'Entrar para editar'; } }
+function authButton(){ const b=$('#auth'); if(!b) return; b.innerHTML=S.user?`${esc(S.user.name)}${S.isAdmin&&S.unread?` <span class="badge">${S.unread>99?'99+':S.unread}</span>`:''}`:'Ingresar'; b.title=S.user?'Mi cuenta':'Ingresar para editar'; }
 
 /* ============ Estado de vista ============ */
-const V={inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:true,size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
+const V={ver:lsGet('vdn-ver','basica'),missingOnly:false,inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:true,size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ICON={
@@ -421,20 +438,21 @@ function viewSongs(){
   const filtered=songs.filter(s=>{
     const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?';
     if(V.key!=='all' && c!==V.key) return false;
+    if(V.missingOnly && s.bodyPro && s.bodyPro.trim()) return false;
     if(q && !norm(s.title+' '+(s.author||'')+' '+(s.category||'')+' '+s.body.replace(/\[[^\]]*\]/g,'')).includes(q)) return false;
     return true;
   });
   const disp=c=>{ if(c==='?') return 'Sin tono'; const k=parseKey(c); return keyText(k); };
-  let h=banner()+(V.q||V.key!=='all'?'':`<div class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
+  let h=banner()+(V.q||V.key!=='all'||V.missingOnly?'':`<div class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="Buscar por título, autor o una frase de la letra" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
     <button class="btn" data-act="open-export" data-scope="songs">Exportar</button>${S.canWrite?`<button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
   </div>
-  <div class="chips"><button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
+  <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
   if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div>`;
   if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>Prueba con otra palabra o quita el filtro de tono.</div>`;
-  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
+  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
   if(V.group){
     const groups=new Map(); filtered.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; if(!groups.has(c)) groups.set(c,[]); groups.get(c).push(s); });
     h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'canción':'canciones'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
@@ -454,6 +472,7 @@ function renderSheet(body,{shift=0,chords=true,key=null,capo=0}={}){
   }
   return `<div class="sheet${chords?' ch':''}">${out}</div>`;
 }
+function sb(s){ return V.ver==='original'&&s&&s.bodyPro&&s.bodyPro.trim()?s.bodyPro:(s?s.body||'':''); }
 function chordAttrs(raw,shift){ const c=parseChord(raw); if(!c) return null; return {r:((c.root+shift)%12+12)%12,s:c.suf,b:c.bass==null?'':((c.bass+shift)%12+12)%12}; }
 function chordBtn(raw,shift,flat){ const a=chordAttrs(raw,shift); const label=esc(fmtChord(raw,shift,flat,V.latin));
   return a?`<button type="button" class="c" data-act="chord" data-r="${a.r}" data-s="${esc(a.s)}" data-b="${a.b}" data-n="${label}">${label}</button>`:`<span class="c">${label}</span>`; }
@@ -476,6 +495,12 @@ function instBar(song,capo,inLive){
     ${inLive?`<div class="tp" title="Desplazamiento automático"><button data-act="scroll" data-d="-1" aria-label="Más lento">−</button><output style="min-width:110px">${V.live&&V.live.speed?'Auto '+V.live.speed:'Auto: apagado'}</output><button data-act="scroll" data-d="1" aria-label="Más rápido">+</button></div>`:''}
   </div>`;
 }
+function fmtWhen(t){ if(!t) return ''; const d=new Date(t); return d.toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
+function verBar(s){
+  const has=!!(s.bodyPro&&s.bodyPro.trim());
+  return `<div class="inst-bar"><div class="seg" role="group" aria-label="Versión de acordes"><button data-act="ver" data-v="basica" aria-pressed="${V.ver!=='original'||!has}">Acordes básicos</button><button data-act="ver" data-v="original" aria-pressed="${V.ver==='original'&&has}" ${has?'':'disabled title="Aún no tiene versión original"'}>Versión original</button></div>
+    ${has?'':`<span class="muted" style="font-size:13px">Falta la versión original con los acordes reales.${S.canWrite?' Agrégala con “Editar”.':''}</span>`}</div>`;
+}
 function controls(key,shift,extra=''){
   return `<div class="seg" role="group" aria-label="Vista"><button data-act="chords" data-v="0" aria-pressed="${!V.chords}">Solo letra</button><button data-act="chords" data-v="1" aria-pressed="${V.chords}">Letra + acordes</button></div>
   <div class="tp" title="Transponer"><button data-act="shift" data-d="-1" aria-label="Bajar medio tono">−</button><output>${esc(keyText(key,shift))}${shift?` <small>${shift>0?'+':''}${shift}</small>`:''}</output><button data-act="shift" data-d="1" aria-label="Subir medio tono">+</button></div>
@@ -485,17 +510,18 @@ function viewSong(){
   const s=S.songs.get(V.songId); if(!s){ V.view='list'; return viewSongs(); }
   const k=songKey(s);
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Canciones</button>
-  <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p></div></div>
+  <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
-    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>`:''}
   </div>
+  ${V.chords?verBar(s):''}
   ${V.chords?instBar(s,V.capo,false):''}
   ${V.chords&&V.capo&&V.inst!=='piano'?`<p style="margin:-4px 0 12px;color:var(--muted);font-size:13px">Capo ${V.capo}: los acordes se muestran como formas; suena en ${esc(keyText(k,V.shift))}.</p>`:''}
-  ${chordStrip(s.body,V.shift,k,V.inst==='piano'?0:V.capo)}
-  ${renderSheet(s.body,{shift:V.shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:V.capo})}
+  ${chordStrip(sb(s),V.shift,k,V.inst==='piano'?0:V.capo)}
+  ${renderSheet(sb(s),{shift:V.shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:V.capo})}
   ${s.notes?`<div class="notes">${esc(s.notes)}</div>`:''}`;
 }
 
@@ -515,26 +541,29 @@ function viewEdit(){
     <div class="help">Escribe cada acorde entre corchetes justo antes de la sílaba donde cambia: <code>[G]Cristo me [C]ama</code>. Usa <code># Coro</code> para nombrar secciones. Si pegas una letra con los acordes en la línea de arriba, pulsa “Convertir acordes de arriba”.</div>
     <div class="edit-split">
       <div style="display:grid;gap:8px;min-width:0">
-        <textarea id="e-body" class="body" spellcheck="false" placeholder="# Estrofa 1&#10;[G]Escribe aquí la [C]letra">${esc(d.body)}</textarea>
-        <div class="actions"><button class="btn" data-act="convert">Convertir acordes de arriba</button></div>
+        <div class="seg" role="tablist" aria-label="Versión"><button data-act="etab" data-v="basica" aria-pressed="${(V.etab||'basica')==='basica'}">Acordes básicos</button><button data-act="etab" data-v="original" aria-pressed="${V.etab==='original'}">Versión original (acordes reales)</button></div>
+        <textarea id="e-body" class="body" spellcheck="false" placeholder="# Estrofa 1&#10;[G]Escribe aquí la [C]letra" ${V.etab==='original'?'hidden':''}>${esc(d.body)}</textarea>
+        <textarea id="e-pro" class="body" spellcheck="false" placeholder="Versión con los acordes reales del autor. Pulsa “Copiar de la básica” para empezar." ${V.etab==='original'?'':'hidden'}>${esc(d.bodyPro||'')}</textarea>
+        <div class="actions"><button class="btn" data-act="convert">Convertir acordes de arriba</button>${V.etab==='original'?'<button class="btn" data-act="copy-basic">Copiar de la básica</button>':''}</div>
       </div>
       <div class="preview" id="e-prev" aria-label="Vista previa"></div>
     </div>
     <label class="f">Notas para el equipo<textarea id="e-notes" rows="2" placeholder="Ej. Empieza solo el piano; coro final dos veces">${esc(d.notes||'')}</textarea></label>
     <div class="actions"><button class="btn pri" data-act="save-song">Guardar canción</button>
-      ${!isNew?(V.confirm==='del-song'?`<span class="confirm">¿Borrar esta canción? <button class="btn danger" data-act="del-song-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-song">Borrar canción</button>`):''}
+      ${!isNew&&S.isAdmin?(V.confirm==='del-song'?`<span class="confirm">¿Borrar esta canción? <button class="btn danger" data-act="del-song-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-song">Borrar canción</button>`):''}
     </div>
   </div>`;
 }
 function keyMatch(a,b){ const x=parseKey(a),y=parseKey(b); return x&&y&&x.idx===y.idx&&x.minor===y.minor; }
+function edTA(){ return V.etab==='original'?$('#e-pro'):$('#e-body'); }
 function bindEditor(){
-  const ta=$('#e-body'), pv=$('#e-prev'), ks=$('#e-key');
-  const upd=()=>{ pv.innerHTML=renderSheet(ta.value,{chords:true,key:parseKey(ks.value)}); };
-  let t; ta.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(upd,120); });
+  const pv=$('#e-prev'), ks=$('#e-key');
+  const upd=()=>{ const ta=edTA(); if(!ta||!document.body.contains(pv)) return; pv.innerHTML=renderSheet(ta.value,{chords:true,key:parseKey(ks.value)}); };
+  let t; for(const ta of [$('#e-body'),$('#e-pro')]) ta.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(upd,120); });
   ks.addEventListener('change',upd); upd();
 }
 function readDraft(){
-  const d=V.draft; d.title=$('#e-title').value.trim(); d.author=$('#e-author').value.trim(); d.key=$('#e-key').value; d.category=$('#e-cat').value.trim(); d.body=$('#e-body').value; d.notes=$('#e-notes').value.trim(); d.bpm=Number($('#e-bpm').value)||''; d.capo=Number($('#e-capo').value)||0; return d;
+  const d=V.draft; d.title=$('#e-title').value.trim(); d.author=$('#e-author').value.trim(); d.key=$('#e-key').value; d.category=$('#e-cat').value.trim(); d.body=$('#e-body').value; d.bodyPro=$('#e-pro').value; d.notes=$('#e-notes').value.trim(); d.bpm=Number($('#e-bpm').value)||''; d.capo=Number($('#e-capo').value)||0; return d;
 }
 
 function fmtDate(iso){ if(!iso) return {d:'—',m:'',full:'Sin fecha'}; const [y,mo,da]=iso.split('-').map(Number); const dt=new Date(y,mo-1,da); return {d:da,m:dt.toLocaleDateString('es',{month:'short'}).replace('.',''),full:dt.toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}; }
@@ -610,7 +639,7 @@ function renderLive(){
     <div class="live-top"><button class="btn ghost" data-act="live-close" aria-label="Salir del modo en vivo">${ICON.x}</button>
       <span class="key sm">${esc(keyText(k,shift))}</span><span class="ttl">${esc(e.song.title)}</span>${E.length>1?`<span class="cnt">${V.live.idx+1} / ${E.length}</span>`:''}
       <span style="flex-basis:100%;height:0"></span>${controls(k,shift)}${e.note?`<span style="color:var(--muted);font-size:13px">${esc(e.note)}</span>`:''}</div>
-    <div class="live-body" id="live-body">${V.chords?instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(e.song.body,shift,k,V.inst==='piano'?0:liveCapo)}${renderSheet(e.song.body,{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
+    <div class="live-body" id="live-body">${V.chords?verBar(e.song)+instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(sb(e.song),shift,k,V.inst==='piano'?0:liveCapo)}${renderSheet(sb(e.song),{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
     ${E.length>1?`<div class="live-bot"><button class="btn" data-act="live-go" data-d="-1" ${prev?'':'disabled'}>${ICON.back}${prev?esc(prev.song.title):'Inicio'}</button><button class="btn" data-act="live-go" data-d="1" ${next?'':'disabled'}>${next?esc(next.song.title):'Fin del programa'} <span style="transform:rotate(180deg);display:inline-flex">${ICON.back}</span></button></div>`:''}
   </div>`;
   keepAwake(true);
@@ -703,7 +732,7 @@ function buildPdf(entries,mode,head){
     y+=10;
     if(mode==='acordes' && window.Acordes && Acordes.ready()){
       const inst=V.inst==='ukulele'?'ukulele':'guitar'; const capo=Number(e.song.capo)||0; const sh=e.shift-capo; const fl=useFlatFor(k,sh); const seen=new Map();
-      for(const L of parseSong(e.song.body)) if(L.type==='ln') for(const sg of L.segs) if(sg.c){ const a=chordAttrs(sg.c,sh); if(!a) continue; const id=a.r+'|'+a.s+'|'+a.b; if(!seen.has(id)) seen.set(id,{a,label:pdfText(fmtChord(sg.c,sh,fl,false))}); }
+      for(const L of parseSong(sb(e.song))) if(L.type==='ln') for(const sg of L.segs) if(sg.c){ const a=chordAttrs(sg.c,sh); if(!a) continue; const id=a.r+'|'+a.s+'|'+a.b; if(!seen.has(id)) seen.set(id,{a,label:pdfText(fmtChord(sg.c,sh,fl,false))}); }
       if(capo){ doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...CHORD); doc.text(pdfText('Capo '+capo+' (los acordes son formas)'),M,y); y+=12; }
       const cw=52, chH=74; let x=M; if(seen.size) ensure(chH+6);
       for(const {a,label} of seen.values()){
@@ -712,7 +741,7 @@ function buildPdf(entries,mode,head){
       }
       if(seen.size) y+=chH+4;
     }
-    const lines=parseSong(e.song.body);
+    const lines=parseSong(sb(e.song));
     if(mode==='letra'){
       const LH=15.5; let lastGap=true;
       for(const L of lines){
@@ -769,7 +798,7 @@ document.addEventListener('click',async ev=>{
   if(el.dataset.act==='close-modal' && ev.target.closest('[data-stop]') && !ev.target.closest('button[data-act="close-modal"]')) return;
   const a=el.dataset.act, ds=el.dataset;
   switch(a){
-    case 'auth': if(S.canWrite){ S.canWrite=false; S.token=null; lsSet('vdn-token',null); if(V.view==='edit'){ V.draft=null; V.view='list'; } render(); toast('Saliste del modo director.'); } else openLogin(); break;
+    case 'auth': if(S.user) openUserMenu(); else openLogin(); break;
     case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':'programs'); break;
     case 'nota': V.latin=!V.latin; lsSet('cancionero-latin',V.latin); render(); if(V.live) renderLive(); break;
     case 'group': V.group=ds.v==='1'; render(); break;
@@ -777,6 +806,11 @@ document.addEventListener('click',async ev=>{
     case 'go-list': V.tab='songs'; go('list'); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
     case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
+    case 'ver': V.ver=ds.v; lsSet('vdn-ver',V.ver); if(V.live) renderLive(); render(); break;
+    case 'missing': V.missingOnly=!V.missingOnly; render(); break;
+    case 'etab': readDraft(); V.etab=ds.v; render(); break;
+    case 'copy-basic': { const pro=$('#e-pro'); if(pro.value.trim()&&V.confirm!=='copy'){ V.confirm='copy'; toast('La versión original ya tiene texto. Pulsa otra vez para reemplazarla.'); break; } V.confirm=null; pro.value=$('#e-body').value; pro.dispatchEvent(new Event('input')); break; }
+    case 'history': openHistory('songs',ds.id); break;
     case 'open-import': openImport(); break;
     case 'open-export': openExport(ds.scope); break;
     case 'imp-view': { const c=IO.chunks[+ds.i]; if(c){ c.open=!c.open; ioRender(); } break; }
@@ -792,11 +826,11 @@ document.addEventListener('click',async ev=>{
     case 'chords': V.chords=ds.v==='1'; if(V.live) renderLive(); else render(); break;
     case 'shift': if(V.live){ V.live.extra=(V.live.extra||0)+Number(ds.d); renderLive(); } else { V.shift=normShift(V.shift+Number(ds.d)); render(); } break;
     case 'size': V.size=Math.min(2,Math.max(.7,Math.round((V.size+Number(ds.d)*.1)*10)/10)); lsSet('cancionero-size',V.size); document.documentElement.style.setProperty('--lyric',V.size); break;
-    case 'new-song': V.draft={id:newId('c'),title:'',author:'',key:'',category:'',body:'',notes:''}; go('edit'); break;
-    case 'edit-song': V.draft={...S.songs.get(V.songId)}; go('edit'); break;
+    case 'new-song': V.etab='basica'; V.draft={id:newId('c'),title:'',author:'',key:'',category:'',body:'',notes:''}; go('edit'); break;
+    case 'edit-song': V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
     case 'cancel-edit': V.draft=null; S.songs.has(V.songId)?go('song'):go('list'); break;
-    case 'convert': { const ta=$('#e-body'); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
-    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } delete d.ejemplo; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
+    case 'convert': { const ta=edTA(); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
+    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
     case 'del-song': readDraft(); V.confirm='del-song'; render(); break;
     case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción borrada.'); break;
     case 'confirm-no': if(V.view==='edit') readDraft(); V.confirm=null; render(); break;
@@ -831,5 +865,6 @@ document.addEventListener('change',async ev=>{
 });
 render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
 </script>
-<script src="/io.js?v=1"></script>
+<script src="/io.js?v=2"></script>
+<script src="/equipo.js?v=2"></script>
 </body></html>

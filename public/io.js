@@ -137,7 +137,7 @@ function openImport(){
 }
 async function ioRead(files){
   if(!files.length) return; const list=$('#imp-list'); list.innerHTML='<p class="muted">Leyendo archivos…</p>';
-  const jsons=files.filter(f=>ioExt(f.name)==='json'); if(jsons.length){ return ioBackup(jsons[0]); }
+  const jsons=files.filter(f=>ioExt(f.name)==='json'); if(jsons.length){ if(!S.isAdmin){ list.innerHTML='<div class="banner">Solo el administrador puede restaurar una copia de seguridad.</div>'; return; } return ioBackup(jsons[0]); }
   IO.files=[]; const errors=[];
   for(const f of files){ const ext=ioExt(f.name);
     try{ let pages;
@@ -201,7 +201,7 @@ async function ioBackup(file){
   const writes=[...d.songs.map(s=>({col:'songs',s})),...(d.programs||[]).map(p=>({col:'programs',s:p}))].filter(w=>w.s&&w.s.id).map(w=>{ const data={...w.s}; delete data.id; return {col:w.col,id:String(w.s.id),data}; });
   $('#imp-list').innerHTML=`<p>Copia con ${d.songs.length} canciones y ${(d.programs||[]).length} programas. Las que tengan el mismo identificador se reemplazarán.</p><div class="actions"><button class="btn pri" id="bk-go">Restaurar copia</button><span id="imp-prog" style="font-size:13px;color:var(--muted)"></span></div>`;
   $('#bk-go').addEventListener('click',async()=>{ $('#bk-go').disabled=true; let done=0;
-    for(let i=0;i<writes.length;i+=50){ try{ await api('/api/batch',{method:'POST',body:JSON.stringify({writes:writes.slice(i,i+50)})}); done+=Math.min(50,writes.length-i); $('#imp-prog').textContent=`Restaurados ${done} de ${writes.length}…`; }catch(e){ if(e.code===401){ lostAuth(); return; } toast('No se pudo terminar de restaurar.'); break; } }
+    for(let i=0;i<writes.length;i+=50){ try{ await api('/api/batch',{method:'POST',body:JSON.stringify({writes:writes.slice(i,i+50),restore:true})}); done+=Math.min(50,writes.length-i); $('#imp-prog').textContent=`Restaurados ${done} de ${writes.length}…`; }catch(e){ if(e.code===401){ lostAuth(); return; } toast('No se pudo terminar de restaurar.'); break; } }
     closeModal(); lastSig=''; await loadData(); toast('Copia restaurada.'); });
 }
 
@@ -239,7 +239,7 @@ async function ioExport(fmt,scope){
       ioDownload(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}),`voz-de-la-novia-copia-${new Date().toISOString().slice(0,10)}.json`); closeModal(); toast('Copia descargada.'); return; }
     const JSZip=await ioZip(); const zip=new JSZip(); const used=new Set();
     list.forEach((s,i)=>{ let name=(scope==='program'?String(i+1).padStart(2,'0')+' - ':'')+ioSafeName(s.title); let n=name, k=2; while(used.has(n.toLowerCase())) n=name+' ('+(k++)+')'; used.add(n.toLowerCase());
-      if(fmt==='holyrics') zip.file(n+'.txt',holyricsText(s)); else zip.file(n+'.cho',toChordPro(s)); });
+      if(fmt==='holyrics') zip.file(n+'.txt',holyricsText(s)); else zip.file(n+'.cho',toChordPro({...s,body:sb(s)})); });
     const blob=await zip.generateAsync({type:'blob'}); ioDownload(blob,`${base}-${fmt==='holyrics'?'holyrics':'chordpro'}.zip`); closeModal(); toast(`${list.length} canciones exportadas.`);
   }catch(e){ toast('No se pudo exportar: '+(e.message||'error')); }
 }
