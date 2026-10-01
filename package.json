@@ -1,0 +1,7 @@
+{
+  "name": "voz-de-la-novia",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "bun server.ts" },
+  "engines": { "bun": ">=1.2" }
+}
