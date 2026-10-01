@@ -131,6 +131,20 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .beat{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--line);margin-left:2px}
 .beat.on{background:var(--accent)}
 .beat.acc{background:var(--chord)}
+.drop{display:grid;gap:4px;justify-items:center;text-align:center;border:2px dashed var(--line);border-radius:12px;padding:22px 16px;cursor:pointer;background:var(--bg)}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{font-family:var(--f-display);font-size:17px}
+.drop span{font-size:13px;color:var(--muted)}
+.imp-rows{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.imp-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface)}
+.imp-row input:not([type=checkbox]),.imp-row select{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:5px 8px;min-width:0;font-size:14px}
+.imp-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+@media (max-width:560px){.imp-row{grid-template-columns:auto minmax(0,1fr) auto}.imp-row select{grid-column:2}}
+.exp{display:grid;gap:3px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 14px;width:100%}
+.exp:hover{border-color:var(--accent)}
+.exp b{font-family:var(--f-display);font-size:16px}
+.exp span{font-size:13px;color:var(--muted)}
+.muted{color:var(--muted)}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -414,11 +428,11 @@ function viewSongs(){
   let h=banner()+(V.q||V.key!=='all'?'':`<div class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="Buscar por título, autor o una frase de la letra" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    ${S.canWrite?`<button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
+    <button class="btn" data-act="open-export" data-scope="songs">Exportar</button>${S.canWrite?`<button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
   </div>
   <div class="chips"><button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
-  if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. Puedes pegar letras con acordes encima y convertirlas automáticamente.</div>`;
+  if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div>`;
   if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>Prueba con otra palabra o quita el filtro de tono.</div>`;
   const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
   if(V.group){
@@ -547,6 +561,7 @@ function viewProgram(){
     <button class="btn pri" data-act="live-prog" ${items.length?'':'disabled'}>${ICON.play}Modo en vivo</button>
     <button class="btn" data-act="pdf-prog" data-mode="letra" ${items.length?'':'disabled'}>${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-prog" data-mode="acordes" ${items.length?'':'disabled'}>${ICON.pdf}PDF acordes</button>
+    <button class="btn" data-act="open-export" data-scope="program" ${items.length?'':'disabled'}>Exportar</button>
     <span class="spacer"></span>
     ${w?`<button class="btn" data-act="pick-song">${ICON.plus}Agregar canción</button>`:''}
   </div>
@@ -762,6 +777,11 @@ document.addEventListener('click',async ev=>{
     case 'go-list': V.tab='songs'; go('list'); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
     case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
+    case 'open-import': openImport(); break;
+    case 'open-export': openExport(ds.scope); break;
+    case 'imp-view': { const c=IO.chunks[+ds.i]; if(c){ c.open=!c.open; ioRender(); } break; }
+    case 'imp-go': ioImport(); break;
+    case 'exp': ioExport(ds.f,ds.scope); break;
     case 'chord': openChord(Number(ds.r),ds.s,ds.b===''?null:Number(ds.b),ds.n); break;
     case 'chord-v': V.cdv=(V.cdv||0)+Number(ds.d); drawChordModal(true); break;
     case 'chord-play': playCurrent(); break;
@@ -811,4 +831,5 @@ document.addEventListener('change',async ev=>{
 });
 render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
 </script>
+<script src="/io.js?v=1"></script>
 </body></html>

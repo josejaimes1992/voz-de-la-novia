@@ -37,7 +37,7 @@ function isEditor(req: Request) {
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8" };
 
 Bun.serve({
   port: Number(Bun.env.PORT ?? 3000),
@@ -68,6 +68,25 @@ Bun.serve({
         }
         attempts.set(ip, { n: a && now - a.t < 10 * 60_000 ? a.n + 1 : 1, t: a && now - a.t < 10 * 60_000 ? a.t : now });
         return json({ error: "bad_password" }, 403);
+      }
+      if (p === "/api/batch" && req.method === "POST") {
+        if (!isEditor(req)) return json({ error: "unauthorized" }, 401);
+        const text = await req.text();
+        if (text.length > 5_000_000) return json({ error: "too_large" }, 413);
+        const body = JSON.parse(text);
+        const writes = Array.isArray(body?.writes) ? body.writes : null;
+        if (!writes || writes.length === 0 || writes.length > 200) return json({ error: "bad_body" }, 400);
+        for (const w of writes) {
+          if (!w || !COLS.has(w.col) || typeof w.id !== "string" || !ID_RE.test(w.id) || !w.data || typeof w.data !== "object" || Array.isArray(w.data)) return json({ error: "bad_write" }, 400);
+        }
+        await db.begin(async (tx) => {
+          for (const w of writes) {
+            const data = { ...w.data }; delete data.id;
+            await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${w.col}, ${w.id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
+                     ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+          }
+        });
+        return json({ ok: true, count: writes.length });
       }
       const m = p.match(/^\/api\/(songs|programs)\/([^/]+)$/);
       if (m) {
