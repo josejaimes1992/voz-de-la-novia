@@ -159,6 +159,18 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .diff .add{background:color-mix(in srgb,var(--ok) 18%,transparent);display:block}
 .diff .del{background:color-mix(in srgb,var(--danger) 16%,transparent);display:block;text-decoration:line-through;opacity:.85}
 .urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.placer{font-family:var(--f-display);font-size:17px;line-height:1.2}
+.pl-ln{display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 6px;margin-bottom:6px}
+.pl-sec{font-family:var(--f-ui);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:12px 0 4px}
+.pl-gap{height:10px}
+.pl-w{display:inline-grid;justify-items:start;border:1px dashed transparent;background:none;border-radius:6px;padding:1px 3px;font:inherit;color:var(--ink);cursor:pointer;min-height:44px;align-content:end}
+.pl-w.join{margin-left:-6px}
+.pl-w:hover,.pl-w:focus-visible{border-color:var(--accent);background:var(--accent-soft)}
+.pl-c{font-family:var(--f-ui);font-weight:700;font-size:13px;color:var(--chord);min-height:16px}
+.pl-w:not(.has) .pl-c{color:var(--line)}
+.pl-w:hover .pl-c{color:var(--accent)}
+.pl-w.end .pl-c{color:var(--muted)}
+.pl-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -544,7 +556,7 @@ function viewEdit(){
         <div class="seg" role="tablist" aria-label="Versión"><button data-act="etab" data-v="basica" aria-pressed="${(V.etab||'basica')==='basica'}">Acordes básicos</button><button data-act="etab" data-v="original" aria-pressed="${V.etab==='original'}">Versión original (acordes reales)</button></div>
         <textarea id="e-body" class="body" spellcheck="false" placeholder="# Estrofa 1&#10;[G]Escribe aquí la [C]letra" ${V.etab==='original'?'hidden':''}>${esc(d.body)}</textarea>
         <textarea id="e-pro" class="body" spellcheck="false" placeholder="Versión con los acordes reales del autor. Pulsa “Copiar de la básica” para empezar." ${V.etab==='original'?'':'hidden'}>${esc(d.bodyPro||'')}</textarea>
-        <div class="actions"><button class="btn" data-act="convert">Convertir acordes de arriba</button>${V.etab==='original'?'<button class="btn" data-act="copy-basic">Copiar de la básica</button>':''}</div>
+        <div class="actions"><button class="btn pri" data-act="pl-toggle" aria-pressed="${!!V.placer}">${V.placer?'Ver vista previa':'Poner acordes tocando'}</button><button class="btn" data-act="convert">Convertir acordes de arriba</button>${V.etab==='original'?'<button class="btn" data-act="copy-basic">Copiar de la básica</button>':''}</div>
       </div>
       <div class="preview" id="e-prev" aria-label="Vista previa"></div>
     </div>
@@ -558,7 +570,7 @@ function keyMatch(a,b){ const x=parseKey(a),y=parseKey(b); return x&&y&&x.idx===
 function edTA(){ return V.etab==='original'?$('#e-pro'):$('#e-body'); }
 function bindEditor(){
   const pv=$('#e-prev'), ks=$('#e-key');
-  const upd=()=>{ const ta=edTA(); if(!ta||!document.body.contains(pv)) return; pv.innerHTML=renderSheet(ta.value,{chords:true,key:parseKey(ks.value)}); };
+  const upd=()=>{ const ta=edTA(); if(!ta||!document.body.contains(pv)) return; if(V.placer&&window.plRender) return plRender(); pv.innerHTML=renderSheet(ta.value,{chords:true,key:parseKey(ks.value)}); };
   let t; for(const ta of [$('#e-body'),$('#e-pro')]) ta.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(upd,120); });
   ks.addEventListener('change',upd); upd();
 }
@@ -826,8 +838,8 @@ document.addEventListener('click',async ev=>{
     case 'chords': V.chords=ds.v==='1'; if(V.live) renderLive(); else render(); break;
     case 'shift': if(V.live){ V.live.extra=(V.live.extra||0)+Number(ds.d); renderLive(); } else { V.shift=normShift(V.shift+Number(ds.d)); render(); } break;
     case 'size': V.size=Math.min(2,Math.max(.7,Math.round((V.size+Number(ds.d)*.1)*10)/10)); lsSet('cancionero-size',V.size); document.documentElement.style.setProperty('--lyric',V.size); break;
-    case 'new-song': V.etab='basica'; V.draft={id:newId('c'),title:'',author:'',key:'',category:'',body:'',notes:''}; go('edit'); break;
-    case 'edit-song': V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
+    case 'new-song': V.placer=false; V.etab='basica'; V.draft={id:newId('c'),title:'',author:'',key:'',category:'',body:'',notes:''}; go('edit'); break;
+    case 'edit-song': V.placer=false; V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
     case 'cancel-edit': V.draft=null; S.songs.has(V.songId)?go('song'):go('list'); break;
     case 'convert': { const ta=edTA(); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
     case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
@@ -867,4 +879,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 </script>
 <script src="/io.js?v=2"></script>
 <script src="/equipo.js?v=2"></script>
+<script src="/placer.js?v=1"></script>
 </body></html>
