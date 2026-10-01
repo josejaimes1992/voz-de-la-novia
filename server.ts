@@ -37,6 +37,7 @@ function isEditor(req: Request) {
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8" };
 
 Bun.serve({
   port: Number(Bun.env.PORT ?? 3000),
@@ -49,6 +50,7 @@ Bun.serve({
       }
       if (p === "/healthz") return new Response("ok");
       if (p === "/logo.jpg") return new Response(LOGO, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
+      if (STATIC[p]) return new Response(Bun.file(new URL("./public" + p, import.meta.url)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
       if (p === "/api/data" && req.method === "GET") {
         const rows = await db`SELECT col, id, data FROM docs`;
         const out: Record<string, unknown[]> = { songs: [], programs: [] };
