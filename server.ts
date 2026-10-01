@@ -67,6 +67,16 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
   const now = Date.now();
   data.updatedAt = now; data.updatedBy = user.name;
   if (!before) { data.createdBy = data.createdBy ?? user.name; data.createdAt = data.createdAt ?? now; }
+  if (col === "songs") {
+    const sig = (t: unknown) => String(t ?? "").split("\n").map(l => (l.match(/\[[^\]]*\]/g) ?? []).join("")).join("|").replace(/\|+$/, "");
+    for (const [field, by] of [["body", "chordsBy"], ["bodyPro", "chordsProBy"]] as const) {
+      delete data[by];
+      const changed = sig(data[field]) !== sig(before?.[field]);
+      if (changed && sig(data[field])) data[by] = user.name;
+      else if (before?.[by]) data[by] = before[by];
+      else if (!sig(data[field])) delete data[by];
+    }
+  }
   else { if (before.createdBy) data.createdBy = before.createdBy; if (before.createdAt) data.createdAt = before.createdAt; }
   await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${col}, ${id}, ${JSON.stringify(data)}::jsonb, ${now})
            ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;

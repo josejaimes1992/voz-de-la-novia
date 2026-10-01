@@ -54,6 +54,7 @@ function plDraw(){
       <div class="actions"><button class="btn" data-act="pl-listen">${ICON.play}Escuchar</button><span class="spacer"></span>${PL.existing?'<button class="btn danger" data-act="pl-remove">Quitar</button>':''}<button class="btn pri" data-act="pl-put">${PL.existing?'Cambiar':'Poner'} acorde</button></div>
     </div></div></div>`;
 }
+function plSound(){ if(window.Acordes) Acordes.play(V.inst||'guitar',PL.root,PL.q,PL.bass,0); }
 function plApply(text){
   const ta=edTA(); const lines=ta.value.split('\n'); let line=lines[PL.li]||'';
   if(PL.existing) line=line.slice(0,PL.existing.start)+(text?'['+text+']':'')+line.slice(PL.existing.end);
@@ -63,12 +64,12 @@ function plApply(text){
 document.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='pl-toggle'){ V.placer=!V.placer; el.setAttribute('aria-pressed',V.placer); el.textContent=V.placer?'Ver vista previa':'Poner acordes tocando'; if(V.placer) plRender(); else edTA().dispatchEvent(new Event('input')); }
-  else if(a==='pl-pick') plOpen(Number(d.li),Number(d.pos));
-  else if(a==='pl-root'){ PL.root=Number(d.v); plDraw(); }
-  else if(a==='pl-q'){ PL.q=d.v; plDraw(); }
-  else if(a==='pl-bass'){ PL.bass=d.v===''?null:Number(d.v); plDraw(); }
-  else if(a==='pl-used'){ const c=parseChord(d.n); if(c){ PL.root=c.root; PL.q=c.suf; PL.bass=c.bass; plDraw(); } }
-  else if(a==='pl-listen'){ if(window.Acordes) Acordes.load().then(()=>Acordes.play(V.inst==='piano'?'piano':V.inst,PL.root,PL.q,PL.bass,0)); }
+  else if(a==='pl-pick'){ plOpen(Number(d.li),Number(d.pos)); if(PL.existing) plSound(); }
+  else if(a==='pl-root'){ PL.root=Number(d.v); plDraw(); plSound(); }
+  else if(a==='pl-q'){ PL.q=d.v; plDraw(); plSound(); }
+  else if(a==='pl-bass'){ PL.bass=d.v===''?null:Number(d.v); plDraw(); plSound(); }
+  else if(a==='pl-used'){ const c=parseChord(d.n); if(c){ PL.root=c.root; PL.q=c.suf; PL.bass=c.bass; plDraw(); plSound(); } }
+  else if(a==='pl-listen') plSound();
   else if(a==='pl-put') plApply(plChordName());
   else if(a==='pl-remove') plApply('');
 });

@@ -248,7 +248,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="/acordes.js?v=2"></script>
+<script src="/acordes.js?v=3"></script>
 <script>
 "use strict";
 const LOGO_FULL="/logo.jpg?v=2";
@@ -373,7 +373,7 @@ async function writeDoc(col,obj){
   obj.updatedAt=Date.now();
   try{ await api(`/api/${col}/${encodeURIComponent(obj.id)}`,{method:'PUT',body:JSON.stringify(strip(obj))}); }
   catch(e){ if(e.code===401) lostAuth(); else toast('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.'); return false; }
-  (col==='songs'?S.songs:S.programs).set(obj.id,obj); lastSig=''; return true;
+  (col==='songs'?S.songs:S.programs).set(obj.id,obj); lastSig=''; loadData(); return true;
 }
 async function removeDoc(col,id){
   if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return; }
@@ -508,6 +508,7 @@ function instBar(song,capo,inLive){
   </div>`;
 }
 function fmtWhen(t){ if(!t) return ''; const d=new Date(t); return d.toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
+function chordsByLine(s){ const by=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim()?(s.chordsProBy||s.updatedBy):(s.chordsBy||s.createdBy); return by?`<p class="muted" style="margin:-8px 0 14px;font-size:13px;font-style:italic">Acordes por: ${esc(by)}</p>`:''; }
 function verBar(s){
   const has=!!(s.bodyPro&&s.bodyPro.trim());
   return `<div class="inst-bar"><div class="seg" role="group" aria-label="Versión de acordes"><button data-act="ver" data-v="basica" aria-pressed="${V.ver!=='original'||!has}">Acordes básicos</button><button data-act="ver" data-v="original" aria-pressed="${V.ver==='original'&&has}" ${has?'':'disabled title="Aún no tiene versión original"'}>Versión original</button></div>
@@ -532,7 +533,7 @@ function viewSong(){
   ${V.chords?verBar(s):''}
   ${V.chords?instBar(s,V.capo,false):''}
   ${V.chords&&V.capo&&V.inst!=='piano'?`<p style="margin:-4px 0 12px;color:var(--muted);font-size:13px">Capo ${V.capo}: los acordes se muestran como formas; suena en ${esc(keyText(k,V.shift))}.</p>`:''}
-  ${chordStrip(sb(s),V.shift,k,V.inst==='piano'?0:V.capo)}
+  ${chordStrip(sb(s),V.shift,k,V.inst==='piano'?0:V.capo)}${V.chords?chordsByLine(s):''}
   ${renderSheet(sb(s),{shift:V.shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:V.capo})}
   ${s.notes?`<div class="notes">${esc(s.notes)}</div>`:''}`;
 }
@@ -651,7 +652,7 @@ function renderLive(){
     <div class="live-top"><button class="btn ghost" data-act="live-close" aria-label="Salir del modo en vivo">${ICON.x}</button>
       <span class="key sm">${esc(keyText(k,shift))}</span><span class="ttl">${esc(e.song.title)}</span>${E.length>1?`<span class="cnt">${V.live.idx+1} / ${E.length}</span>`:''}
       <span style="flex-basis:100%;height:0"></span>${controls(k,shift)}${e.note?`<span style="color:var(--muted);font-size:13px">${esc(e.note)}</span>`:''}</div>
-    <div class="live-body" id="live-body">${V.chords?verBar(e.song)+instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(sb(e.song),shift,k,V.inst==='piano'?0:liveCapo)}${renderSheet(sb(e.song),{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
+    <div class="live-body" id="live-body">${V.chords?verBar(e.song)+instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(sb(e.song),shift,k,V.inst==='piano'?0:liveCapo)}${V.chords?chordsByLine(e.song):''}${renderSheet(sb(e.song),{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
     ${E.length>1?`<div class="live-bot"><button class="btn" data-act="live-go" data-d="-1" ${prev?'':'disabled'}>${ICON.back}${prev?esc(prev.song.title):'Inicio'}</button><button class="btn" data-act="live-go" data-d="1" ${next?'':'disabled'}>${next?esc(next.song.title):'Fin del programa'} <span style="transform:rotate(180deg);display:inline-flex">${ICON.back}</span></button></div>`:''}
   </div>`;
   keepAwake(true);
@@ -692,6 +693,25 @@ function startAutoScroll(){
 /* ============ PDF ============ */
 function slug(s){ return norm(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'cancionero'; }
 function pdfText(s){ return String(s).replace(/[♯]/g,'#').replace(/[♭]/g,'b'); }
+const PDF_OPTS={inst:lsGet('vdn-pdf-inst','guitar')};
+const PDF_IV={major:[0,4,7],minor:[0,3,7],dim:[0,3,6],dim7:[0,3,6,9],aug:[0,4,8],'5':[0,7],'6':[0,4,7,9],m6:[0,3,7,9],'7':[0,4,7,10],maj7:[0,4,7,11],m7:[0,3,7,10],m7b5:[0,3,6,10],mmaj7:[0,3,7,11],sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],'7sus4':[0,5,7,10],'9':[0,4,7,10,14],maj9:[0,4,7,11,14],m9:[0,3,7,10,14],add9:[0,4,7,14],madd9:[0,3,7,14],'11':[0,4,7,10,14,17],m11:[0,3,7,10,14,17],'13':[0,4,7,10,14,21],'69':[0,4,7,9,14],m69:[0,3,7,9,14],'7b9':[0,4,7,10,13],'7#9':[0,4,7,10,15]};
+function drawPdfPiano(doc,a,label,x,y,INK,CHORD){
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...CHORD); doc.text(label,x+38,y+8,{align:'center'});
+  const iv=PDF_IV[Acordes.normSuffix(a.s)]||PDF_IV.major; const on=new Set(iv.map(i=>{ let p=a.r+i; while(p>=24) p-=12; return p; }));
+  if(a.b!==''&&a.b!=null) on.add(Number(a.b));
+  const isBlack=p=>[1,3,6,8,10].includes(p%12); const ww=5.4, wh=26, bw=3.4, bh=16, gx=x, gy=y+16; let wi=0; const wx={};
+  doc.setDrawColor(...INK); doc.setLineWidth(0.4);
+  for(let p=0;p<24;p++){ if(isBlack(p)) continue; wx[p]=gx+wi*ww; if(on.has(p)){ doc.setFillColor(...CHORD); doc.rect(wx[p],gy,ww,wh,'FD'); } else doc.rect(wx[p],gy,ww,wh,'S'); wi++; }
+  for(let p=0;p<24;p++){ if(!isBlack(p)) continue; const bx=wx[p-1]+ww-bw/2; doc.setFillColor(...(on.has(p)?CHORD:INK)); doc.rect(bx,gy,bw,bh,'F'); }
+}
+function openPdfOpts(run){
+  PDF_OPTS.run=run;
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="PDF con acordes" data-stop style="width:min(420px,100%)">
+    <header><h3>PDF con acordes</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:10px"><p class="muted" style="margin:0">¿Para qué instrumento quieres los dibujos de los acordes?</p>
+      ${[['guitar','Guitarra'],['ukulele','Ukelele'],['piano','Piano (teclado)'],['none','Sin dibujos, solo letra y acordes']].map(([v,t])=>`<button class="exp" data-act="pdf-inst" data-v="${v}" style="${PDF_OPTS.inst===v?'border-color:var(--accent)':''}"><b>${t}</b></button>`).join('')}
+    </div></div></div>`;
+}
 function drawPdfChord(doc,inst,a,label,x,y,INK,CHORD){
   const ps=Acordes.positions(inst,a.r,a.s,a.b===''?null:a.b); const strings=inst==='ukulele'?4:6;
   doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...CHORD); doc.text(label,x+26,y+8,{align:'center'});
@@ -742,17 +762,19 @@ function buildPdf(entries,mode,head){
     const meta=[e.song.author,e.note].filter(Boolean).join(' · ');
     if(meta){ doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED); doc.text(pdfText(meta),M,y+2); y+=14; }
     y+=10;
-    if(mode==='acordes' && window.Acordes && Acordes.ready()){
-      const inst=V.inst==='ukulele'?'ukulele':'guitar'; const capo=Number(e.song.capo)||0; const sh=e.shift-capo; const fl=useFlatFor(k,sh); const seen=new Map();
+    const chordsBy=V.ver==='original'&&e.song.bodyPro&&e.song.bodyPro.trim()?(e.song.chordsProBy||e.song.updatedBy):(e.song.chordsBy||e.song.createdBy);
+    if(mode==='acordes' && PDF_OPTS.inst!=='none' && window.Acordes && Acordes.ready()){
+      const inst=PDF_OPTS.inst; const capo=inst==='piano'?0:(Number(e.song.capo)||0); const sh=e.shift-capo; const fl=useFlatFor(k,sh); const seen=new Map();
       for(const L of parseSong(sb(e.song))) if(L.type==='ln') for(const sg of L.segs) if(sg.c){ const a=chordAttrs(sg.c,sh); if(!a) continue; const id=a.r+'|'+a.s+'|'+a.b; if(!seen.has(id)) seen.set(id,{a,label:pdfText(fmtChord(sg.c,sh,fl,false))}); }
       if(capo){ doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...CHORD); doc.text(pdfText('Capo '+capo+' (los acordes son formas)'),M,y); y+=12; }
-      const cw=52, chH=74; let x=M; if(seen.size) ensure(chH+6);
+      const cw=inst==='piano'?76:52, chH=inst==='piano'?50:74; let x=M; if(seen.size) ensure(chH+6);
       for(const {a,label} of seen.values()){
         if(x+cw>W-M){ x=M; y+=chH; ensure(chH+6); }
-        drawPdfChord(doc,inst,a,label,x,y,INK,CHORD); x+=cw+8;
+        if(inst==='piano') drawPdfPiano(doc,a,label,x,y,INK,CHORD); else drawPdfChord(doc,inst,a,label,x,y,INK,CHORD); x+=cw+8;
       }
       if(seen.size) y+=chH+4;
     }
+    if(mode==='acordes' && chordsBy){ doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...MUTED); doc.text(pdfText('Acordes por: '+chordsBy),M,y+2); y+=16; }
     const lines=parseSong(sb(e.song));
     if(mode==='letra'){
       const LH=15.5; let lastGap=true;
@@ -846,7 +868,8 @@ document.addEventListener('click',async ev=>{
     case 'del-song': readDraft(); V.confirm='del-song'; render(); break;
     case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción borrada.'); break;
     case 'confirm-no': if(V.view==='edit') readDraft(); V.confirm=null; render(); break;
-    case 'pdf-song': { const s=S.songs.get(V.songId); savePdf([songEntry(s,V.shift)],ds.mode,null,`${slug(s.title)}-${ds.mode}.pdf`); break; }
+    case 'pdf-song': { const s=S.songs.get(V.songId); const run=()=>savePdf([songEntry(s,V.shift)],ds.mode,null,`${slug(s.title)}-${ds.mode}.pdf`); if(ds.mode==='acordes') openPdfOpts(run); else run(); break; }
+    case 'pdf-inst': { PDF_OPTS.inst=ds.v; lsSet('vdn-pdf-inst',ds.v); closeModal(); if(PDF_OPTS.run) PDF_OPTS.run(); break; }
     case 'live-song': V.live={songId:V.songId,idx:0,extra:V.shift,capo:V.capo,speed:0}; renderLive(); break;
     case 'add-to-prog': openProgPicker(); break;
     case 'add-to': { const s=S.songs.get(V.songId); let p; if(ds.id==='__new'){ p={id:newId('p'),title:'Nuevo programa',date:new Date().toISOString().slice(0,10),service:'',notes:'',items:[]}; } else p=JSON.parse(JSON.stringify(S.programs.get(ds.id)));
@@ -864,7 +887,7 @@ document.addEventListener('click',async ev=>{
     case 'live-go': liveGo(Number(ds.d)); break;
     case 'live-close': V.live=null; stopMetro(); renderLive(); break;
     case 'pdf-prog': { const p=S.programs.get(V.programId); const E=(p.items||[]).map(it=>{ const s=S.songs.get(it.songId); return s?songEntry(s,itemShift(it),it.note):null; }).filter(Boolean); const f=fmtDate(p.date);
-      savePdf(E,ds.mode,{title:p.title||'Programa',sub:[f.full.replace(/^./,c=>c.toUpperCase()),p.service].filter(Boolean).join(' · '),notes:p.notes},`${slug(p.title)}-${p.date||''}-${ds.mode}.pdf`); break; }
+      const run=()=>savePdf(E,ds.mode,{title:p.title||'Programa',sub:[f.full.replace(/^./,c=>c.toUpperCase()),p.service].filter(Boolean).join(' · '),notes:p.notes},`${slug(p.title)}-${p.date||''}-${ds.mode}.pdf`); if(ds.mode==='acordes') openPdfOpts(run); else run(); break; }
     case 'close-modal': closeModal(); break;
   }
 });
@@ -879,5 +902,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 </script>
 <script src="/io.js?v=2"></script>
 <script src="/equipo.js?v=2"></script>
-<script src="/placer.js?v=1"></script>
+<script src="/placer.js?v=2"></script>
 </body></html>

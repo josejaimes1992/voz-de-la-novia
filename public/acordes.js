@@ -95,13 +95,23 @@ function count(inst,root,raw,bass){ return inst==='piano'?1:positions(inst,root,
 
 /* ---------- Sonido ---------- */
 let ctx=null, master=null; const cache=new Map();
+let unlocked=false;
+function unlockMedia(){
+  if(unlocked) return; unlocked=true;
+  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch{}
+  try{ const a=document.createElement('audio'); a.setAttribute('playsinline',''); a.loop=true; a.volume=0.01;
+    a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; const pr=a.play(); if(pr&&pr.catch) pr.catch(()=>{}); window.__vdnSilent=a; }catch{}
+}
 function audio(){
-  if(!ctx){ const C=window.AudioContext||window.webkitAudioContext; if(!C) return null; ctx=new C();
-    master=ctx.createGain(); master.gain.value=0.9; const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200;
-    master.connect(lp); lp.connect(ctx.destination); }
-  if(ctx.state==='suspended') ctx.resume();
+  unlockMedia();
+  if(!ctx){ const C=window.AudioContext||window.webkitAudioContext; if(!C) return null; ctx=new C({latencyHint:'interactive'});
+    master=ctx.createGain(); master.gain.value=1.0; const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6000;
+    const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.knee.value=12; comp.ratio.value=4; comp.attack.value=0.003; comp.release.value=0.25;
+    const out=ctx.createGain(); out.gain.value=1.6;
+    master.connect(lp); lp.connect(comp); comp.connect(out); out.connect(ctx.destination); }
   return ctx;
 }
+function whenReady(fn){ const c=audio(); if(!c) return false; if(c.state!=='running'){ c.resume().then(fn,fn); } else fn(); return true; }
 function pluck(midi,decay){
   const key=midi+':'+decay; if(cache.has(key)) return cache.get(key);
   const sr=ctx.sampleRate, f=440*Math.pow(2,(midi-69)/12), N=Math.max(2,Math.round(sr/f)), len=Math.floor(sr*2.4);
@@ -125,12 +135,12 @@ function playPiano(notes){
   });
 }
 function play(inst,root,raw,bass,vi=0){
-  if(!audio()) return false;
-  if(inst==='piano'){ playPiano(pianoNotes(root,raw,bass)); return true; }
-  const ps=positions(inst,root,raw,bass);
-  let notes=ps.length?ps[vi%ps.length][4].slice().sort((a,b)=>a-b):pianoNotes(root,raw,bass);
-  if(inst==='ukulele') playPluck(notes,0.990,0.022,0.55); else playPluck(notes,0.996,0.028,0.6);
-  return true;
+  return whenReady(()=>{
+    if(inst==='piano'){ playPiano(pianoNotes(root,raw,bass)); return; }
+    const ps=positions(inst,root,raw,bass);
+    const notes=ps.length?ps[vi%ps.length][4].slice().sort((a,b)=>a-b):pianoNotes(root,raw,bass);
+    if(inst==='ukulele') playPluck(notes,0.990,0.022,0.8); else playPluck(notes,0.996,0.028,0.85);
+  });
 }
 
 /* ---------- Metrónomo ---------- */
@@ -139,7 +149,7 @@ function clickAt(t,accent){ const o=ctx.createOscillator(), g=ctx.createGain(); 
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(accent?0.5:0.3,t+0.002); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
   o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.07); }
 function metroStart(bpm,onBeat){
-  if(!audio()) return false; metroStop(); metro.on=true; metro.bpm=bpm; metro.beat=0; metro.next=ctx.currentTime+0.06; metro.onBeat=onBeat;
+  if(!audio()) return false; if(ctx.state!=='running') ctx.resume(); metroStop(); metro.on=true; metro.bpm=bpm; metro.beat=0; metro.next=ctx.currentTime+0.06; metro.onBeat=onBeat;
   metro.timer=setInterval(()=>{ while(metro.next<ctx.currentTime+0.12){ const b=metro.beat%4; clickAt(metro.next,b===0);
       const delay=Math.max(0,(metro.next-ctx.currentTime)*1000); setTimeout(()=>metro.onBeat&&metro.onBeat(b),delay);
       metro.next+=60/metro.bpm; metro.beat++; } },25);
