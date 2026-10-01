@@ -31,10 +31,9 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .top-in{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
 .brand .mark{width:92px;height:52px;flex:none;background-color:#000;background-repeat:no-repeat;background-size:124% auto;background-position:50% 18%}
-.hero{background:var(--band);border-radius:14px;margin-bottom:18px;display:grid;justify-items:center;padding-inline:16px;padding-block:0 18px;overflow:hidden;text-align:center}
-.hero img{width:min(560px,100%);height:auto;mix-blend-mode:screen}
-.hero p{margin:2px 0 0;font-family:var(--f-display);font-style:italic;color:var(--band-ink);font-size:clamp(15px,2.4vw,18px)}
-.hero p b{display:block;font-style:normal;color:var(--gold);font-size:clamp(20px,3.4vw,26px);letter-spacing:-.005em}
+.hero{margin:0 auto 22px;max-width:760px;text-align:center}
+.hero img{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:14px;background:#000}
+.hero p{margin:10px 0 0;font-family:var(--f-display);font-style:italic;color:var(--muted);font-size:clamp(15px,2.4vw,18px)}
 .brand .bt{min-width:0;display:grid;line-height:1.15}
 .brand b{font-family:var(--f-display);font-size:20px;font-weight:700;letter-spacing:-.005em;color:var(--gold)}
 .brand span{color:#B9B09A;font-size:12px;font-style:italic;font-family:var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -173,7 +172,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 </style></head><body>
 
 <header class="top"><div class="top-in">
-  <div class="brand"><span class="mark" role="img" aria-label="Logo Tabernáculo Shalom Adonai"></span><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div></div>
+  <div class="brand"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div></div>
   <div class="tabs" role="tablist">
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
@@ -190,10 +189,10 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 "use strict";
-const LOGO_FULL="/logo.jpg";
+const LOGO_FULL="/logo.jpg?v=2";
 let LOGO_DATA=null;
 fetch(LOGO_FULL).then(r=>r.blob()).then(b=>new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); })).then(d=>{ LOGO_DATA=d; }).catch(()=>{});
-document.querySelector(".mark").style.backgroundImage="url("+LOGO_FULL+")";
+
 const CHURCH="Tabernáculo Shalom Adonai";
 const APP="Voz de la Novia";
 /* ============ Música: notas, acordes, transposición ============ */
