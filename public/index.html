@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><link rel="icon" href="/logo.jpg"><link rel="apple-touch-icon" href="/logo.jpg"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><title>Voz de la Novia</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><link rel="icon" href="/vdn-icon.png"><link rel="apple-touch-icon" href="/vdn-icon.png"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><title>Voz de la Novia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -31,9 +31,15 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .top-in{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
 .brand .mark{width:92px;height:52px;flex:none;background-color:#000;background-repeat:no-repeat;background-size:124% auto;background-position:50% 18%}
-.hero{margin:0 auto 22px;max-width:760px;text-align:center}
-.hero img{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:14px;background:#000}
+.hero{margin:0 auto 22px;max-width:1000px;text-align:center}
+.hero .imgs{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:14px}
+.hero img{display:block;width:100%;height:auto;border-radius:14px;background:#000}
+.hero img.sq{aspect-ratio:1}
+.hero img.wide{aspect-ratio:3/2}
+@media (max-width:640px){.hero .imgs{grid-template-columns:minmax(0,1fr)}}
 .hero p{margin:10px 0 0;font-family:var(--f-display);font-style:italic;color:var(--muted);font-size:clamp(15px,2.4vw,18px)}
+.brand img.vdn{width:56px;height:56px;border-radius:8px;flex:none;margin-block:-4px}
+@media (max-width:520px){.brand img.vdn{width:46px;height:46px}}
 .brand .bt{min-width:0;display:grid;line-height:1.15}
 .brand b{font-family:var(--f-display);font-size:20px;font-weight:700;letter-spacing:-.005em;color:var(--gold)}
 .brand span{color:#B9B09A;font-size:12px;font-style:italic;font-family:var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -187,7 +193,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 </style></head><body>
 
 <header class="top"><div class="top-in">
-  <div class="brand"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div></div>
+  <div class="brand"><img class="vdn" src="/vdn-logo.jpg?v=2" alt="Logo Voz de la Novia" width="56" height="56"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div></div>
   <div class="tabs" role="tablist">
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
@@ -206,7 +212,8 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <script>
 "use strict";
 const LOGO_FULL="/logo.jpg?v=2";
-let LOGO_DATA=null;
+let LOGO_DATA=null, VDN_DATA=null;
+fetch('/vdn-logo.jpg?v=2').then(r=>r.blob()).then(b=>new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); })).then(d=>{ VDN_DATA=d; }).catch(()=>{});
 fetch(LOGO_FULL).then(r=>r.blob()).then(b=>new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); })).then(d=>{ LOGO_DATA=d; }).catch(()=>{});
 
 const CHURCH="Tabernáculo Shalom Adonai";
@@ -405,7 +412,7 @@ function viewSongs(){
     return true;
   });
   const disp=c=>{ if(c==='?') return 'Sin tono'; const k=parseKey(c); return keyText(k); };
-  let h=banner()+(V.q||V.key!=='all'?'':`<div class="hero"><img src="${LOGO_FULL}" alt="Tabernáculo Shalom Adonai"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
+  let h=banner()+(V.q||V.key!=='all'?'':`<div class="hero"><div class="imgs"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><img class="wide" src="${LOGO_FULL}" alt="Tabernáculo Shalom Adonai"></div><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="Buscar por título, autor o una frase de la letra" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
     ${S.canWrite?`<button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
@@ -658,6 +665,7 @@ function buildPdf(entries,mode,head){
   const ensure=h=>{ if(y+h>H-M-14){ doc.addPage(); y=M; } };
   if(head){
     if(LOGO_DATA){ try{ doc.addImage(LOGO_DATA,'JPEG',M,y,105,70); }catch{} }
+    if(VDN_DATA){ try{ doc.addImage(VDN_DATA,'JPEG',W-M-70,y,70,70); }catch{} }
     doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(...ACC); doc.text(pdfText(APP),M+120,y+28);
     doc.setFont('times','italic'); doc.setFontSize(10.5); doc.setTextColor(...MUTED); doc.text(pdfText('Unidos en una misma alabanza'),M+120,y+44);
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.text(pdfText(CHURCH.toUpperCase()),M+120,y+58);

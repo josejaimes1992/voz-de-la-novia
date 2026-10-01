@@ -37,7 +37,7 @@ function isEditor(req: Request) {
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png" };
 
 Bun.serve({
   port: Number(Bun.env.PORT ?? 3000),
