@@ -153,12 +153,16 @@ async function ioRead(files){
     }catch(e){ errors.push(`${f.name}: ${e.message||'no se pudo leer.'}`); }
   }
   IO.errors=errors; IO.hymnal=IO.files.some(f=>hymFindIndex(f.pages).entries.length>=3); if(IO.lower===undefined) IO.lower=true;
+  IO.numbered=false; let numCount=0, hymCount=0;
+  for(const f of IO.files){ const np=numberedParse(f.pages,f.name); if(np&&np.length>=5){ IO.numbered=true; numCount+=np.length; } if(IO.hymnal){ const hp=hymnalParse(f.pages,f.name); hymCount+=hp?hp.length:0; } }
+  if(IO.mode==='auto'&&IO.numbered&&numCount>=hymCount) IO.mode='numbered';
   if(IO.mode==='auto'&&IO.hymnal) IO.mode='hymnal'; if(IO.mode==='auto') IO.mode=IO.files.length>1?'file':(IO.files[0]&&IO.files[0].pages.length>1&&IO.files[0].ext==='pdf'?'titles':'titles');
   ioBuild();
 }
 function ioBuild(){
-  const chunks=[];
+  const chunks=[]; IO.missing=[];
   for(const f of IO.files){
+    if(IO.mode==='numbered'){ const ns=numberedParse(f.pages,f.name+(f.ext?'.'+f.ext:'')); if(ns&&ns.length){ IO.missing=(IO.missing||[]).concat(ns.missing||[]); ns.forEach(h=>{ const c=finishSong({...h,body:IO.lower?lyricCase(h.body):h.body}); if(h.doubts&&h.doubts.length){ c.doubts=h.doubts; c.include=false; } chunks.push(c); }); continue; } }
     if(IO.mode==='hymnal'){ const hs=hymnalParse(f.pages,f.name+(f.ext?'.'+f.ext:'')); if(hs&&hs.length){ hs.forEach(h=>chunks.push(finishSong({...h,body:IO.lower?lyricCase(h.body):h.body}))); continue; } }
     const all=f.pages.join('\n\n');
     if(isChordPro(all)&&IO.mode!=='sep'){ chunks.push(makeSong(all,f.name)); continue; }
@@ -175,14 +179,15 @@ function ioRender(){
   const opts=$('#imp-opts'), list=$('#imp-list'); if(!opts) return;
   const errs=(IO.errors||[]).map(e=>`<div class="banner" style="color:var(--danger)">${esc(e)}</div>`).join('');
   if(!IO.files.length){ opts.innerHTML=''; list.innerHTML=errs; return; }
-  const modes=[...(IO.hymnal?[['hymnal','Himnario con índice (detecta cada canción, une acordes y letra)']]:[]),['file','Un archivo = una canción'],['titles','Detectar títulos (números o MAYÚSCULAS)'],['page','Una página = una canción'],['sep','Separadas con una línea ---']];
+  const modes=[...(IO.numbered?[['numbered','Himnario numerado (N.º y TÍTULO, columnas, índice)']]:[]),...(IO.hymnal?[['hymnal','Himnario con índice (detecta cada canción, une acordes y letra)']]:[]),['file','Un archivo = una canción'],['titles','Detectar títulos (números o MAYÚSCULAS)'],['page','Una página = una canción'],['sep','Separadas con una línea ---']];
   opts.innerHTML=`<label class="f">¿Cómo están separadas las canciones?<select id="imp-mode">${modes.map(([v,t])=>`<option value="${v}" ${IO.mode===v?'selected':''}>${t}</option>`).join('')}</select></label>`;
   opts.innerHTML+=`<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:8px"><input type="checkbox" id="imp-lower" ${IO.lower?'checked':''}> Pasar la letra en MAYÚSCULAS a minúsculas (mantiene Dios, Jesús, Señor…)</label>`;
   $('#imp-mode').addEventListener('change',e=>{ IO.mode=e.target.value; ioBuild(); });
   $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
   const nd=IO.chunks.filter(c=>c.dup).length; list.innerHTML=errs+(nd?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra, y las desmarqué para evitar duplicados.</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
-    <div class="imp-rows">${IO.chunks.map((c,i)=>`<div class="imp-row">
+    ${ioDoubtBanner()}
+    <div class="imp-rows">${IO.chunks.map((c,i)=>IO.onlyDoubts&&!(c.doubts&&c.doubts.length)?'':`<div class="imp-row${c.doubts&&c.doubts.length?' doubt':''}">
       <input type="checkbox" data-imp="include" data-i="${i}" ${c.include?'checked':''} aria-label="Incluir">
       <input data-imp="title" data-i="${i}" value="${esc(c.title)}" aria-label="Título">
       <select data-imp="key" data-i="${i}" aria-label="Tono"><option value="">Tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${c.key===k?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select>
@@ -190,13 +195,16 @@ function ioRender(){
       ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
       ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
+      ${c.doubts&&c.doubts.length?`<div class="ask"><b>Tengo una duda${c.num?` con la n.º ${c.num}`:''}:</b> ${esc(c.doubts.join(' '))}
+        <div class="ask-snip">${esc(c.body.split('\n').filter(l=>l.trim()&&!/^#/.test(l)).slice(0,3).join(' / ').replace(/\[[^\]]*\]/g,'').slice(0,160))}…</div>
+        <div class="actions"><button class="btn pri" data-act="imp-ok" data-i="${i}">Sí, es una canción</button>${i>0?`<button class="btn" data-act="imp-merge" data-i="${i}">Unir con la anterior</button>`:''}<button class="btn danger" data-act="imp-drop" data-i="${i}">No es una canción</button></div></div>`:''}
       ${c.open?`<textarea data-imp="body" data-i="${i}" class="body" style="grid-column:1/-1;min-height:220px">${esc(c.body)}</textarea>`:''}
     </div>`).join('')}</div>
     <div class="actions" style="position:sticky;bottom:-12px;background:var(--surface);padding-block:10px"><button class="btn pri" data-act="imp-go" ${n?'':'disabled'}>Importar ${n} ${n===1?'canción':'canciones'}</button><span id="imp-prog" style="font-size:13px;color:var(--muted)"></span></div>`;
 }
 document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
-  if(el.dataset.imp==='include'){ c.include=el.checked; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value; });
+  if(el.dataset.imp==='include'){ c.include=el.checked; if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value; });
 function ioDupConfirm(){ const d=IO.chunks.filter(c=>c.include&&c.dup); return `<div class="banner" style="border:2px solid var(--danger);display:grid;gap:8px"><b style="color:var(--danger)">Alto: vas a importar ${d.length} ${d.length===1?'canción que ya existe':'canciones que ya existen'}</b><ul style="margin:0;padding-left:18px">${d.map(c=>`<li>${esc(c.title)} → ${esc(dupLabel(c.dupOf))}</li>`).join('')}</ul><div class="actions"><button class="btn danger" data-act="imp-go-force">Importar de todas formas</button><button class="btn" data-act="imp-dup-off">Desmarcarlas y continuar</button></div></div>`; }
 async function ioImport(force){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
@@ -263,4 +271,17 @@ async function ioExport(fmt,scope){
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return;
   if(el.dataset.act==='imp-go-force'){ IO.confirmDup=false; ioImport(true); }
   else if(el.dataset.act==='imp-dup-off'){ IO.chunks.forEach(c=>{ if(c.dup) c.include=false; }); IO.confirmDup=false; ioRender(); }
+});
+
+function ioDoubtBanner(){
+  const nd=IO.chunks.filter(c=>c.doubts&&c.doubts.length).length; const miss=IO.missing||[];
+  return (nd?`<div class="banner ask-banner"><b>Necesito tu ayuda con ${nd} ${nd===1?'parte':'partes'} antes de importarlas.</b> No estoy seguro de dónde empiezan o terminan. Mientras no me respondas, no se importan.
+    <div class="actions" style="margin-top:6px"><button class="btn" data-act="imp-only-doubts">${IO.onlyDoubts?'Ver todas':'Ver solo las dudas'}</button></div></div>`:'')
+   +(miss.length?`<div class="banner"><b>Del índice no encontré ${miss.length}:</b> ${esc(miss.slice(0,15).join(' · '))}${miss.length>15?'…':''}. Puede que estén en una página escaneada o con otro formato.</div>`:'');
+}
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, i=+el.dataset.i, c=IO.chunks[i];
+  if(a==='imp-ok'&&c){ c.doubts=[]; c.include=!c.dup; ioRender(); }
+  else if(a==='imp-drop'&&c){ IO.chunks.splice(i,1); ioRender(); }
+  else if(a==='imp-merge'&&c&&i>0){ const p=IO.chunks[i-1]; p.body=(p.body+'\n\n'+(c.title?'# '+c.title+'\n':'')+c.body).trim(); IO.chunks.splice(i,1); ioRender(); toast('Unida con “'+p.title+'”.'); }
+  else if(a==='imp-only-doubts'){ IO.onlyDoubts=!IO.onlyDoubts; ioRender(); }
 });

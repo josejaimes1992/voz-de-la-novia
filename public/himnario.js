@@ -119,7 +119,7 @@ function hymnalParse(pages,fileName){
 /* ---------- Texto a partir de palabras con posición (PDF) ----------
    words: [[x0,y0,x1,y1,texto],...] de una página. Agrupa en líneas y, cuando una línea es de acordes,
    coloca cada acorde sobre la letra de la línea siguiente según su posición real en la página. */
-function wordsToText(words){
+function wordsToTextSimple(words){
   if(!words||!words.length) return '';
   const ws=words.map(w=>({x0:+w[0],y0:+w[1],x1:+w[2],y1:+w[3],t:String(w[4])})).filter(w=>w.t.trim());
   ws.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);
@@ -154,4 +154,82 @@ function wordsToText(words){
     out.push(plain(l)); prevY1=l.y1;
   }
   return out.join('\n');
+}
+
+/* Detecta páginas a dos columnas (una franja vertical vacía en el centro) y las lee columna por columna */
+function wordsToText(words){
+  if(!words||words.length<20) return wordsToTextSimple(words);
+  const ws=words.filter(w=>String(w[4]).trim()); const minX=Math.min(...ws.map(w=>+w[0])), maxX=Math.max(...ws.map(w=>+w[2])); const W=maxX-minX; if(W<=0) return wordsToTextSimple(words);
+  const bins=200, cover=new Array(bins).fill(0);
+  for(const w of ws){ const a=Math.max(0,Math.floor((+w[0]-minX)/W*bins)), b=Math.min(bins-1,Math.floor((+w[2]-minX)/W*bins)); for(let i=a;i<=b;i++) cover[i]++; }
+  let best=-1, bestVal=Infinity;
+  for(let i=Math.floor(bins*0.3);i<=Math.floor(bins*0.7);i++){ if(cover[i]<bestVal){ bestVal=cover[i]; best=i; } }
+  if(best<0||bestVal>ws.length*0.03) return wordsToTextSimple(words);
+  const gx=minX+(best+0.5)/bins*W;
+  const left=ws.filter(w=>+w[2]<=gx), right=ws.filter(w=>+w[0]>=gx), cross=ws.filter(w=>+w[0]<gx&&+w[2]>gx);
+  if(left.length<ws.length*0.2||right.length<ws.length*0.2) return wordsToTextSimple(words);
+  /* Palabras que cruzan el centro (encabezados a todo el ancho) van arriba o abajo según su posición */
+  const colTop=Math.min(...left.concat(right).map(w=>+w[1]));
+  const crossTop=cross.filter(w=>+w[1]<=colTop+2), crossBot=cross.filter(w=>+w[1]>colTop+2);
+  const lineOf=w=>Math.round(+w[1]); const crossLines=new Set(cross.map(lineOf));
+  /* Las palabras de una línea que cruza se quedan con esa línea */
+  const pull=arr=>arr.filter(w=>!crossLines.has(lineOf(w)));
+  const keepTop=crossTop.concat(left.concat(right).filter(w=>crossTop.some(c=>lineOf(c)===lineOf(w))));
+  const keepBot=crossBot.concat(left.concat(right).filter(w=>crossBot.some(c=>lineOf(c)===lineOf(w))));
+  return [wordsToTextSimple(keepTop),wordsToTextSimple(pull(left)),wordsToTextSimple(pull(right)),wordsToTextSimple(keepBot)].filter(t=>t.trim()).join('\n\n');
+}
+
+/* ---------- Himnarios numerados ("2  HALLÉ UN BUEN AMIGO   H/FA") ---------- */
+const NUM_HEAD=/^\s*(\d{1,4})\s*[.)\-–]?\s+([^\d].{1,90}?)(?:\s+([A-ZÁÉ]{1,3})\s*\/\s*([A-Za-zé#♯b♭]{1,5}m?))?\s*$/;
+const LAT_KEY={DO:0,RE:2,MI:4,FA:5,SOL:7,LA:9,SI:11,C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function keyFromCode(code){
+  if(!code) return ''; const m=/^(DO|RE|MI|FA|SOL|LA|SI|[A-G])(#|♯|B|♭)?(M|MENOR)?$/i.exec(code.trim().toUpperCase().replace('É','E'));
+  if(!m) return ''; let i=LAT_KEY[m[1].toUpperCase()]; if(m[2]) i=(i+(m[2]==='#'||m[2]==='♯'?1:11))%12; return keyCanon(i,!!m[3]);
+}
+function isUpperish(t){ const L=t.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g,''); if(L.length<3) return false; const up=L.replace(/[^A-ZÁÉÍÓÚÑÜ]/g,'').length; return up/L.length>0.85; }
+function isNoiseLine(t){ const toks=t.trim().split(/\s+/); if(toks.length>=6&&toks.filter(x=>x.length===1).length/toks.length>=0.8) return true; const c=t.replace(/\s/g,''); if(c.length>=8&&/^(.)\1(?:(.)\2)+$/.test(c)) return true; return false; }
+function hymCleanPages(pages){
+  /* Quita encabezados y pies que se repiten en muchas páginas, números de página y texto decorativo */
+  const keyOf=l=>norm(l).replace(/[^a-z]/g,'');
+  const count=new Map(); pages.forEach(p=>{ const seen=new Set(); for(const l of p.split('\n')){ const k=keyOf(l); if(k.length>=6&&!seen.has(k)){ seen.add(k); count.set(k,(count.get(k)||0)+1); } } });
+  const rep=new Set([...count].filter(([k,n])=>pages.length>=4&&n>=Math.max(3,pages.length*0.3)).map(([k])=>k));
+  return pages.map(p=>{ const L=p.split('\n'); const nz=L.map((l,i)=>l.trim()?i:-1).filter(i=>i>=0); const edge=new Set([...nz.slice(0,2),...nz.slice(-2)]);
+    return L.filter((l,i)=>{ const t=l.trim(); if(!t) return true; if(rep.has(keyOf(l))) return false;
+      if(edge.has(i)&&/^(\d{1,4}|[ivxlc]+|p[aá]g(ina)?\.?\s*\d+|-\s*\d+\s*-)$/i.test(t)){ const isRomanStanza=/^[ivx]+$/i.test(t)&&nz.indexOf(i)<nz.length-2; if(!isRomanStanza) return false; }
+      if(isNoiseLine(t)) return false; return true; }).join('\n'); });
+}
+function hymFindNumberedIndex(pages){
+  const entries=[]; pages.forEach((p,i)=>{ const hits=[]; for(const l of p.split('\n')){ let m=/^\s*(\d{1,4})[.)\-]?\s+(.+?)\s*(?:[.·…_]{2,}|\s{2,})\s*(\d{1,4})\s*$/.exec(l); if(m){ hits.push({num:+m[1],title:m[2].trim(),page:+m[3],pi:i}); continue; } m=HYM_INDEX_RE.exec(l); if(m) hits.push({num:null,title:m[1].trim(),page:+m[2],pi:i}); } if(hits.length>=6) entries.push(...hits); });
+  return entries;
+}
+function numberedParse(rawPages,fileName){
+  const pages=hymCleanPages(rawPages); const index=hymFindNumberedIndex(rawPages);
+  const indexPages=new Set(index.map(e=>e.pi));
+  const lines=[]; pages.forEach((p,pi)=>{ if(indexPages.has(pi)) return; for(const l of p.split('\n')) lines.push({t:l,pi}); });
+  const heads=[];
+  lines.forEach((L,i)=>{ const t=L.t.trim(); const m=NUM_HEAD.exec(t); if(!m) return; const title=m[2].trim();
+    if(!isUpperish(title)&&!m[3]) return; if(/^(coro|estrofa|i{1,3}|iv|v)\b/i.test(title)) return; if(hymIsChordLine(title)) return;
+    heads.push({i,num:+m[1],title,code:m[3]?m[3]+'/'+m[4]:'',key:keyFromCode(m[4]),pi:L.pi}); });
+  if(heads.length<5) return null;
+  const idxByNum=new Map(index.filter(e=>e.num!=null).map(e=>[e.num,e])); const idxTitles=new Set(index.map(e=>hymNorm(e.title)));
+  const out=[];
+  heads.forEach((h,n)=>{
+    const end=n+1<heads.length?heads[n+1].i:lines.length;
+    const body=lines.slice(h.i+1,end).map(l=>l.t);
+    while(body.length&&!body[body.length-1].trim()) body.pop();
+    const conv=[]; for(const raw of body){ const t=raw.trim(); const hd=hymHeader(t); if(hd){ conv.push('# '+hd); continue; } const cp=hymChordPart(raw); conv.push(cp!==null?cp:t); }
+    const text=convertChordsOverLyrics(conv.join('\n')).replace(/\n{3,}/g,'\n\n').trim();
+    const lyricCount=conv.filter(l=>l&&!/^#/.test(l)).length;
+    const doubts=[];
+    const prev=heads[n-1];
+    if(prev&&h.num>prev.num+1&&out[n-1]){ const miss=h.num-prev.num-1; out[n-1].doubts.push(`Puede que al final incluya ${miss===1?'la n.º '+(prev.num+1):'las n.º '+(prev.num+1)+' a '+(h.num-1)}, que no encontré con título.`); }
+    if(prev&&h.num!==prev.num+1&&h.num!==prev.num) doubts.push(h.num>prev.num+1?`Después de la n.º ${prev.num} sigue la n.º ${h.num}: faltan números entre medio.`:`La numeración va hacia atrás (de ${prev.num} a ${h.num}).`);
+    if(index.length){ const ie=idxByNum.get(h.num); const inIdx=ie?hymNorm(ie.title).slice(0,12)===hymNorm(h.title).slice(0,12):idxTitles.has(hymNorm(h.title)); if(!inIdx) doubts.push('No aparece así en el índice del archivo.'); }
+    if(lyricCount<3) doubts.push('Tiene muy pocas líneas: puede ser solo un título o una parte de otra canción.');
+    if(lyricCount>90) doubts.push('Es muy larga: puede que incluya otra canción sin título reconocible.');
+    out.push({title:niceCase(h.title),num:h.num,author:'',key:h.key,bpm:'',capo:0,body:text,notes:`N.º ${h.num}${h.code?' · '+h.code:''} · Importado de “${fileName}”.`,hasChords:/\[/.test(text),doubts});
+  });
+  const found=new Set(heads.map(h=>h.num)); const missing=index.filter(e=>e.num!=null&&!found.has(e.num));
+  out.missing=missing.map(e=>`${e.num}. ${e.title}`);
+  return out;
 }
