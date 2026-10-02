@@ -41,6 +41,10 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .brand img.vdn{width:56px;height:56px;border-radius:8px;flex:none;margin-block:-4px}
 @media (max-width:520px){.brand img.vdn{width:46px;height:46px}}
 .brand .bt{min-width:0;display:grid;line-height:1.15}
+.brand{flex:1 0 100%;display:grid;grid-template-columns:56px minmax(0,1fr) 56px;margin-right:0}
+.brand .bt{text-align:center;justify-items:center}
+.brand img.church{background:#000;justify-self:end}
+@media (max-width:520px){.brand{grid-template-columns:46px minmax(0,1fr) 46px}}
 .brand b{font-family:var(--f-display);font-size:20px;font-weight:700;letter-spacing:-.005em;color:var(--gold)}
 .brand span{color:#B9B09A;font-size:12px;font-style:italic;font-family:var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tabs{display:flex;gap:4px;background:#1B1A17;padding:3px;border-radius:999px}
@@ -278,7 +282,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 </style></head><body>
 
 <header class="top"><div class="top-in">
-  <div class="brand"><img class="vdn" src="/vdn-logo.jpg?v=2" alt="Logo Voz de la Novia" width="56" height="56"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div></div>
+  <div class="brand"><img class="vdn" src="/vdn-logo.jpg?v=2" alt="Logo Voz de la Novia" width="56" height="56"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div><img class="vdn church" src="/shalom-logo.jpg?v=1" alt="Logo Tabernáculo Shalom Adonai" width="56" height="56"></div>
   <div class="tabs" role="tablist">
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
