@@ -32,28 +32,21 @@ async function readDocx(file){
   return pages.map(p=>p.join('\n')).filter(t=>t.trim());
 }
 async function readPdf(file){
+  try{
+    if(S.token){ const r=await fetch('/api/pdf-words',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/pdf'},body:file});
+      if(r.ok){ const d=await r.json(); if(d.pages&&d.pages.length) return d.pages.map(wordsToText); } }
+  }catch{}
+  return readPdfBrowser(file);
+}
+async function readPdfBrowser(file){
   await ioLoadScript(PDFJS_SRC); const lib=window.pdfjsLib; if(!lib) throw new Error('No se pudo cargar el lector de PDF. Revisa tu conexión.');
   lib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
   const pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const pages=[];
   for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i); const tc=await page.getTextContent();
-    const items=tc.items.filter(it=>it.str!==undefined && it.str.length).map(it=>({x:it.transform[4],y:it.transform[5],s:it.str,w:it.width,h:Math.abs(it.transform[3])||10}));
-    if(!items.length){ pages.push(''); continue; }
-    const widths=items.filter(it=>it.s.trim().length>1).map(it=>it.w/it.s.length).sort((a,b)=>a-b);
-    const cw=widths.length?widths[Math.floor(widths.length/2)]:5;
-    const minX=Math.min(...items.map(it=>it.x));
-    items.sort((a,b)=>b.y-a.y||a.x-b.x);
-    const lines=[]; for(const it of items){ const L=lines.find(l=>Math.abs(l.y-it.y)<=Math.max(2,it.h*0.35)); if(L) L.items.push(it); else lines.push({y:it.y,h:it.h,items:[it]}); }
-    lines.sort((a,b)=>b.y-a.y);
-    const hs=lines.map(l=>l.h).sort((a,b)=>a-b); const lh=hs[Math.floor(hs.length/2)]*1.25;
-    let out=[]; let prevY=null;
-    for(const l of lines){
-      if(prevY!=null && prevY-l.y>lh*1.7) out.push('');
-      l.items.sort((a,b)=>a.x-b.x); let s='';
-      for(const it of l.items){ const col=Math.max(0,Math.round((it.x-minX)/cw)); if(s.length<col) s=s.padEnd(col,' '); else if(s.length && !/\s$/.test(s) && !/^\s/.test(it.s) && it.x-minX>(s.length+0.6)*cw) s+=' '; s+=it.s; }
-      out.push(s.replace(/\s+$/,'')); prevY=l.y;
-    }
-    pages.push(out.join('\n'));
+    const page=await pdf.getPage(i); const tc=await page.getTextContent(); const vh=page.getViewport({scale:1}).height; const words=[];
+    for(const it of tc.items){ if(!it.str||!it.str.trim()) continue; const x=it.transform[4], h=Math.abs(it.transform[3])||10, y0=vh-it.transform[5]-h, cw=it.width/Math.max(1,it.str.length); let pos=0;
+      for(const m of it.str.matchAll(/\S+/g)){ const x0=x+m.index*cw; words.push([x0,y0,x0+m[0].length*cw,y0+h,m[0]]); pos++; } }
+    pages.push(wordsToText(words));
   }
   return pages;
 }
@@ -95,7 +88,19 @@ function isTitleLine(line){
   return letters===letters.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(letters);
 }
 function cleanTitle(t){ return t.trim().replace(/^\d{1,4}\s*[-.)–]\s*/,'').replace(/\s+/g,' ').replace(/^(.)(.*)$/,(m,a,b)=>a+b); }
-function niceCase(t){ const letters=t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g,''); if(letters && letters===letters.toUpperCase()){ const l=t.toLocaleLowerCase('es'); return l.charAt(0).toLocaleUpperCase('es')+l.slice(1); } return t; }
+const PROPER=['Dios','Jesús','Jesucristo','Cristo','Jehová','Señor','Espíritu Santo','Espíritu','Emanuel','Emmanuel','Mesías','Rey de reyes','Cordero','Sion','Israel','Jerusalén','Canaán','Jordán','Abraham','Isaac','Jacob','Moisés','Elías','Eliseo','David','Pedro','Pablo','Juan','María','Miguel','Gabriel','Josué','Noé','Getsemaní','Calvario','Gólgota','Belén','Nazaret','Egipto','Faraón','Biblia','Edén','Babilonia','Salomón','Sansón','Daniel','Ezequiel','Isaías','Jeremías','Lázaro','Marta','Zaqueo','Rut','Ester','Gedeón','Samuel','Saúl','Goliat'];
+const PROPER_MAP=new Map(PROPER.map(p=>[p.toLocaleLowerCase('es'),p]));
+function fixProper(t){ let out=t; for(const [lo,p] of PROPER_MAP){ out=out.replace(new RegExp('(^|[^\\p{L}])'+lo.replace(/ /g,'\\s+')+'(?=$|[^\\p{L}])','gu'),(m,pre)=>pre+p); } return out; }
+function sentence(t){ const l=t.toLocaleLowerCase('es'); const i=l.search(/\p{L}/u); const s=i<0?l:l.slice(0,i)+l.charAt(i).toLocaleUpperCase('es')+l.slice(i+1); return fixProper(s); }
+function niceCase(t){ const letters=t.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g,''); if(letters && letters===letters.toUpperCase()) return sentence(t); return t; }
+/* Pasa a minúsculas las líneas de letra escritas en MAYÚSCULAS, sin tocar acordes ni títulos de sección */
+function lyricCase(body){
+  return body.split('\n').map(line=>{ if(/^\s*#/.test(line)) return line;
+    const parts=line.split(/(\[[^\]]*\])/); const text=parts.filter((p,i)=>i%2===0).join(''); const letters=text.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g,'');
+    if(!letters||letters!==letters.toUpperCase()) return line;
+    const low=sentence(text); let k=0; return parts.map((p,i)=>{ if(i%2) return p; const seg=low.slice(k,k+p.length); k+=p.length; return seg; }).join('');
+  }).join('\n');
+}
 function splitText(text,mode){
   const lines=text.replace(/\r/g,'').split('\n');
   if(mode==='sep'){ const out=[]; let cur=[]; for(const l of lines){ if(/^\s*(-{3,}|\*{3,}|={3,}|_{3,})\s*$/.test(l)){ if(cur.join('').trim()) out.push(cur.join('\n')); cur=[]; } else cur.push(l); } if(cur.join('').trim()) out.push(cur.join('\n')); return out; }
@@ -109,7 +114,7 @@ function makeSong(text,fallbackTitle){
   if(lines.length && !isChordLine(lines[0]) && !SEC_RE.test(lines[0]) && lines[0].trim().length<=80){ title=cleanTitle(lines.shift()); }
   while(lines.length && (META_RE.test(lines[0])||!lines[0].trim())){ const m=META_RE.exec(lines.shift()); if(!m) continue; const k=m[1].toLowerCase(), v=m[2].trim();
     if(/tono|key|clave/.test(k)) meta.key=v; else if(/bpm|tempo/.test(k)) meta.bpm=parseInt(v)||''; else if(k==='capo') meta.capo=parseInt(v)||0; else meta.author=v; }
-  return finishSong({title:niceCase(title||fallbackTitle||'Sin título'),author:meta.author||'',key:meta.key||'',bpm:meta.bpm||'',capo:meta.capo||0,body:convertChordsOverLyrics(lines.join('\n')).replace(/\n{3,}/g,'\n\n').trim()});
+  return finishSong({title:niceCase(title||fallbackTitle||'Sin título'),author:meta.author||'',key:meta.key||'',bpm:meta.bpm||'',capo:meta.capo||0,body:(b=>IO.lower?lyricCase(b):b)(convertChordsOverLyrics(lines.join('\n')).replace(/\n{3,}/g,'\n\n').trim())});
 }
 function finishSong(s){
   let k=parseKey(s.key);
@@ -147,12 +152,14 @@ async function ioRead(files){
       IO.files.push({name:f.name.replace(/\.[^.]+$/,''),ext,pages});
     }catch(e){ errors.push(`${f.name}: ${e.message||'no se pudo leer.'}`); }
   }
-  IO.errors=errors; if(IO.mode==='auto') IO.mode=IO.files.length>1?'file':(IO.files[0]&&IO.files[0].pages.length>1&&IO.files[0].ext==='pdf'?'titles':'titles');
+  IO.errors=errors; IO.hymnal=IO.files.some(f=>hymFindIndex(f.pages).entries.length>=3); if(IO.lower===undefined) IO.lower=true;
+  if(IO.mode==='auto'&&IO.hymnal) IO.mode='hymnal'; if(IO.mode==='auto') IO.mode=IO.files.length>1?'file':(IO.files[0]&&IO.files[0].pages.length>1&&IO.files[0].ext==='pdf'?'titles':'titles');
   ioBuild();
 }
 function ioBuild(){
   const chunks=[];
   for(const f of IO.files){
+    if(IO.mode==='hymnal'){ const hs=hymnalParse(f.pages,f.name+(f.ext?'.'+f.ext:'')); if(hs&&hs.length){ hs.forEach(h=>chunks.push(finishSong({...h,body:IO.lower?lyricCase(h.body):h.body}))); continue; } }
     const all=f.pages.join('\n\n');
     if(isChordPro(all)&&IO.mode!=='sep'){ chunks.push(makeSong(all,f.name)); continue; }
     if(IO.mode==='file') chunks.push(makeSong(all,f.name));
@@ -165,9 +172,11 @@ function ioRender(){
   const opts=$('#imp-opts'), list=$('#imp-list'); if(!opts) return;
   const errs=(IO.errors||[]).map(e=>`<div class="banner" style="color:var(--danger)">${esc(e)}</div>`).join('');
   if(!IO.files.length){ opts.innerHTML=''; list.innerHTML=errs; return; }
-  const modes=[['file','Un archivo = una canción'],['titles','Detectar títulos (números o MAYÚSCULAS)'],['page','Una página = una canción'],['sep','Separadas con una línea ---']];
+  const modes=[...(IO.hymnal?[['hymnal','Himnario con índice (detecta cada canción, une acordes y letra)']]:[]),['file','Un archivo = una canción'],['titles','Detectar títulos (números o MAYÚSCULAS)'],['page','Una página = una canción'],['sep','Separadas con una línea ---']];
   opts.innerHTML=`<label class="f">¿Cómo están separadas las canciones?<select id="imp-mode">${modes.map(([v,t])=>`<option value="${v}" ${IO.mode===v?'selected':''}>${t}</option>`).join('')}</select></label>`;
+  opts.innerHTML+=`<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:8px"><input type="checkbox" id="imp-lower" ${IO.lower?'checked':''}> Pasar la letra en MAYÚSCULAS a minúsculas (mantiene Dios, Jesús, Señor…)</label>`;
   $('#imp-mode').addEventListener('change',e=>{ IO.mode=e.target.value; ioBuild(); });
+  $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
   list.innerHTML=errs+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
     <div class="imp-rows">${IO.chunks.map((c,i)=>`<div class="imp-row">
@@ -176,6 +185,7 @@ function ioRender(){
       <select data-imp="key" data-i="${i}" aria-label="Tono"><option value="">Tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${c.key===k?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select>
       <button class="btn ghost" data-act="imp-view" data-i="${i}">Ver</button>
       ${c.dup?'<span class="pill" title="Ya hay una canción con este título">Ya existe</span>':''}
+      ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.open?`<textarea data-imp="body" data-i="${i}" class="body" style="grid-column:1/-1;min-height:220px">${esc(c.body)}</textarea>`:''}
     </div>`).join('')}</div>
     <div class="actions" style="position:sticky;bottom:-12px;background:var(--surface);padding-block:10px"><button class="btn pri" data-act="imp-go" ${n?'':'disabled'}>Importar ${n} ${n===1?'canción':'canciones'}</button><span id="imp-prog" style="font-size:13px;color:var(--muted)"></span></div>`;
@@ -186,7 +196,7 @@ document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.d
 async function ioImport(){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
   const btn=document.querySelector('[data-act="imp-go"]'); if(btn) btn.disabled=true; const prog=$('#imp-prog');
-  const writes=sel.map(c=>({col:'songs',id:newId('c'),data:{title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:'',updatedAt:Date.now()}}));
+  const writes=sel.map(c=>({col:'songs',id:newId('c'),data:{title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()}}));
   let done=0;
   for(let i=0;i<writes.length;i+=50){
     const part=writes.slice(i,i+50);

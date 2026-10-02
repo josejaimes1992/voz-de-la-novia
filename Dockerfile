@@ -1,4 +1,5 @@
 FROM oven/bun:1.2-alpine
+RUN apk add --no-cache poppler-utils
 WORKDIR /app
 COPY . .
 ENV NODE_ENV=production

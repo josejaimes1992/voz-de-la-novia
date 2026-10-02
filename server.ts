@@ -86,7 +86,7 @@ function publicUser(u: any) { return { id: u.id, username: u.username, name: u.n
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8" };
 
 Bun.serve({
   port: Number(Bun.env.PORT ?? 3000),
@@ -197,6 +197,28 @@ Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const rows = await db`SELECT id, at, username, action, title FROM changes WHERE col = ${hm[1]} AND doc_id = ${decodeURIComponent(hm[2])} ORDER BY id DESC LIMIT 100`;
         return json({ history: rows });
+      }
+
+      /* ---- Lectura de PDF con posiciones de palabras (para alinear acordes) ---- */
+      if (p === "/api/pdf-words" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const buf = new Uint8Array(await req.arrayBuffer());
+        if (buf.length > 40_000_000) return json({ error: "too_large" }, 413);
+        if (buf.length < 5 || String.fromCharCode(...buf.slice(0, 5)) !== "%PDF-") return json({ error: "not_pdf" }, 400);
+        const tmp = `/tmp/vdn-${randomBytes(8).toString("hex")}`;
+        await Bun.write(tmp + ".pdf", buf);
+        try {
+          const proc = Bun.spawn(["pdftotext", "-bbox-layout", "-enc", "UTF-8", tmp + ".pdf", tmp + ".html"], { stdout: "ignore", stderr: "pipe" });
+          const code = await proc.exited;
+          if (code !== 0) return json({ error: "pdf_failed" }, 422);
+          const x = await Bun.file(tmp + ".html").text();
+          const unesc = (t: string) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+          const pages = [...x.matchAll(/<page[^>]*>([\s\S]*?)<\/page>/g)].map(m =>
+            [...m[1].matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([\s\S]*?)<\/word>/g)].map(w => [+w[1], +w[2], +w[3], +w[4], unesc(w[5])]));
+          return json({ pages });
+        } finally {
+          await Bun.$`rm -f ${tmp + ".pdf"} ${tmp + ".html"}`.quiet().nothrow();
+        }
       }
 
       /* ---- Escritura ---- */
