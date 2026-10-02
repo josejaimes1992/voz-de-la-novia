@@ -1,6 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
 import { randomBytes } from "node:crypto";
+import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
 
 const db = new SQL(Bun.env.DATABASE_URL!);
 await db`CREATE TABLE IF NOT EXISTS docs (
@@ -37,6 +38,11 @@ if (u === 0) {
   }
 }
 
+const AUDIO_DIR = Bun.env.AUDIO_DIR ?? "/data/audio";
+try { mkdirSync(AUDIO_DIR, { recursive: true }); } catch (e) { console.error("No se pudo crear la carpeta de audios", e); }
+const AUDIO_TYPES: Record<string, string> = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/ogg": "ogg", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac", "audio/3gpp": "3gp", "audio/amr": "amr" };
+const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", webm: "audio/webm", flac: "audio/flac", "3gp": "audio/3gpp", amr: "audio/amr" };
+const AUDIO_RE = /^[a-f0-9]{24}\.(mp3|m4a|aac|wav|ogg|webm|flac|3gp|amr)$/;
 const COLS = new Set(["songs", "programs"]);
 const ID_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
 const USER_RE = /^[a-z0-9._-]{2,30}$/;
@@ -68,6 +74,7 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
   data.updatedAt = now; data.updatedBy = user.name;
   if (!before) { data.createdBy = data.createdBy ?? user.name; data.createdAt = data.createdAt ?? now; }
   if (col === "songs") {
+    if (before?.audio) data.audio = before.audio; else delete data.audio;
     const sig = (t: unknown) => String(t ?? "").split("\n").map(l => (l.match(/\[[^\]]*\]/g) ?? []).join("")).join("|").replace(/\|+$/, "");
     for (const [field, by] of [["body", "chordsBy"], ["bodyPro", "chordsProBy"]] as const) {
       delete data[by];
@@ -86,9 +93,10 @@ function publicUser(u: any) { return { id: u.id, username: u.username, name: u.n
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8" };
 
 Bun.serve({
+  maxRequestBodySize: 60 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -99,6 +107,22 @@ Bun.serve({
       if (p === "/logo.jpg") return new Response(LOGO, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
       if (STATIC[p]) return new Response(Bun.file(new URL("./public" + p, import.meta.url)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
 
+      const am = p.match(/^\/audio\/([^/]+)$/);
+      if (am && (req.method === "GET" || req.method === "HEAD")) {
+        if (!AUDIO_RE.test(am[1])) return new Response("No encontrado", { status: 404 });
+        const path = `${AUDIO_DIR}/${am[1]}`; if (!existsSync(path)) return new Response("No encontrado", { status: 404 });
+        const size = statSync(path).size; const type = AUDIO_MIME[am[1].split(".").pop()!] ?? "application/octet-stream";
+        const range = req.headers.get("range"); const file = Bun.file(path);
+        const base = { "accept-ranges": "bytes", "content-type": type, "cache-control": "public, max-age=604800, immutable" };
+        const rm = range && /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (rm) {
+          let start = rm[1] ? Number(rm[1]) : size - Number(rm[2]); let end = rm[1] && rm[2] ? Number(rm[2]) : size - 1;
+          if (!rm[1] && rm[2]) end = size - 1; start = Math.max(0, start); end = Math.min(size - 1, end);
+          if (start > end) return new Response(null, { status: 416, headers: { "content-range": `bytes */${size}` } });
+          return new Response(req.method === "HEAD" ? null : file.slice(start, end + 1), { status: 206, headers: { ...base, "content-range": `bytes ${start}-${end}/${size}`, "content-length": String(end - start + 1) } });
+        }
+        return new Response(req.method === "HEAD" ? null : file, { headers: { ...base, "content-length": String(size) } });
+      }
       if (p === "/api/data" && req.method === "GET") {
         const rows = await db`SELECT col, id, data FROM docs`;
         const out: Record<string, unknown[]> = { songs: [], programs: [] };
@@ -197,6 +221,44 @@ Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const rows = await db`SELECT id, at, username, action, title FROM changes WHERE col = ${hm[1]} AND doc_id = ${decodeURIComponent(hm[2])} ORDER BY id DESC LIMIT 100`;
         return json({ history: rows });
+      }
+
+      /* ---- Audios de canciones ---- */
+      const au = p.match(/^\/api\/audio\/([A-Za-z0-9_.:-]{1,80})(?:\/([a-f0-9]{24}\.[a-z0-9]+))?$/);
+      if (au) {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const songId = au[1];
+        const rows = await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${songId}`;
+        if (!rows[0]) return json({ error: "not_found" }, 404);
+        const song = parseJ(rows[0].data);
+        if (req.method === "POST" && !au[2]) {
+          const type = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+          const ext = AUDIO_TYPES[type]; if (!ext) return json({ error: "bad_type" }, 415);
+          const len = Number(req.headers.get("content-length") ?? 0); if (len > 40_000_000) return json({ error: "too_large" }, 413);
+          const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 40_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
+          const file = randomBytes(12).toString("hex") + "." + ext;
+          await Bun.write(`${AUDIO_DIR}/${file}`, buf);
+          const name = (url.searchParams.get("name") ?? "Audio").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 80) || "Audio";
+          const entry = { id: file, name, size: buf.length, type: AUDIO_MIME[ext], by: user.name, at: Date.now() };
+          const after = { ...song, audio: [...(song.audio ?? []), entry], updatedAt: Date.now(), updatedBy: user.name };
+          await db.begin(async (tx) => {
+            await tx`UPDATE docs SET data = ${JSON.stringify(after)}::jsonb, updated_at = ${Date.now()} WHERE col = 'songs' AND id = ${songId}`;
+            await logChange(tx, user, "audio", "songs", songId, song, after);
+          });
+          return json({ ok: true, audio: entry });
+        }
+        if (req.method === "DELETE" && au[2]) {
+          const entry = (song.audio ?? []).find((a: any) => a.id === au[2]); if (!entry) return json({ error: "not_found" }, 404);
+          if (user.role !== "admin" && entry.by !== user.name) return json({ error: "forbidden" }, 403);
+          const after = { ...song, audio: (song.audio ?? []).filter((a: any) => a.id !== au[2]), updatedAt: Date.now(), updatedBy: user.name };
+          await db.begin(async (tx) => {
+            await tx`UPDATE docs SET data = ${JSON.stringify(after)}::jsonb, updated_at = ${Date.now()} WHERE col = 'songs' AND id = ${songId}`;
+            await logChange(tx, user, "audio-delete", "songs", songId, song, after);
+          });
+          try { unlinkSync(`${AUDIO_DIR}/${au[2]}`); } catch {}
+          return json({ ok: true });
+        }
+        return json({ error: "method" }, 405);
       }
 
       /* ---- Lectura de PDF con posiciones de palabras (para alinear acordes) ---- */

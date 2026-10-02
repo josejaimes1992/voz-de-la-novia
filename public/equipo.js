@@ -1,7 +1,7 @@
 /* Voz de la Novia — equipo: cuenta, usuarios, registro de cambios, historial */
 "use strict";
 const ROLE_NAME={admin:'Administrador',moderator:'Moderador'};
-const ACTION_NAME={create:'Creó',update:'Editó',delete:'Borró',import:'Importó',restore:'Restauró'};
+const ACTION_NAME={create:'Creó',update:'Editó',delete:'Borró',import:'Importó',restore:'Restauró',audio:'Subió audio','audio-delete':'Borró audio'};
 const COL_NAME={songs:'canción',programs:'programa'};
 
 function modal(title,inner,width){
@@ -92,6 +92,7 @@ function changeSummary(c){
   const a=c.before||{}, b=c.after||{}; let html='';
   const nv=v=>(v===undefined||v===null||v===0||v==='0')?'':String(v); const fields=Object.keys(FIELD_NAME).filter(k=>nv(a[k])!==nv(b[k]));
   if(c.action!=='delete'&&c.before&&fields.length) html+=`<div class="diff">${fields.map(k=>`${FIELD_NAME[k]}: <span class="del">− ${esc(a[k]??'')}</span><span class="add">+ ${esc(b[k]??'')}</span>`).join('')}</div>`;
+  if(c.action==='audio'||c.action==='audio-delete'){ const na=(a.audio||[]).map(x=>x.name).join('\n'), nb=(b.audio||[]).map(x=>x.name).join('\n'); const d=lineDiff(na,nb); return `<b>Audios</b><div class="diff">${d||esc(nb)}</div>`; }
   if(c.col==='songs'){
     const d1=lineDiff(a.body,b.body), d2=lineDiff(a.bodyPro,b.bodyPro);
     if(!c.before||!c.after){ const t=(c.after||c.before).body||''; html+=`<b>Letra (acordes básicos)</b><div class="diff">${esc(t)}</div>`; }

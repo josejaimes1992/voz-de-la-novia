@@ -143,6 +143,10 @@ function play(inst,root,raw,bass,vi=0){
   });
 }
 
+function note(midi,inst){ return whenReady(()=>{ if(inst==='piano') playPiano([midi]); else playPluck([midi],0.997,0,0.9); }); }
+function tone(freq,secs){ return whenReady(()=>{ const t0=ctx.currentTime+0.02, o=ctx.createOscillator(), g=ctx.createGain(); o.type='triangle'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.35,t0+0.03); g.gain.setValueAtTime(0.35,t0+secs-0.15); g.gain.exponentialRampToValueAtTime(0.0001,t0+secs); o.connect(g); g.connect(master); o.start(t0); o.stop(t0+secs+0.05); }); }
+
 /* ---------- Metrónomo ---------- */
 const metro={on:false,bpm:80,beat:0,next:0,timer:null,onBeat:null};
 function clickAt(t,accent){ const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=accent?1600:1000;
@@ -157,5 +161,5 @@ function metroStart(bpm,onBeat){
 }
 function metroStop(){ if(metro.timer) clearInterval(metro.timer); metro.timer=null; metro.on=false; }
 
-window.Acordes={load,diagram,count,play,positions,normSuffix,chordName,metroStart,metroStop,metro,ready:()=>!!DB};
+window.Acordes={note,tone,load,diagram,count,play,positions,normSuffix,chordName,metroStart,metroStop,metro,ready:()=>!!DB};
 })();

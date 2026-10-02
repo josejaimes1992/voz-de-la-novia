@@ -171,6 +171,29 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .pl-w:hover .pl-c{color:var(--accent)}
 .pl-w.end .pl-c{color:var(--muted)}
 .pl-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.aud{display:grid;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:12px;margin:0 0 16px}
+.aud-h{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.aud-h b{font-family:var(--f-display);font-size:16px}
+.aud-row{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.aud-meta{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.aud-row audio{width:100%;height:40px}
+.aud-ops{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tun-face{display:grid;gap:8px;justify-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+.tun-note{font-family:var(--f-ui);font-weight:700;font-size:56px;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+.tun-note.ok{color:var(--ok)}
+.tun-meter{position:relative;width:100%;height:56px}
+.tun-scale span{position:absolute;bottom:0;transform:translateX(-50%);font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.tun-zone{position:absolute;left:45%;width:10%;top:6px;height:30px;background:color-mix(in srgb,var(--ok) 20%,transparent);border-radius:4px}
+.tun-meter::before{content:"";position:absolute;left:0;right:0;top:20px;height:2px;background:var(--line)}
+.tun-needle{position:absolute;top:2px;left:50%;width:4px;height:36px;margin-left:-2px;border-radius:2px;background:var(--chord);transition:left .12s linear;z-index:1}
+.tun-needle.ok{background:var(--ok)}
+@media (prefers-reduced-motion:reduce){.tun-needle{transition:none}}
+.tun-info{display:flex;gap:16px;font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.tun-hint{font-size:14px;font-weight:600;min-height:20px;text-align:center}
+.tun-strings{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tun-str{display:grid;justify-items:center;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;min-width:52px;cursor:pointer;color:var(--ink)}
+.tun-str b{font-family:var(--f-ui);font-size:18px}.tun-str small{color:var(--muted);font-size:11px}
+.tun-str.on{border-color:var(--accent);background:var(--accent-soft)}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -238,6 +261,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
   </div>
+  <button class="nota" data-act="tuner" style="font-family:var(--f-ui);font-weight:600" title="Afinador de guitarra">Afinador</button>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
   <button class="nota" id="auth" data-act="auth" style="font-family:var(--f-ui);font-weight:600">Ingresar</button>
 </div></header>
@@ -248,7 +272,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="/acordes.js?v=3"></script>
+<script src="/acordes.js?v=4"></script>
 <script>
 "use strict";
 const LOGO_FULL="/logo.jpg?v=2";
@@ -530,12 +554,14 @@ function viewSong(){
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
     ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>`:''}
   </div>
+  ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
   ${V.chords?verBar(s):''}
   ${V.chords?instBar(s,V.capo,false):''}
   ${V.chords&&V.capo&&V.inst!=='piano'?`<p style="margin:-4px 0 12px;color:var(--muted);font-size:13px">Capo ${V.capo}: los acordes se muestran como formas; suena en ${esc(keyText(k,V.shift))}.</p>`:''}
   ${chordStrip(sb(s),V.shift,k,V.inst==='piano'?0:V.capo)}${V.chords?chordsByLine(s):''}
   ${renderSheet(sb(s),{shift:V.shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:V.capo})}
-  ${s.notes?`<div class="notes">${esc(s.notes)}</div>`:''}`;
+  ${s.notes?`<div class="notes">${esc(s.notes)}</div>`:''}
+  ${!(s.audio||[]).length&&S.canWrite&&window.audioSection?audioSection(s):''}`;
 }
 
 function viewEdit(){
@@ -902,6 +928,8 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 </script>
 <script src="/himnario.js?v=1"></script>
 <script src="/io.js?v=3"></script>
-<script src="/equipo.js?v=2"></script>
+<script src="/equipo.js?v=3"></script>
 <script src="/placer.js?v=2"></script>
+<script src="/afinador.js?v=1"></script>
+<script src="/audios.js?v=1"></script>
 </body></html>
