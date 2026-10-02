@@ -11,7 +11,7 @@ function audioSection(s,compact){
     <div id="aud-prog" class="muted" style="font-size:13px" hidden></div>
     ${list.length?list.map(a=>`<div class="aud-row">
       <div class="aud-meta"><b>${esc(a.name)}</b><small class="muted">${esc(a.by||'')} · ${esc(fmtWhen(a.at))}${a.duration?' · '+Math.floor(a.duration/60)+':'+String(a.duration%60).padStart(2,'0'):''} · ${audSize(a.size||0)}${a.original&&a.original>a.size*1.2?` (comprimido de ${audSize(a.original)})`:''}</small></div>
-      <audio controls preload="none" src="/audio/${esc(a.id)}" data-aud-player></audio>
+      <audio controls ${S.canWrite?'':'controlslist="nodownload" oncontextmenu="return false"'} preload="none" src="/audio/${esc(a.id)}" data-aud-player></audio>
       <div class="aud-ops"><span class="muted" style="font-size:12px">Velocidad</span>${[0.75,0.9,1].map(r=>`<button class="chip" data-act="aud-rate" data-r="${r}">${r===1?'Normal':r+'×'}</button>`).join('')}
         ${S.isAdmin||(S.user&&S.user.name===a.by)?(V.confirm==='aud-'+a.id?`<span class="confirm">¿Borrar? <button class="btn danger" data-act="aud-del-yes" data-s="${esc(s.id)}" data-id="${esc(a.id)}">Sí</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="aud-del" data-id="${esc(a.id)}">Borrar</button>`):''}</div>
     </div>`).join(''):`<p class="muted" style="margin:0;font-size:13px">Aún no hay audios. Sube la canción original o un ensayo (MP3, M4A, WAV… hasta 100 MB). Se comprime solo para ocupar poco espacio.</p>`}

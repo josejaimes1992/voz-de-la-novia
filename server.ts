@@ -116,9 +116,15 @@ function publicUser(u: any) { return { id: u.id, username: u.username, name: u.n
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8" };
 
-Bun.serve({
+/* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
+type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
+let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
+const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
+const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+
+const SERVER = Bun.serve({
   maxRequestBodySize: 120 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
   async fetch(req, server) {
@@ -127,6 +133,12 @@ Bun.serve({
     try {
       if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
+      if (p === "/proyector") return new Response(PROJ_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/ws/proyector") {
+        if (server.upgrade(req)) return undefined as unknown as Response;
+        return new Response("Se esperaba WebSocket", { status: 400 });
+      }
+      if (p === "/api/proyector" && req.method === "GET") return json(PROJ);
       if (p === "/logo.jpg") return new Response(LOGO, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
       if (STATIC[p]) return new Response(Bun.file(new URL("./public" + p, import.meta.url)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
 
@@ -172,6 +184,16 @@ Bun.serve({
         return json({ token, user: publicUser(rows[0]) });
       }
       const user = p.startsWith("/api/") ? await currentUser(req) : null;
+      if (p === "/api/proyector" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const b = await req.json().catch(() => ({}));
+        const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
+        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60),
+          songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
+          idx: Number(b.idx) || 0, total: Number(b.total) || 0, by: user.name, at: Date.now() };
+        SERVER.publish("proj", JSON.stringify(PROJ));
+        return json(PROJ);
+      }
       if (p === "/api/me") return json({ user: user ? { ...user } : null });
       if (p === "/api/logout" && req.method === "POST") {
         const h = req.headers.get("authorization") ?? ""; if (h.startsWith("Bearer ")) await db`DELETE FROM sessions WHERE token = ${h.slice(7)}`;
@@ -399,6 +421,13 @@ Bun.serve({
       console.error(e);
       return json({ error: "server" }, 500);
     }
+  },
+  websocket: {
+    idleTimeout: 60,
+    sendPings: true,
+    open(ws) { ws.subscribe("proj"); ws.send(JSON.stringify(PROJ)); },
+    message(ws, msg) { if (msg === "ping") ws.send("pong"); },
+    close(ws) { ws.unsubscribe("proj"); },
   },
 });
 console.log("Voz de la Novia escuchando en", Bun.env.PORT ?? 3000);

@@ -243,6 +243,7 @@ function holyricsText(s){
   return '﻿'+blocks.join('\r\n\r\n')+'\r\n';
 }
 function openExport(scope){
+  if(!S.canWrite) return;
   const list=scope==='program'?ioProgramSongs():ioFilteredSongs();
   const label=scope==='program'?`las ${list.length} canciones del programa, en su orden`:(list.length===S.songs.size?`todas las canciones (${list.length})`:`las ${list.length} canciones que estás viendo`);
   $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Exportar" data-stop style="width:min(520px,100%)">
@@ -259,6 +260,7 @@ function ioFilteredSongs(){
 function ioProgramSongs(){ const p=S.programs.get(V.programId); return (p&&p.items||[]).map(it=>{ const s=S.songs.get(it.songId); if(!s) return null; const sh=itemShift(it); return {...s,key:it.key||s.key,body:sh?transposeBody(s.body,sh):s.body}; }).filter(Boolean); }
 function transposeBody(body,sh){ return body.replace(/\[([^\]]+)\]/g,(m,c)=>'['+fmtChord(c,sh,false,false)+']'); }
 async function ioExport(fmt,scope){
+  if(!S.canWrite) return;
   const list=scope==='program'?ioProgramSongs():ioFilteredSongs(); const p=scope==='program'?S.programs.get(V.programId):null;
   const base=scope==='program'?slug(p.title||'programa')+(p.date?'-'+p.date:''):'voz-de-la-novia';
   try{

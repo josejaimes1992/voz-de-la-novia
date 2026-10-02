@@ -295,6 +295,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <footer class="foot">Tabernáculo Shalom Adonai · Voz de la Novia</footer>
 <div id="modal-root"></div>
 <div id="live-root"></div>
+<div id="proj-root"></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -455,6 +456,7 @@ const ICON={
  search:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
  back:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>',
  plus:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
+ screen:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
  pdf:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6m-3-3 3 3 3-3"/></svg>',
  play:'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>',
  edit:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
@@ -513,7 +515,7 @@ function viewSongsInner(){
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}<button class="btn" data-act="open-export" data-scope="songs">Exportar</button>${S.canWrite?`<button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
@@ -634,9 +636,10 @@ function viewSong(){
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Canciones</button>
   <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
-    <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
-    <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
+    ${S.canWrite?`<button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
+    <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>`:''}
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
+    ${S.canWrite?`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`:''}
     ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>`:''}
   </div>
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
@@ -713,9 +716,10 @@ function viewProgram(){
   </div>`:`<h1 style="font-family:var(--f-display);font-size:30px">${esc(p.title)}</h1><p style="color:var(--muted);margin:4px 0 0">${esc(f.full)}${p.service?' · '+esc(p.service):''}</p>${p.notes?`<div class="notes">${esc(p.notes)}</div>`:''}`}
   <div class="ctrl" style="margin-top:16px">
     <button class="btn pri" data-act="live-prog" ${items.length?'':'disabled'}>${ICON.play}Modo en vivo</button>
+    ${S.canWrite?`<button class="btn" data-act="proj-prog" ${items.length?'':'disabled'}>${ICON.screen}Proyectar</button>
     <button class="btn" data-act="pdf-prog" data-mode="letra" ${items.length?'':'disabled'}>${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-prog" data-mode="acordes" ${items.length?'':'disabled'}>${ICON.pdf}PDF acordes</button>
-    <button class="btn" data-act="open-export" data-scope="program" ${items.length?'':'disabled'}>Exportar</button>
+    <button class="btn" data-act="open-export" data-scope="program" ${items.length?'':'disabled'}>Exportar</button>`:''}
     <span class="spacer"></span>
     ${w?`<button class="btn" data-act="pick-song">${ICON.plus}Agregar canción</button>`:''}
   </div>
@@ -929,6 +933,7 @@ function buildPdf(entries,mode,head){
   return doc.output('blob');
 }
 async function savePdf(entries,mode,head,filename){
+  if(!S.canWrite) return;
   let blob; try{ blob=buildPdf(entries,mode,head); }catch(e){ toast('No se pudo generar el PDF. Revisa tu conexión y recarga la página.'); return; }
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000); toast('PDF descargado.');
@@ -1020,4 +1025,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/afinador.js?v=1"></script>
 <script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
+<script src="/proyeccion.js?v=1"></script>
 </body></html>
