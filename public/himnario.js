@@ -202,32 +202,53 @@ function hymFindNumberedIndex(pages){
   const entries=[]; pages.forEach((p,i)=>{ const hits=[]; for(const l of p.split('\n')){ let m=/^\s*(\d{1,4})[.)\-]?\s+(.+?)\s*(?:[.·…_]{2,}|\s{2,})\s*(\d{1,4})\s*$/.exec(l); if(m){ hits.push({num:+m[1],title:m[2].trim(),page:+m[3],pi:i}); continue; } m=HYM_INDEX_RE.exec(l); if(m) hits.push({num:null,title:m[1].trim(),page:+m[2],pi:i}); } if(hits.length>=6) entries.push(...hits); });
   return entries;
 }
+/* ---------- ¿Esto es letra de canción? ---------- */
+const NOTE_WORD=/^(DO|RE|MI|FA|SOL|LA|SI|[A-G])(#|♯|B|♭)?(M|MENOR|MAYOR|7|M7|MAJ7|SUS\d?|DIM|AUG)?$/i;
+function hymLyricWords(t){ return String(t).replace(/\[[^\]]*\]/g,' ').split(/\s+/).map(w=>w.replace(/[^\p{L}]/gu,'')).filter(w=>w.length>=2&&!parseChord(w)&&!HYM_ROMAN.test(w.toUpperCase())); }
+function isLyricLine(t){ if(/^\s*#/.test(t)) return false; const w=hymLyricWords(t); return w.length>=2||(w.length===1&&w[0].length>=4); }
+function lyricCountOf(text){ return String(text).split('\n').filter(isLyricLine).length; }
+function hasSongShape(lines){ const n=lines.filter(isLyricLine).length; const sec=lines.some(l=>hymHeader(String(l).replace(/^#\s*/,''))); return n>=3||(n>=2&&sec); }
+function validTitle(t){
+  const toks=t.split(/\s+/).filter(Boolean); if(!toks.length) return false;
+  const words=toks.map(w=>w.replace(/[^\p{L}#♯♭]/gu,'')).filter(w=>w.length>=3&&!NOTE_WORD.test(w)&&!parseChord(w));
+  if(!words.length) return false;
+  const noteish=toks.filter(w=>{ const c=w.replace(/[^\p{L}#♯♭0-9]/gu,''); return !c||/^\d+$/.test(c)||NOTE_WORD.test(c)||parseChord(c); }).length;
+  if(noteish/toks.length>=0.5) return false;
+  if(hymHeader(t)) return false;
+  return true;
+}
+/* Quita del cuerpo líneas que no son letra, acordes ni títulos de sección (números sueltos, restos) */
+function cleanBodyLines(lines){ return lines.filter(raw=>{ const t=raw.trim(); if(!t) return true; if(hymHeader(t)) return true; if(hymIsChordLine(t)||hymChordPart(raw)!==null) return true; return isLyricLine(t); }); }
+
 function numberedParse(rawPages,fileName){
   const pages=hymCleanPages(rawPages); const index=hymFindNumberedIndex(rawPages);
   const indexPages=new Set(index.map(e=>e.pi));
   const lines=[]; pages.forEach((p,pi)=>{ if(indexPages.has(pi)) return; for(const l of p.split('\n')) lines.push({t:l,pi}); });
-  const heads=[];
+  let heads=[];
   lines.forEach((L,i)=>{ const t=L.t.trim(); const m=NUM_HEAD.exec(t); if(!m) return; const title=m[2].trim();
-    if(!isUpperish(title)&&!m[3]) return; if(/^(coro|estrofa|i{1,3}|iv|v)\b/i.test(title)) return; if(hymIsChordLine(title)) return;
+    if(!isUpperish(title)&&!m[3]) return; if(!validTitle(title)) return; if(hymIsChordLine(title)) return;
     heads.push({i,num:+m[1],title,code:m[3]?m[3]+'/'+m[4]:'',key:keyFromCode(m[4]),pi:L.pi}); });
+  /* Un encabezado solo cuenta si debajo hay forma de canción (estrofa o coro con letra).
+     Si no la hay, no es una canción: sus líneas se quedan con la canción anterior y luego se limpian. */
+  for(let pass=0;pass<6;pass++){
+    const keep=heads.filter((h,n)=>{ const end=n+1<heads.length?heads[n+1].i:lines.length; return hasSongShape(lines.slice(h.i+1,end).map(l=>l.t)); });
+    if(keep.length===heads.length) break; heads=keep;
+  }
   if(heads.length<5) return null;
-  const idxByNum=new Map(index.filter(e=>e.num!=null).map(e=>[e.num,e])); const idxTitles=new Set(index.map(e=>hymNorm(e.title)));
   const out=[];
   heads.forEach((h,n)=>{
     const end=n+1<heads.length?heads[n+1].i:lines.length;
-    const body=lines.slice(h.i+1,end).map(l=>l.t);
+    const body=cleanBodyLines(lines.slice(h.i+1,end).map(l=>l.t));
     while(body.length&&!body[body.length-1].trim()) body.pop();
     const conv=[]; for(const raw of body){ const t=raw.trim(); const hd=hymHeader(t); if(hd){ conv.push('# '+hd); continue; } const cp=hymChordPart(raw); conv.push(cp!==null?cp:t); }
     const text=convertChordsOverLyrics(conv.join('\n')).replace(/\n{3,}/g,'\n\n').trim();
-    const lyricCount=conv.filter(l=>l&&!/^#/.test(l)).length;
+    const lyricCount=lyricCountOf(text);
     const doubts=[];
     const prev=heads[n-1];
-    if(prev&&h.num>prev.num+1&&out[n-1]){ const miss=h.num-prev.num-1; out[n-1].doubts.push(`Puede que al final incluya ${miss===1?'la n.º '+(prev.num+1):'las n.º '+(prev.num+1)+' a '+(h.num-1)}, que no encontré con título.`); }
-    if(prev&&h.num!==prev.num+1&&h.num!==prev.num) doubts.push(h.num>prev.num+1?`Después de la n.º ${prev.num} sigue la n.º ${h.num}: faltan números entre medio.`:`La numeración va hacia atrás (de ${prev.num} a ${h.num}).`);
-    if(index.length){ const ie=idxByNum.get(h.num); const inIdx=ie?hymNorm(ie.title).slice(0,12)===hymNorm(h.title).slice(0,12):idxTitles.has(hymNorm(h.title)); if(!inIdx) doubts.push('No aparece así en el índice del archivo.'); }
-    if(lyricCount<3) doubts.push('Tiene muy pocas líneas: puede ser solo un título o una parte de otra canción.');
+    /* Solo pregunto si es probable que una canción se haya "comido" a otra */
+    if(prev&&h.num>prev.num+1&&out[n-1]&&out[n-1].lyricCount>40){ const miss=h.num-prev.num-1; out[n-1].doubts.push(`Es larga y después falta ${miss===1?'la n.º '+(prev.num+1):'de la n.º '+(prev.num+1)+' a la '+(h.num-1)}: puede que tenga otra canción pegada al final.`); }
     if(lyricCount>90) doubts.push('Es muy larga: puede que incluya otra canción sin título reconocible.');
-    out.push({title:niceCase(h.title),num:h.num,author:'',key:h.key,bpm:'',capo:0,body:text,notes:`N.º ${h.num}${h.code?' · '+h.code:''} · Importado de “${fileName}”.`,hasChords:/\[/.test(text),doubts});
+    out.push({title:niceCase(h.title),num:h.num,author:'',key:h.key,bpm:'',capo:0,body:text,lyricCount,notes:`N.º ${h.num}${h.code?' · '+h.code:''} · Importado de “${fileName}”.`,hasChords:/\[/.test(text),doubts});
   });
   const found=new Set(heads.map(h=>h.num)); const missing=index.filter(e=>e.num!=null&&!found.has(e.num));
   out.missing=missing.map(e=>`${e.num}. ${e.title}`);

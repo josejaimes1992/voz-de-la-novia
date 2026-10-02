@@ -170,7 +170,10 @@ function ioBuild(){
     else if(IO.mode==='page') f.pages.forEach((p,i)=>chunks.push(makeSong(p,f.name+' '+(i+1))));
     else splitText(all,IO.mode).forEach((t,i)=>chunks.push(makeSong(t,f.name+(i?' '+(i+1):''))));
   }
-  IO.chunks=chunks.filter(c=>c.body.trim()||c.title);
+  /* Descarta fragmentos sin forma de canción: solo números, acordes, una línea suelta */
+  const valid=chunks.filter(c=>c.body&&hasSongShape(c.body.split('\n')));
+  IO.discarded=chunks.length-valid.length;
+  IO.chunks=valid;
   /* Repetidas dentro del mismo archivo */
   IO.chunks.forEach((c,i)=>{ if(c.dup) return; const d=findDuplicate(c,IO.chunks.slice(0,i)); if(d){ c.dup=true; c.dupOf={...d,inBatch:true}; c.include=false; } });
   IO.confirmDup=false; ioRender();
@@ -274,6 +277,10 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
 });
 
 function ioDoubtBanner(){
+  const disc=IO.discarded?`<div class="banner muted">No tomé en cuenta ${IO.discarded} ${IO.discarded===1?'fragmento':'fragmentos'} sin forma de canción (números sueltos, acordes o una sola línea).</div>`:'';
+  return disc+ioDoubtBanner2();
+}
+function ioDoubtBanner2(){
   const nd=IO.chunks.filter(c=>c.doubts&&c.doubts.length).length; const miss=IO.missing||[];
   return (nd?`<div class="banner ask-banner"><b>Necesito tu ayuda con ${nd} ${nd===1?'parte':'partes'} antes de importarlas.</b> No estoy seguro de dónde empiezan o terminan. Mientras no me respondas, no se importan.
     <div class="actions" style="margin-top:6px"><button class="btn" data-act="imp-only-doubts">${IO.onlyDoubts?'Ver todas':'Ver solo las dudas'}</button></div></div>`:'')
