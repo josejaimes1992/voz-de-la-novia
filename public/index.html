@@ -41,6 +41,7 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .brand img.vdn{width:56px;height:56px;border-radius:8px;flex:none;margin-block:-4px}
 @media (max-width:520px){.brand img.vdn{width:46px;height:46px}}
 .brand .bt{min-width:0;display:grid;line-height:1.15}
+.row.was-here{outline:2px solid var(--accent);outline-offset:-2px;transition:outline-color 1.5s}
 .brand{flex:1 0 100%;display:grid;grid-template-columns:56px minmax(0,1fr) 56px;margin-right:0}
 .brand .bt{text-align:center;justify-items:center}
 .brand img.church{background:#000;justify-self:end}
@@ -515,7 +516,7 @@ function viewSongsInner(){
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-excel">Excel</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
@@ -636,8 +637,8 @@ function viewSong(){
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Canciones</button>
   <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
-    ${S.canWrite?`<button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
-    <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>`:''}
+    <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
+    <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
     ${S.canWrite?`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`:''}
     ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>`:''}
@@ -663,7 +664,7 @@ function viewEdit(){
       <label class="f">Tono original<select id="e-key"><option value="">Sin tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${keyMatch(d.key,k)?'selected':''}>${esc(keyText(parseKey(k)))} — ${esc(keyLong(parseKey(k).idx,parseKey(k).minor))}</option>`).join('')}</select></label>
       <label class="f">Tempo (BPM)<input id="e-bpm" type="number" min="30" max="240" inputmode="numeric" value="${esc(d.bpm||'')}" placeholder="Ej. 72"></label>
       <label class="f">Capo sugerido (guitarra)<select id="e-capo">${[0,1,2,3,4,5,6,7].map(n=>`<option value="${n}" ${Number(d.capo||0)===n?'selected':''}>${n?n:'Sin capo'}</option>`).join('')}</select></label>
-      <label class="f">Categoría<input id="e-cat" list="cats" value="${esc(d.category||'')}" placeholder="Alabanza, Adoración, Himno…"><datalist id="cats">${['Alabanza','Adoración','Himno','Ofrenda','Santa Cena','Bautismo','Infantil','Navidad','Semana Santa'].map(c=>`<option value="${c}">`).join('')}</datalist></label>
+      <label class="f">Categoría<input id="e-cat" list="cats" value="${esc(d.category||'')}" placeholder="Alabanza, Adoración, Himno…"><datalist id="cats">${['Adoración','Júbilo','Alabanza','Himno','Ofrenda','Santa Cena','Bautismo','Infantil','Navidad','Semana Santa'].map(c=>`<option value="${c}">`).join('')}</datalist></label>
     </div>
     <div class="help">Escribe cada acorde entre corchetes justo antes de la sílaba donde cambia: <code>[G]Cristo me [C]ama</code>. Usa <code># Coro</code> para nombrar secciones. Si pegas una letra con los acordes en la línea de arriba, pulsa “Convertir acordes de arriba”.</div>
     <div class="edit-split">
@@ -716,10 +717,10 @@ function viewProgram(){
   </div>`:`<h1 style="font-family:var(--f-display);font-size:30px">${esc(p.title)}</h1><p style="color:var(--muted);margin:4px 0 0">${esc(f.full)}${p.service?' · '+esc(p.service):''}</p>${p.notes?`<div class="notes">${esc(p.notes)}</div>`:''}`}
   <div class="ctrl" style="margin-top:16px">
     <button class="btn pri" data-act="live-prog" ${items.length?'':'disabled'}>${ICON.play}Modo en vivo</button>
-    ${S.canWrite?`<button class="btn" data-act="proj-prog" ${items.length?'':'disabled'}>${ICON.screen}Proyectar</button>
+    ${S.canWrite?`<button class="btn" data-act="proj-prog" ${items.length?'':'disabled'}>${ICON.screen}Proyectar</button>`:''}
     <button class="btn" data-act="pdf-prog" data-mode="letra" ${items.length?'':'disabled'}>${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-prog" data-mode="acordes" ${items.length?'':'disabled'}>${ICON.pdf}PDF acordes</button>
-    <button class="btn" data-act="open-export" data-scope="program" ${items.length?'':'disabled'}>Exportar</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="open-export" data-scope="program" ${items.length?'':'disabled'}>Exportar</button>`:''}
     <span class="spacer"></span>
     ${w?`<button class="btn" data-act="pick-song">${ICON.plus}Agregar canción</button>`:''}
   </div>
@@ -933,7 +934,6 @@ function buildPdf(entries,mode,head){
   return doc.output('blob');
 }
 async function savePdf(entries,mode,head,filename){
-  if(!S.canWrite) return;
   let blob; try{ blob=buildPdf(entries,mode,head); }catch(e){ toast('No se pudo generar el PDF. Revisa tu conexión y recarga la página.'); return; }
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000); toast('PDF descargado.');
@@ -942,7 +942,14 @@ function songEntry(s,shift,note){ const k=songKey(s); return {song:s,shift,keyTe
 
 /* ============ Eventos ============ */
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,3200); }
-function go(view,extra={}){ Object.assign(V,{view,confirm:null},extra); render(); window.scrollTo(0,0); }
+function go(view,extra={}){
+  if(V.view==='list'&&view!=='list') V.listY=window.scrollY;
+  Object.assign(V,{view,confirm:null},extra); render();
+  if(view==='list'&&V.lastSongId){ const row=document.querySelector(`#view [data-act="open-song"][data-id="${CSS.escape(V.lastSongId)}"]`);
+    if(row){ row.scrollIntoView({block:'center'}); row.classList.add('was-here'); setTimeout(()=>row.classList.remove('was-here'),2200); return; }
+    if(V.listY!=null){ window.scrollTo(0,V.listY); return; } }
+  window.scrollTo(0,0);
+}
 
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return;
@@ -956,7 +963,7 @@ document.addEventListener('click',async ev=>{
     case 'key': V.key=ds.k; render(); break;
     case 'go-list': V.tab='songs'; go('list'); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
-    case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
+    case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; V.lastSongId=ds.id; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
     case 'ver': V.ver=ds.v; lsSet('vdn-ver',V.ver); if(V.live) renderLive(); render(); break;
     case 'missing': V.missingOnly=!V.missingOnly; render(); break;
     case 'etab': readDraft(); V.etab=ds.v; render(); break;
@@ -1026,4 +1033,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=1"></script>
+<script src="/excel.js?v=1"></script>
 </body></html>
