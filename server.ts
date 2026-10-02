@@ -96,7 +96,7 @@ const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
 const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8" };
 
 Bun.serve({
-  maxRequestBodySize: 60 * 1024 * 1024,
+  maxRequestBodySize: 120 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -234,12 +234,25 @@ Bun.serve({
         if (req.method === "POST" && !au[2]) {
           const type = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
           const ext = AUDIO_TYPES[type]; if (!ext) return json({ error: "bad_type" }, 415);
-          const len = Number(req.headers.get("content-length") ?? 0); if (len > 40_000_000) return json({ error: "too_large" }, 413);
-          const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 40_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
-          const file = randomBytes(12).toString("hex") + "." + ext;
-          await Bun.write(`${AUDIO_DIR}/${file}`, buf);
+          const len = Number(req.headers.get("content-length") ?? 0); if (len > 110_000_000) return json({ error: "too_large" }, 413);
+          const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 110_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
+          /* Comprime: MP3 mono 64 kbps (se escucha bien en cualquier celular o PC y ocupa ~0,5 MB por minuto) */
+          const id = randomBytes(12).toString("hex"); const tmpIn = `/tmp/up-${id}.${ext}`; const tmpOut = `/tmp/up-${id}.mp3`;
+          await Bun.write(tmpIn, buf);
+          let file = id + "." + ext, size = buf.length, duration = 0;
+          try {
+            const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmpIn, "-vn", "-map_metadata", "-1", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "64k", tmpOut], { stdout: "ignore", stderr: "pipe" });
+            const err = await new Response(proc.stderr).text(); const code = await proc.exited;
+            const dm = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err); if (dm) duration = Math.round(+dm[1] * 3600 + +dm[2] * 60 + +dm[3]);
+            if (code === 0 && existsSync(tmpOut)) {
+              const outSize = statSync(tmpOut).size;
+              if (outSize > 1000 && outSize < buf.length) { file = id + ".mp3"; size = outSize; await Bun.write(`${AUDIO_DIR}/${file}`, Bun.file(tmpOut)); }
+            } else if (code !== 0 && !dm) { return json({ error: "bad_audio" }, 415); }
+          } catch (e) { console.error("ffmpeg", e); }
+          if (file === id + "." + ext) await Bun.write(`${AUDIO_DIR}/${file}`, buf);
+          try { unlinkSync(tmpIn); } catch {} try { unlinkSync(tmpOut); } catch {}
           const name = (url.searchParams.get("name") ?? "Audio").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 80) || "Audio";
-          const entry = { id: file, name, size: buf.length, type: AUDIO_MIME[ext], by: user.name, at: Date.now() };
+          const entry = { id: file, name, size, original: buf.length, duration, type: AUDIO_MIME[file.split(".").pop()!], by: user.name, at: Date.now() };
           const after = { ...song, audio: [...(song.audio ?? []), entry], updatedAt: Date.now(), updatedBy: user.name };
           await db.begin(async (tx) => {
             await tx`UPDATE docs SET data = ${JSON.stringify(after)}::jsonb, updated_at = ${Date.now()} WHERE col = 'songs' AND id = ${songId}`;
