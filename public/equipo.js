@@ -1,7 +1,7 @@
 /* Voz de la Novia — equipo: cuenta, usuarios, registro de cambios, historial */
 "use strict";
 const ROLE_NAME={admin:'Administrador',moderator:'Moderador'};
-const ACTION_NAME={create:'Creó',update:'Editó',delete:'Borró',import:'Importó',restore:'Restauró',audio:'Subió audio','audio-delete':'Borró audio'};
+const ACTION_NAME={create:'Creó',update:'Editó',delete:'Borró',import:'Importó',restore:'Restauró',audio:'Subió audio','audio-delete':'Borró audio',trash:'Mandó a papelera',untrash:'Rescató de papelera'};
 const COL_NAME={songs:'canción',programs:'programa'};
 
 function modal(title,inner,width){

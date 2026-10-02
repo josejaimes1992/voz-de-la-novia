@@ -89,11 +89,34 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
            ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
   await logChange(tx, user, action ?? (before ? "update" : "create"), col, id, before, data);
 }
+/* ---- Papelera: las canciones borradas se guardan 60 días ---- */
+const TRASH_DAYS = 60;
+async function moveToTrash(tx: any, user: User, col: string, id: string) {
+  const prev = await tx`SELECT data FROM docs WHERE col = ${col} AND id = ${id}`;
+  if (!prev[0]) return false;
+  const item = parseJ(prev[0].data);
+  const entry = { col, id, item, title: item.title ?? "", deletedBy: user.name, deletedAt: Date.now() };
+  await tx`INSERT INTO docs (col, id, data, updated_at) VALUES ('trash', ${col + ":" + id}, ${JSON.stringify(entry)}::jsonb, ${Date.now()})
+           ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+  await tx`DELETE FROM docs WHERE col = ${col} AND id = ${id}`;
+  await logChange(tx, user, "trash", col, id, item, null);
+  return true;
+}
+function removeAudioFiles(item: any) { for (const a of item?.audio ?? []) { try { if (AUDIO_RE.test(a.id)) unlinkSync(`${AUDIO_DIR}/${a.id}`); } catch {} } }
+async function purgeTrash() {
+  const limit = Date.now() - TRASH_DAYS * 86400_000;
+  const old = await db`SELECT id, data FROM docs WHERE col = 'trash' AND (data->>'deletedAt')::bigint < ${limit}`;
+  for (const r of old) { removeAudioFiles(parseJ(r.data).item); await db`DELETE FROM docs WHERE col = 'trash' AND id = ${r.id}`; }
+  if (old.length) console.log("Papelera: eliminadas definitivamente", old.length);
+}
+purgeTrash().catch(console.error);
+setInterval(() => purgeTrash().catch(console.error), 6 * 3600_000);
+
 function publicUser(u: any) { return { id: u.id, username: u.username, name: u.name, role: u.role, active: u.active }; }
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8" };
 
 Bun.serve({
   maxRequestBodySize: 120 * 1024 * 1024,
@@ -124,7 +147,7 @@ Bun.serve({
         return new Response(req.method === "HEAD" ? null : file, { headers: { ...base, "content-length": String(size) } });
       }
       if (p === "/api/data" && req.method === "GET") {
-        const rows = await db`SELECT col, id, data FROM docs`;
+        const rows = await db`SELECT col, id, data FROM docs WHERE col IN ('songs', 'programs')`;
         const out: Record<string, unknown[]> = { songs: [], programs: [] };
         for (const r of rows) if (out[r.col]) out[r.col].push({ ...parseJ(r.data), id: r.id });
         return json(out);
@@ -296,6 +319,41 @@ Bun.serve({
         }
       }
 
+      /* ---- Papelera ---- */
+      if (p.startsWith("/api/trash")) {
+        if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
+        if (p === "/api/trash" && req.method === "GET") {
+          const rows = await db`SELECT id, data FROM docs WHERE col = 'trash' ORDER BY updated_at DESC`;
+          return json({ days: TRASH_DAYS, items: rows.map((r: any) => { const d = parseJ(r.data); return { trashId: r.id, col: d.col, id: d.id, title: d.title, deletedBy: d.deletedBy, deletedAt: d.deletedAt, key: d.item?.key ?? "", audio: (d.item?.audio ?? []).length }; }) });
+        }
+        const b = await req.json().catch(() => ({}));
+        const ids: string[] = Array.isArray(b.ids) ? b.ids.filter((x: unknown) => typeof x === "string").slice(0, 500) : [];
+        if (p === "/api/trash" && req.method === "POST") {
+          let n = 0; await db.begin(async (tx) => { for (const id of ids) if (ID_RE.test(id) && await moveToTrash(tx, user, "songs", id)) n++; });
+          return json({ ok: true, count: n });
+        }
+        if (p === "/api/trash/restore" && req.method === "POST") {
+          let n = 0; const conflicts: string[] = [];
+          await db.begin(async (tx) => {
+            for (const tid of ids) {
+              const r = await tx`SELECT data FROM docs WHERE col = 'trash' AND id = ${tid}`; if (!r[0]) continue;
+              const d = parseJ(r[0].data); const exists = await tx`SELECT 1 FROM docs WHERE col = ${d.col} AND id = ${d.id}`;
+              const newId = exists.length ? d.id + "-r" + randomBytes(3).toString("hex") : d.id; if (exists.length) conflicts.push(d.title);
+              await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${d.col}, ${newId}, ${JSON.stringify(d.item)}::jsonb, ${Date.now()})`;
+              await tx`DELETE FROM docs WHERE col = 'trash' AND id = ${tid}`;
+              await logChange(tx, user, "untrash", d.col, newId, null, d.item); n++;
+            }
+          });
+          return json({ ok: true, count: n, conflicts });
+        }
+        if (p === "/api/trash/purge" && req.method === "POST") {
+          let n = 0;
+          for (const tid of ids) { const r = await db`SELECT data FROM docs WHERE col = 'trash' AND id = ${tid}`; if (!r[0]) continue; removeAudioFiles(parseJ(r[0].data).item); await db`DELETE FROM docs WHERE col = 'trash' AND id = ${tid}`; n++; }
+          return json({ ok: true, count: n });
+        }
+        return json({ error: "not_found" }, 404);
+      }
+
       /* ---- Escritura ---- */
       if (p === "/api/batch" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
@@ -326,6 +384,7 @@ Bun.serve({
         }
         if (req.method === "DELETE") {
           if (col === "songs" && user.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (col === "songs") { await db.begin(async (tx) => { await moveToTrash(tx, user, col, id); }); return new Response(null, { status: 204 }); }
           await db.begin(async (tx) => {
             const prev = await tx`SELECT data FROM docs WHERE col = ${col} AND id = ${id}`;
             await tx`DELETE FROM docs WHERE col = ${col} AND id = ${id}`;

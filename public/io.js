@@ -120,7 +120,7 @@ function finishSong(s){
   let k=parseKey(s.key);
   if(!k){ const m=/\[([^\]]+)\]/.exec(s.body); const c=m&&parseChord(m[1]); if(c) k={idx:c.root,minor:/^m(?!aj)/.test(c.suf)}; }
   s.key=k?keyCanon(k.idx,k.minor):'';
-  const nt=norm(s.title); s.dup=[...S.songs.values()].some(x=>norm(x.title)===nt);
+  s.dupOf=findDuplicate(s,[...S.songs.values()]); s.dup=!!s.dupOf;
   s.include=!s.dup && !!s.body.trim(); return s;
 }
 
@@ -166,7 +166,10 @@ function ioBuild(){
     else if(IO.mode==='page') f.pages.forEach((p,i)=>chunks.push(makeSong(p,f.name+' '+(i+1))));
     else splitText(all,IO.mode).forEach((t,i)=>chunks.push(makeSong(t,f.name+(i?' '+(i+1):''))));
   }
-  IO.chunks=chunks.filter(c=>c.body.trim()||c.title); ioRender();
+  IO.chunks=chunks.filter(c=>c.body.trim()||c.title);
+  /* Repetidas dentro del mismo archivo */
+  IO.chunks.forEach((c,i)=>{ if(c.dup) return; const d=findDuplicate(c,IO.chunks.slice(0,i)); if(d){ c.dup=true; c.dupOf={...d,inBatch:true}; c.include=false; } });
+  IO.confirmDup=false; ioRender();
 }
 function ioRender(){
   const opts=$('#imp-opts'), list=$('#imp-list'); if(!opts) return;
@@ -178,13 +181,14 @@ function ioRender(){
   $('#imp-mode').addEventListener('change',e=>{ IO.mode=e.target.value; ioBuild(); });
   $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
-  list.innerHTML=errs+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
+  const nd=IO.chunks.filter(c=>c.dup).length; list.innerHTML=errs+(nd?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra, y las desmarqué para evitar duplicados.</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
     <div class="imp-rows">${IO.chunks.map((c,i)=>`<div class="imp-row">
       <input type="checkbox" data-imp="include" data-i="${i}" ${c.include?'checked':''} aria-label="Incluir">
       <input data-imp="title" data-i="${i}" value="${esc(c.title)}" aria-label="Título">
       <select data-imp="key" data-i="${i}" aria-label="Tono"><option value="">Tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${c.key===k?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select>
       <button class="btn ghost" data-act="imp-view" data-i="${i}">Ver</button>
-      ${c.dup?'<span class="pill" title="Ya hay una canción con este título">Ya existe</span>':''}
+      ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
+      ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.open?`<textarea data-imp="body" data-i="${i}" class="body" style="grid-column:1/-1;min-height:220px">${esc(c.body)}</textarea>`:''}
     </div>`).join('')}</div>
@@ -193,8 +197,10 @@ function ioRender(){
 document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
   if(el.dataset.imp==='include'){ c.include=el.checked; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value; });
-async function ioImport(){
+function ioDupConfirm(){ const d=IO.chunks.filter(c=>c.include&&c.dup); return `<div class="banner" style="border:2px solid var(--danger);display:grid;gap:8px"><b style="color:var(--danger)">Alto: vas a importar ${d.length} ${d.length===1?'canción que ya existe':'canciones que ya existen'}</b><ul style="margin:0;padding-left:18px">${d.map(c=>`<li>${esc(c.title)} → ${esc(dupLabel(c.dupOf))}</li>`).join('')}</ul><div class="actions"><button class="btn danger" data-act="imp-go-force">Importar de todas formas</button><button class="btn" data-act="imp-dup-off">Desmarcarlas y continuar</button></div></div>`; }
+async function ioImport(force){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
+  if(!force&&sel.some(c=>c.dup)){ IO.confirmDup=true; ioRender(); document.getElementById('imp-list').scrollIntoView({behavior:'smooth'}); return; }
   const btn=document.querySelector('[data-act="imp-go"]'); if(btn) btn.disabled=true; const prog=$('#imp-prog');
   const writes=sel.map(c=>({col:'songs',id:newId('c'),data:{title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()}}));
   let done=0;
@@ -253,3 +259,8 @@ async function ioExport(fmt,scope){
     const blob=await zip.generateAsync({type:'blob'}); ioDownload(blob,`${base}-${fmt==='holyrics'?'holyrics':'chordpro'}.zip`); closeModal(); toast(`${list.length} canciones exportadas.`);
   }catch(e){ toast('No se pudo exportar: '+(e.message||'error')); }
 }
+
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return;
+  if(el.dataset.act==='imp-go-force'){ IO.confirmDup=false; ioImport(true); }
+  else if(el.dataset.act==='imp-dup-off'){ IO.chunks.forEach(c=>{ if(c.dup) c.include=false; }); IO.confirmDup=false; ioRender(); }
+});

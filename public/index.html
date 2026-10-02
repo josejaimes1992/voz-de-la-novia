@@ -197,6 +197,21 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .snip{display:block;font-size:13.5px;color:var(--muted);font-family:var(--f-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .snip em{font-style:normal;font-family:var(--f-ui);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent)}
 mark{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.row .cbx{flex:none;width:22px;height:22px;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;background:var(--surface)}
+.row.picked{background:var(--accent-soft)}
+.row.picked .cbx{background:var(--accent);border-color:var(--accent)}
+.row.picked .cbx::after{content:"✓";color:var(--accent-ink);font-weight:700;font-size:14px}
+.selbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.12);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.selbar .in{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.selbar b{font-family:var(--f-display);font-size:16px;margin-right:auto}
+.trow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;text-align:left;width:100%}
+.trow.picked{border-color:var(--accent);background:var(--accent-soft)}
+.trow.picked .cbx{background:var(--accent);border-color:var(--accent)}
+.trow.picked .cbx::after{content:"✓";color:var(--accent-ink);font-weight:700;font-size:14px}
+.trow .cbx{width:22px;height:22px;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;background:var(--surface)}
+.days{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.pill.dup{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger)}
+.dupinfo{grid-column:1/-1;color:var(--danger);font-size:12.5px}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -460,6 +475,7 @@ function render(){
   else if(V.view==='edit') html=viewEdit();
   else if(V.view==='programs') html=viewPrograms();
   else if(V.view==='program') html=viewProgram();
+  else if(V.view==='trash') html=window.viewTrash?viewTrash():'';
   m.innerHTML=html;
   if(V.view==='edit') bindEditor();
 }
@@ -468,7 +484,8 @@ function banner(){
   return '';
 }
 
-function viewSongs(){
+function viewSongs(){ return window.selWrap?selWrap(viewSongsInner()):viewSongsInner(); }
+function viewSongsInner(){
   const songs=sortedSongs();
   const counts=new Map();
   songs.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; counts.set(c,(counts.get(c)||0)+1); });
@@ -481,13 +498,14 @@ function viewSongs(){
     if(toks.length){ const m=matchSong(s,toks,V.qmode||'all'); if(!m) return false; hits.set(s.id,m); }
     return true;
   });
+  V._visible=filtered.map(s=>s.id);
   if(toks.length) filtered.sort((a,b)=>hits.get(b.id).score-hits.get(a.id).score||a.title.localeCompare(b.title,'es'));
   const disp=c=>{ if(c==='?') return 'Sin tono'; const k=parseKey(c); return keyText(k); };
   let h=banner()+(V.q||V.key!=='all'||V.missingOnly?'':`<div class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    <button class="btn" data-act="open-export" data-scope="songs">Exportar</button>${S.canWrite?`<button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}<button class="btn" data-act="open-export" data-scope="songs">Exportar</button>${S.canWrite?`<button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
@@ -525,6 +543,27 @@ function matchSong(s,toks,mode){
   return {score,inTitle,line:inTitle&&mode!=='lyrics'&&!inLyrics?null:line,sec};
 }
 function snipAround(text,toks){ if(text.length<=55) return text; const nc=[...text].map(c=>{ const n=norm(c); return n.length===1?n:(n[0]||' '); }).join(''); let i=-1; for(const t of toks){ const j=nc.indexOf(t); if(j>=0&&(i<0||j<i)) i=j; } if(i<=25) return text; const st=text.lastIndexOf(' ',i-15); return '…'+text.slice(st>0?st+1:i-15); }
+/* ---------- Detección de canciones repetidas (por título y por letra) ---------- */
+const SHINGLES=new WeakMap();
+function lyricShingles(s){
+  if(s&&typeof s==='object'&&SHINGLES.has(s)) return SHINGLES.get(s);
+  const words=plainNorm(lyricLines(s).map(l=>l.t).join(' ')).split(' ').filter(w=>w.length>1);
+  const set=new Set(); for(let i=0;i+2<words.length;i++) set.add(words[i]+' '+words[i+1]+' '+words[i+2]);
+  if(!set.size&&words.length) set.add(words.join(' '));
+  if(s&&typeof s==='object') SHINGLES.set(s,set); return set;
+}
+function lyricSimilarity(a,b){ if(!a.size||!b.size) return 0; const [x,y]=a.size<b.size?[a,b]:[b,a]; let n=0; for(const t of x) if(y.has(t)) n++; return n/x.size; }
+/* Devuelve la canción existente más parecida: igual título, o letra igual en 60% o más */
+function findDuplicate(song,pool,excludeId){
+  const nt=plainNorm(song.title||'').trim(); const mine=lyricShingles(song); let best=null;
+  for(const x of pool){ if(!x||x===song||(excludeId&&x.id===excludeId)) continue;
+    const sameTitle=nt&&plainNorm(x.title||'').trim()===nt; const sim=mine.size>=3?lyricSimilarity(mine,lyricShingles(x)):0;
+    if((sim>=0.6||(sameTitle&&(sim>=0.3||mine.size<3)))&&(!best||sim>best.sim||(sameTitle&&!best.sameTitle))) best={song:x,sim,sameTitle};
+  }
+  return best;
+}
+function dupLabel(d){ return `«${d.song.title}»${d.sim?` · letra ${Math.round(d.sim*100)}% igual`:' · mismo título'}`; }
+
 /* Resalta las palabras buscadas sin importar tildes ni mayúsculas */
 function markText(text,toks){
   const chars=[...text]; const nc=chars.map(c=>{ const n=norm(c); return n.length===1?n:(n[0]||' '); }).join('');
@@ -626,8 +665,9 @@ function viewEdit(){
       <div class="preview" id="e-prev" aria-label="Vista previa"></div>
     </div>
     <label class="f">Notas para el equipo<textarea id="e-notes" rows="2" placeholder="Ej. Empieza solo el piano; coro final dos veces">${esc(d.notes||'')}</textarea></label>
-    <div class="actions"><button class="btn pri" data-act="save-song">Guardar canción</button>
-      ${!isNew&&S.isAdmin?(V.confirm==='del-song'?`<span class="confirm">¿Borrar esta canción? <button class="btn danger" data-act="del-song-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-song">Borrar canción</button>`):''}
+    ${V.confirm==='dup-save'&&V.dupInfo?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>Atención:</b> esta canción ya está en el sistema como ${esc(dupLabel(V.dupInfo))}. Para evitar duplicados, abre la existente y edítala. Si de verdad es otra canción, pulsa “Guardar de todas formas”.</div>`:''}
+    <div class="actions"><button class="btn pri" data-act="save-song">${V.confirm==='dup-save'?'Guardar de todas formas':'Guardar canción'}</button>${V.confirm==='dup-save'&&V.dupInfo?`<button class="btn" data-act="open-song" data-id="${esc(V.dupInfo.song.id)}">Abrir la canción existente</button>`:''}
+      ${!isNew&&S.isAdmin?(V.confirm==='del-song'?`<span class="confirm">¿Mandar esta canción a la papelera? <button class="btn danger" data-act="del-song-yes">Sí</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-song">Mover a la papelera</button>`):''}
     </div>
   </div>`;
 }
@@ -929,9 +969,9 @@ document.addEventListener('click',async ev=>{
     case 'edit-song': V.placer=false; V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
     case 'cancel-edit': V.draft=null; S.songs.has(V.songId)?go('song'):go('list'); break;
     case 'convert': { const ta=edTA(); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
-    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
+    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } if(!S.songs.has(d.id)&&V.confirm!=='dup-save'){ const dup=findDuplicate(d,[...S.songs.values()],d.id); if(dup){ V.confirm='dup-save'; V.dupInfo=dup; render(); toast('Esta canción parece que ya existe. Revisa el aviso.'); break; } } if(V.confirm==='dup-save') V.confirm=null; delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
     case 'del-song': readDraft(); V.confirm='del-song'; render(); break;
-    case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción borrada.'); break;
+    case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción enviada a la papelera. Puedes rescatarla durante 60 días.'); break;
     case 'confirm-no': if(V.view==='edit') readDraft(); V.confirm=null; render(); break;
     case 'pdf-song': { const s=S.songs.get(V.songId); const run=()=>savePdf([songEntry(s,V.shift)],ds.mode,null,`${slug(s.title)}-${ds.mode}.pdf`); if(ds.mode==='acordes') openPdfOpts(run); else run(); break; }
     case 'pdf-inst': { PDF_OPTS.inst=ds.v; lsSet('vdn-pdf-inst',ds.v); closeModal(); if(PDF_OPTS.run) PDF_OPTS.run(); break; }
@@ -966,9 +1006,10 @@ document.addEventListener('change',async ev=>{
 render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
 </script>
 <script src="/himnario.js?v=1"></script>
-<script src="/io.js?v=3"></script>
-<script src="/equipo.js?v=3"></script>
+<script src="/io.js?v=4"></script>
+<script src="/equipo.js?v=4"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>
 <script src="/audios.js?v=2"></script>
+<script src="/seleccion.js?v=1"></script>
 </body></html>
