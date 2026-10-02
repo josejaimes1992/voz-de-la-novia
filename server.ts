@@ -15,6 +15,12 @@ await db`CREATE TABLE IF NOT EXISTS sessions (
 await db`CREATE TABLE IF NOT EXISTS changes (
   id bigserial PRIMARY KEY, at bigint NOT NULL, user_id int, username text NOT NULL, action text NOT NULL,
   col text NOT NULL, doc_id text NOT NULL, title text, before jsonb, after jsonb, seen boolean NOT NULL DEFAULT false)`;
+await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name text NOT NULL DEFAULT ''`;
+await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS photo text`;
+await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at bigint`;
+await db`CREATE TABLE IF NOT EXISTS user_log (
+  id bigserial PRIMARY KEY, at bigint NOT NULL, actor_id int, actor_name text NOT NULL, target_id int, target_name text NOT NULL,
+  action text NOT NULL, detail jsonb NOT NULL DEFAULT '[]'::jsonb)`;
 await db`CREATE INDEX IF NOT EXISTS changes_doc ON changes (col, doc_id, at DESC)`;
 
 const SEED: [string, string, Record<string, unknown>][] = [["songs", "ej-santo", {"author": "Reginald Heber · trad. Juan B. Cabrera", "body": "# Estrofa 1\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! [D]Señor omni[A]potente,\n[D]siempre el [Bm]labio [E]mío loo[A]res te da[E]rá[A].\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! te a[D]doro [A]reverente,\n[G]Dios en tres [D]per[Bm]sonas, [D]ben[A]dita Trini[D]dad.\n\n# Estrofa 2\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! en [D]numeroso [A]coro,\n[D]santos esco[Bm]gidos te a[E]doran sin ce[A]sar,\n[D]de alegría [Bm]llenos, y [G]sus co[D]ronas de [A]oro\n[G]rinden ante el [D]tro[Bm]no y el [D]cris[A]talino [D]mar.", "category": "Himno", "ejemplo": true, "key": "D", "notes": "Ejemplo de dominio público. Edítalo o bórralo cuando quieras.", "title": "Santo, Santo, Santo", "updatedAt": 1790866763569}], ["songs", "ej-castillo", {"author": "Martín Lutero · trad. Juan B. Cabrera", "body": "# Estrofa 1\n[C]Castillo fuerte es [G]nuestro [C]Dios,\nde[F]fensa y [G]buen es[C]cudo;\ncon su po[G]der nos [C]libra[F]rá\nen [C]este [G]trance a[C]gudo.\nCon [Am]furia y con a[G]fán\na[C]cósa[F]nos Sa[C]tán;\npor [Am]armas deja [G]ver\nas[C]tucia y [F]gran po[G]der;\n[F]cual él no [C]hay en la [G]tie[C]rra.", "category": "Himno", "ejemplo": true, "key": "C", "notes": "", "title": "Castillo fuerte es nuestro Dios", "updatedAt": 1790866763569}], ["songs", "ej-cristo", {"author": "Anna B. Warner · trad. tradicional", "body": "# Intro\n[G] [C] [D] [G]\n\n# Estrofa\n[G]Cristo me ama, [C]bien lo [G]sé,\nsu pa[G]labra [D]me hace [G]ver,\nque los [G]niños [C]son de A[G]quel,\nquien es [G]nuestro a[D]migo [G]fiel.\n\n# Coro\n[G]Cristo me ama, [C]Cristo me [G]ama,\n[G]Cristo me ama, [D]la Biblia dice a[G]sí.", "category": "Infantil", "ejemplo": true, "key": "G", "notes": "Repetir el coro al final.", "title": "Cristo me ama", "updatedAt": 1790866763569}], ["programs", "ej-prog", {"date": "2026-10-01", "ejemplo": true, "items": [{"key": "G", "note": "", "songId": "ej-cristo"}, {"key": "Eb", "note": "Subir medio tono", "songId": "ej-santo"}, {"key": "C", "note": "Solo estrofa 1", "songId": "ej-castillo"}], "notes": "Programa de ejemplo.", "service": "Servicio de adoración · 10:00", "title": "Culto dominical", "updatedAt": 1790866763569}]];
@@ -112,7 +118,29 @@ async function purgeTrash() {
 purgeTrash().catch(console.error);
 setInterval(() => purgeTrash().catch(console.error), 6 * 3600_000);
 
-function publicUser(u: any) { return { id: u.id, username: u.username, name: u.name, role: u.role, active: u.active }; }
+function publicUser(u: any) { return { id: u.id, username: u.username, name: u.name, full_name: u.full_name ?? "", photo: u.photo ?? null, role: u.role, active: u.active, created_at: Number(u.created_at) || null, updated_at: Number(u.updated_at) || null }; }
+const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const ROLE_ES: Record<string, string> = { admin: "Administrador", moderator: "Moderador" };
+function cleanFull(v: unknown) { return String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 80); }
+/* Aplica cambios de perfil y devuelve el detalle para el registro */
+async function applyUserChanges(target: any, b: any, allowAdminFields: boolean) {
+  const detail: { field: string; before?: string; after?: string }[] = [];
+  const now = Date.now();
+  if (typeof b.full_name === "string") { const v = cleanFull(b.full_name); if (v !== (target.full_name ?? "")) { await db`UPDATE users SET full_name = ${v} WHERE id = ${target.id}`; detail.push({ field: "Nombre completo", before: target.full_name || "", after: v }); } }
+  if (b.photo === null && target.photo) { await db`UPDATE users SET photo = NULL WHERE id = ${target.id}`; detail.push({ field: "Foto", before: "con foto", after: "sin foto" }); }
+  if (typeof b.photo === "string") { if (b.photo.length > 400_000 || !PHOTO_RE.test(b.photo)) throw new Error("bad_photo"); await db`UPDATE users SET photo = ${b.photo} WHERE id = ${target.id}`; detail.push({ field: "Foto", before: target.photo ? "foto anterior" : "sin foto", after: "foto nueva" }); }
+  if (allowAdminFields) {
+    if (typeof b.name === "string" && b.name.trim()) { const v = b.name.trim().toUpperCase().slice(0, 40); if (v !== target.name) { await db`UPDATE users SET name = ${v} WHERE id = ${target.id}`; detail.push({ field: "Nombre corto", before: target.name, after: v }); } }
+    if (ROLES.has(b.role) && b.role !== target.role) { await db`UPDATE users SET role = ${b.role} WHERE id = ${target.id}`; detail.push({ field: "Rol", before: ROLE_ES[target.role], after: ROLE_ES[b.role] }); }
+    if (typeof b.active === "boolean" && b.active !== target.active) { await db`UPDATE users SET active = ${b.active} WHERE id = ${target.id}`; if (!b.active) await db`DELETE FROM sessions WHERE user_id = ${target.id}`; detail.push({ field: "Estado", before: target.active ? "Activo" : "Desactivado", after: b.active ? "Activo" : "Desactivado" }); }
+    if (typeof b.password === "string" && b.password) { await db`UPDATE users SET pass_hash = ${await Bun.password.hash(b.password)} WHERE id = ${target.id}`; await db`DELETE FROM sessions WHERE user_id = ${target.id}`; detail.push({ field: "Contraseña", after: "cambiada por el administrador" }); }
+  }
+  if (detail.length) await db`UPDATE users SET updated_at = ${now} WHERE id = ${target.id}`;
+  return detail;
+}
+async function logUser(actor: User, target: { id: number; name: string }, action: string, detail: unknown[]) {
+  await db`INSERT INTO user_log (at, actor_id, actor_name, target_id, target_name, action, detail) VALUES (${Date.now()}, ${actor.id}, ${actor.name}, ${target.id}, ${target.name}, ${action}, ${JSON.stringify(detail)}::jsonb)`;
+}
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
@@ -194,7 +222,28 @@ const SERVER = Bun.serve({
         SERVER.publish("proj", JSON.stringify(PROJ));
         return json(PROJ);
       }
-      if (p === "/api/me") return json({ user: user ? { ...user } : null });
+      if (p === "/api/me" && req.method === "GET") {
+        if (!user) return json({ user: null });
+        const r = await db`SELECT * FROM users WHERE id = ${user.id}`; return json({ user: publicUser(r[0]) });
+      }
+      if (p === "/api/me" && req.method === "PATCH") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const b = await req.json().catch(() => ({}));
+        const target = (await db`SELECT * FROM users WHERE id = ${user.id}`)[0];
+        let detail; try { detail = await applyUserChanges(target, { full_name: b.full_name, photo: b.photo }, false); } catch { return json({ error: "bad_photo" }, 400); }
+        if (detail.length) await logUser(user, target, "profile", detail);
+        return json({ user: publicUser((await db`SELECT * FROM users WHERE id = ${user.id}`)[0]) });
+      }
+      if (p === "/api/team" && req.method === "GET") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const rows = await db`SELECT id, name, full_name, photo, role, active FROM users ORDER BY name`;
+        return json({ team: rows.map((u: any) => ({ id: u.id, name: u.name, full_name: u.full_name, photo: u.photo, role: u.role, active: u.active })) });
+      }
+      if (p === "/api/user-log" && req.method === "GET") {
+        if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
+        const rows = await db`SELECT id, at, actor_id, actor_name, target_id, target_name, action, detail FROM user_log ORDER BY id DESC LIMIT 150`;
+        return json({ log: rows.map((r: any) => ({ ...r, at: Number(r.at), detail: parseJ(r.detail) })) });
+      }
       if (p === "/api/logout" && req.method === "POST") {
         const h = req.headers.get("authorization") ?? ""; if (h.startsWith("Bearer ")) await db`DELETE FROM sessions WHERE token = ${h.slice(7)}`;
         return json({ ok: true });
@@ -205,7 +254,8 @@ const SERVER = Bun.serve({
         const row = (await db`SELECT pass_hash FROM users WHERE id = ${user.id}`)[0];
         if (typeof body.current !== "string" || !(await Bun.password.verify(body.current, row.pass_hash))) return json({ error: "bad_current" }, 403);
         if (typeof body.password !== "string" || body.password.length < 6) return json({ error: "too_short" }, 400);
-        await db`UPDATE users SET pass_hash = ${await Bun.password.hash(body.password)} WHERE id = ${user.id}`;
+        await db`UPDATE users SET pass_hash = ${await Bun.password.hash(body.password)}, updated_at = ${Date.now()} WHERE id = ${user.id}`;
+        await logUser(user, user, "password", [{ field: "Contraseña", after: "cambiada por el mismo usuario" }]);
         return json({ ok: true });
       }
 
@@ -218,7 +268,9 @@ const SERVER = Bun.serve({
           const username = String(b.username ?? "").trim().toLowerCase(); const name = String(b.name ?? "").trim().slice(0, 40);
           if (!USER_RE.test(username) || !name || !ROLES.has(b.role) || typeof b.password !== "string" || b.password.length < 6) return json({ error: "bad_user" }, 400);
           const exists = await db`SELECT 1 FROM users WHERE username = ${username}`; if (exists.length) return json({ error: "exists" }, 409);
-          await db`INSERT INTO users (username, name, role, pass_hash, created_at) VALUES (${username}, ${name}, ${b.role}, ${await Bun.password.hash(b.password)}, ${Date.now()})`;
+          const full = cleanFull(b.full_name); const photo = typeof b.photo === "string" && b.photo.length <= 400_000 && PHOTO_RE.test(b.photo) ? b.photo : null;
+          const [nu] = await db`INSERT INTO users (username, name, full_name, photo, role, pass_hash, created_at, updated_at) VALUES (${username}, ${name.toUpperCase()}, ${full}, ${photo}, ${b.role}, ${await Bun.password.hash(b.password)}, ${Date.now()}, ${Date.now()}) RETURNING id, name`;
+          await logUser(user, nu, "create", [{ field: "Usuario", after: "@" + username }, { field: "Nombre completo", after: full }, { field: "Rol", after: ROLE_ES[b.role] }, ...(photo ? [{ field: "Foto", after: "foto nueva" }] : [])]);
           return json({ ok: true });
         }
       }
@@ -227,18 +279,18 @@ const SERVER = Bun.serve({
         if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
         const id = Number(um[1]); const b = await req.json().catch(() => ({}));
         if (id === user.id && (b.active === false || (b.role && b.role !== "admin"))) return json({ error: "self" }, 400);
-        if (typeof b.name === "string" && b.name.trim()) await db`UPDATE users SET name = ${b.name.trim().slice(0, 40)} WHERE id = ${id}`;
-        if (ROLES.has(b.role)) await db`UPDATE users SET role = ${b.role} WHERE id = ${id}`;
-        if (typeof b.active === "boolean") { await db`UPDATE users SET active = ${b.active} WHERE id = ${id}`; if (!b.active) await db`DELETE FROM sessions WHERE user_id = ${id}`; }
-        if (typeof b.password === "string") { if (b.password.length < 6) return json({ error: "too_short" }, 400); await db`UPDATE users SET pass_hash = ${await Bun.password.hash(b.password)} WHERE id = ${id}`; await db`DELETE FROM sessions WHERE user_id = ${id}`; }
-        return json({ ok: true });
+        if (typeof b.password === "string" && b.password && b.password.length < 6) return json({ error: "too_short" }, 400);
+        const target = (await db`SELECT * FROM users WHERE id = ${id}`)[0]; if (!target) return json({ error: "not_found" }, 404);
+        let detail; try { detail = await applyUserChanges(target, b, true); } catch { return json({ error: "bad_photo" }, 400); }
+        if (detail.length) await logUser(user, { id, name: (b.name && String(b.name).trim().toUpperCase()) || target.name }, "update", detail);
+        return json({ ok: true, user: publicUser((await db`SELECT * FROM users WHERE id = ${id}`)[0]) });
       }
 
       /* ---- Registro de cambios ---- */
       if (p === "/api/changes" && req.method === "GET") {
         if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
         const lim = Math.min(200, Number(url.searchParams.get("limit") ?? 60));
-        const rows = await db`SELECT id, at, username, action, col, doc_id, title, seen FROM changes ORDER BY id DESC LIMIT ${lim}`;
+        const rows = await db`SELECT id, at, user_id, username, action, col, doc_id, title, seen FROM changes ORDER BY id DESC LIMIT ${lim}`;
         const [{ unread }] = await db`SELECT count(*)::int AS unread FROM changes WHERE seen = false`;
         return json({ changes: rows, unread });
       }
@@ -264,7 +316,7 @@ const SERVER = Bun.serve({
       const hm = p.match(/^\/api\/history\/(songs|programs)\/([^/]+)$/);
       if (hm && req.method === "GET") {
         if (!user) return json({ error: "unauthorized" }, 401);
-        const rows = await db`SELECT id, at, username, action, title FROM changes WHERE col = ${hm[1]} AND doc_id = ${decodeURIComponent(hm[2])} ORDER BY id DESC LIMIT 100`;
+        const rows = await db`SELECT id, at, user_id, username, action, title FROM changes WHERE col = ${hm[1]} AND doc_id = ${decodeURIComponent(hm[2])} ORDER BY id DESC LIMIT 100`;
         return json({ history: rows });
       }
 

@@ -418,7 +418,7 @@ async function initStore(){
   setInterval(()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); },15000);
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); });
 }
-function setUser(u){ S.user=u||null; S.canWrite=!!u; S.isAdmin=!!u&&u.role==='admin'; if(S.isAdmin&&window.teamPoll) teamPoll(); }
+function setUser(u){ S.user=u||null; S.canWrite=!!u; S.isAdmin=!!u&&u.role==='admin'; if(S.isAdmin&&window.teamPoll) teamPoll(); if(u&&window.loadTeam) loadTeam(); if(!u) S.team=new Map(); }
 function lostAuth(){ setUser(null); S.token=null; lsSet('vdn-token',null); toast('Tu sesión terminó. Vuelve a ingresar para editar.'); render(); }
 async function writeDoc(col,obj){
   if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return false; }
@@ -447,7 +447,7 @@ function openLogin(){
       const d=await r.json(); S.token=d.token; lsSet('vdn-token',d.token); setUser(d.user); closeModal(); render(); toast(`Hola, ${d.user.name}.`);
     }catch{ err.textContent='No hay conexión con el servidor.'; err.hidden=false; } });
 }
-function authButton(){ const b=$('#auth'); if(!b) return; b.innerHTML=S.user?`${esc(S.user.name)}${S.isAdmin&&S.unread?` <span class="badge">${S.unread>99?'99+':S.unread}</span>`:''}`:'Ingresar'; b.title=S.user?'Mi cuenta':'Ingresar para editar'; }
+function authButton(){ const b=$('#auth'); if(!b) return; b.innerHTML=S.user?`${window.avatar?`<span style="display:inline-flex;margin:-4px 6px -4px -6px">${avatar(S.user,22)}</span>`:''}${esc(S.user.name)}${S.isAdmin&&S.unread?` <span class="badge">${S.unread>99?'99+':S.unread}</span>`:''}`:'Ingresar'; b.title=S.user?'Mi cuenta':'Ingresar para editar'; }
 
 /* ============ Estado de vista ============ */
 const V={ver:lsGet('vdn-ver','basica'),missingOnly:false,inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:true,size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
@@ -635,7 +635,7 @@ function viewSong(){
   const s=S.songs.get(V.songId); if(!s){ V.view='list'; return viewSongs(); }
   const k=songKey(s);
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Canciones</button>
-  <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${esc(s.createdBy)}`:''}</p>`:''}</div></div>
+  <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${S.user&&window.whoHtml?whoHtml(null,s.updatedBy,20):esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${S.user&&window.whoHtml?whoHtml(null,s.createdBy,20):esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
@@ -1027,7 +1027,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 </script>
 <script src="/himnario.js?v=3"></script>
 <script src="/io.js?v=6"></script>
-<script src="/equipo.js?v=4"></script>
+<script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>
 <script src="/audios.js?v=2"></script>
