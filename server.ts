@@ -488,10 +488,12 @@ const SERVER = Bun.serve({
         /* Si ya se está transcribiendo este audio, espera ese mismo resultado (no se cobra dos veces) */
         const flightKey = audioId + ":" + mode;
         const running = TR_INFLIGHT.get(flightKey);
-        if (running) { const r = await running; return json(r.body, r.status); }
+        if (running) { try { const r = await running; return json(r.body, r.status); } catch { return json({ error: "service" }, 502); } }
         const job = transcribeAudio({ song, songId, audioId, entry, path, mode, key, cached: force ? null : cached, userName: user.name });
         TR_INFLIGHT.set(flightKey, job);
-        try { const r = await job; return json(r.body, r.status); } finally { TR_INFLIGHT.delete(flightKey); }
+        try { const r = await job; return json(r.body, r.status); }
+        catch (e) { console.error("Transcripción: error", e); return json({ error: "service" }, 502); }
+        finally { TR_INFLIGHT.delete(flightKey); }
       }
       if (p === "/api/transcribe/status") {
         const key = Bun.env.OPENAI_API_KEY ?? "";

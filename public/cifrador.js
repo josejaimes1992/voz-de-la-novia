@@ -204,7 +204,7 @@ if(typeof window==='undefined'&&typeof importScripts==='function'){
 if(typeof window!=='undefined'){
 /* Detección automática de acordes desactivada: no es confiable con grabaciones reales. Los acordes se ponen a mano con “Poner acordes tocando”. */
 const CIF_CHORDS=false;
-const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false,withChords:CIF_CHORDS};
+const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false,withChords:CIF_CHORDS,editText:null,editTab:'edit'};
 const CIF_ROOT_HUE=[0,30,55,85,120,160,190,210,235,265,295,330];
 function cifSong(){ return S.songs.get(CS.songId); }
 function cifItems(s){
@@ -221,11 +221,12 @@ function cifOpts(){
 }
 window.cifOpen=function(id){
   const s=S.songs.get(id); if(!s||!(s.audio||[]).length){ toast('Primero sube un audio a esta canción.'); return; }
-  cifStop(); Object.assign(CS,{songId:id,audioId:(s.sync&&s.audio.some(a=>a.id===s.sync.audio))?s.sync.audio:s.audio[0].id,res:null,busy:false,err:'',keyMode:s.key?'song':'audio',target:'bodyPro',withChords:CIF_CHORDS});
+  cifStop(); Object.assign(CS,{songId:id,audioId:(s.sync&&s.audio.some(a=>a.id===s.sync.audio))?s.sync.audio:s.audio[0].id,res:null,busy:false,err:'',keyMode:s.key?'song':'audio',target:'bodyPro',withChords:CIF_CHORDS,editText:null,editTab:'edit'});
   CS.items=cifItems(s); CS.tr=null; CS.trMsg=''; CS.fromTr=false; if(!cifLyricItems().length) CS.target='body'; const ly=cifLyricItems();
   if(CS.trEnabled===null) fetch('/api/transcribe/status').then(r=>r.json()).then(d=>{ CS.trEnabled=!!d.enabled; cifPaintTr(); }).catch(()=>{});
   if(s.sync&&Array.isArray(s.sync.times)&&s.sync.times.length===ly.length&&s.sync.audio===CS.audioId) ly.forEach((l,i)=>l.t=s.sync.times[i]);
   V.view='cifrar'; render(); window.scrollTo(0,0);
+  if(!ly.length&&!CS.skipAuto) CS.autoTr=true; CS.skipAuto=false;
   if(CIF_CHORDS) cifAnalyzeCurrent(); else if(CS.autoTr) cifAutoTr();
 };
 async function cifAutoTr(){ CS.autoTr=false; if(CS.trEnabled===null){ try{ const d=await (await fetch('/api/transcribe/status')).json(); CS.trEnabled=!!d.enabled; }catch{} } if(CS.trEnabled) cifTranscribe(); else cifPaintTr(); }
@@ -310,7 +311,7 @@ async function cifTranscribe(force){
     else { CS.tr=d;
       if(cifLyricItems().length&&!CS.fromTr){ const ly=cifLyricItems(); ly.forEach(l=>l.t=null); const n=cifAlignLines(ly,d); CS.trMsg=`Ubiqué ${n} de ${ly.length} líneas. Revisa las marcas y corrige las que falten con ⏱.`; }
       else if(d.structured&&d.structured.empty){ CS.items=[]; CS.fromTr=false; CS.trMsg='No se entendió letra cantada clara en este audio (mucha música o la voz muy baja). Prueba con una grabación donde la voz se escuche más fuerte, o escribe la letra en Editar.'; }
-      else { const items=cifItemsFromTranscript(d); if(items.length){ CS.items=items; CS.fromTr=true; CS.target='body'; CS.trMsg=d.structured?'Letra transcrita y revisada (palabras corregidas y estrofas/coros ordenados). Revísala igual antes de guardar.':'Letra transcrita. Revísala: el servicio puede equivocarse con palabras cantadas.'; } else CS.trMsg='No se escuchó letra cantada en este audio.'; }
+      else { const items=cifItemsFromTranscript(d); if(items.length){ CS.items=items; CS.fromTr=true; CS.target='body'; CS.editText=null; CS.editTab='edit'; CS.trMsg=d.structured?'Letra transcrita y revisada (palabras corregidas y estrofas/coros ordenados). Revísala igual antes de guardar.':'Letra transcrita. Revísala: el servicio puede equivocarse con palabras cantadas.'; } else CS.trMsg='No se escuchó letra cantada en este audio.'; }
       if(d.cached) CS.trMsg+=' (ya estaba transcrito: sin costo)'; }
   }catch(e){ CS.trMsg='No se pudo conectar con el servicio.'; }
   CS.trBusy=false; if(CS.fromTr||force){ render(); } else { cifPaintTr(); cifPaintLines(); cifPaintResult(); }
@@ -343,6 +344,16 @@ function cifPaintResult(){
   const cw=$('#cif-with'); if(cw) cw.addEventListener('change',e=>{ CS.withChords=e.target.value==='1'; cifPaintResult(); });
   const tg=$('#cif-target'); if(tg) tg.addEventListener('change',e=>{ CS.target=e.target.value; });
   const ti=$('#cif-title'); if(ti) ti.addEventListener('input',e=>{ CS.title=e.target.value; });
+  if(lo&&CS.fromTr){
+    const cur=CS.editText!=null?CS.editText:cifLyricsText();
+    pv.innerHTML=`<div class="actions" style="margin:0 0 8px"><button class="chip" data-act="cif-tab" data-t="edit" aria-pressed="${CS.editTab==='edit'}">✏️ Editar</button><button class="chip" data-act="cif-tab" data-t="view" aria-pressed="${CS.editTab==='view'}">👁 Vista previa</button>${CS.editText!=null?`<button class="chip" data-act="cif-edit-undo">Deshacer cambios</button>`:''}</div>`+
+      (CS.editTab==='edit'?`<p class="muted" style="margin:0 0 6px;font-size:12.5px">Corrige lo que haga falta. Una línea que empieza con <b>#</b> es el nombre de la sección (por ejemplo <b># Coro</b>). Deja una línea en blanco entre secciones.</p><textarea id="cif-edit" spellcheck="true" style="width:100%;min-height:${Math.min(900,Math.max(260,cur.split('\n').length*26))}px;font:inherit;font-size:16px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;resize:vertical">${esc(cur)}</textarea>`
+        :renderSheet(cur,{chords:false,key:parseKey(s.key)}));
+    const ed=$('#cif-edit'); if(ed) ed.addEventListener('input',e=>{ CS.editText=e.target.value; });
+    if(sv){ sv.disabled=false; sv.textContent=CS.editText!=null?'Guardar letra corregida':'Guardar letra'; }
+    const sn1=$('#cif-savenote'); if(sn1) sn1.textContent='La letra queda marcada como “transcrita automáticamente” hasta que alguien la revise.';
+    return;
+  }
   const txt=cifResultText(); pv.innerHTML=(CS.res||lo)?renderSheet(txt,{chords:!lo,key:lo?parseKey(s.key):cifOpts().key}):'<p class="muted">El resultado aparecerá aquí cuando termine el análisis.</p>';
   if(sv){ sv.disabled=lo?false:(!CS.res||(ly.length&&!marked)); sv.textContent=lo?(CIF_CHORDS?'Guardar solo la letra':'Guardar letra'):'Guardar borrador'; }
   const sn=$('#cif-savenote'); if(sn) sn.textContent=lo?(CS.fromTr?'La letra queda marcada como “transcrita automáticamente” hasta que alguien la revise.':'Se guarda la sincronización de las líneas con el audio.'):'Queda marcado como “detección automática” hasta que alguien lo revise.';
@@ -361,6 +372,18 @@ function cifMark(i){ const a=$('#cif-audio'); if(!a) return; const ly=cifLyricIt
 function cifChordSig(t){ return String(t||'').split('\n').map(l=>(l.match(/\[[^\]]*\]/g)||[]).join('')).join('|').replace(/\|+$/,''); }
 window.cifChordSig=cifChordSig;
 async function cifSaveLyrics(){
+  const ed=$('#cif-edit'); if(ed) CS.editText=ed.value;
+  if(CS.fromTr&&CS.editText!=null){ /* aplica lo editado: conserva el tiempo de cada línea que no cambió */
+    const old=cifLyricItems(); const items=[]; let j=0;
+    for(const raw of CS.editText.replace(/\r/g,'').split('\n')){ const L=raw.trim();
+      if(!L){ items.push({type:'gap'}); continue; }
+      if(L.startsWith('#')){ const t=L.replace(/^#+\s*/,''); if(t) items.push({type:'sec',text:t}); continue; }
+      const it={type:'ln',text:L.replace(/\[[^\]]*\]/g,'').replace(/\s+/g,' ').trim(),t:null}; if(!it.text) continue;
+      let k=-1; for(let q=j;q<Math.min(old.length,j+6);q++){ if(old[q].text===it.text){ k=q; break; } }
+      if(k<0&&j<old.length&&cifNormTok(old[j].text).slice(0,2).join(' ')===cifNormTok(it.text).slice(0,2).join(' ')) k=j;
+      if(k>=0){ it.t=old[k].t; j=k+1; } items.push(it); }
+    if(!items.some(i=>i.type==='ln')){ toast('La letra está vacía.'); return; }
+    CS.items=items; }
   const s=cifSong(); if(!s) return; const txt=cifLyricsText(); const data=JSON.parse(JSON.stringify(s));
   if(CS.fromTr){ data.body=txt; data.lyricsAuto=true; }
   else if(!(data.body||'').trim()&&!(data.bodyPro||'').trim()) data.body=txt;
@@ -393,6 +416,8 @@ document.addEventListener('click',ev=>{
   else if(a==='cif-seek'){ const au=$('#cif-audio'); if(au){ au.currentTime=Number(d.t); } }
   else if(a==='cif-save') cifSave();
   else if(a==='cif-tr') cifTranscribe();
+  else if(a==='cif-tab'){ const ed=$('#cif-edit'); if(ed) CS.editText=ed.value; CS.editTab=d.t; cifPaintResult(); }
+  else if(a==='cif-edit-undo'){ CS.editText=null; cifPaintResult(); }
   else if(a==='cif-tr-redo'){ CS.items=cifItems(cifSong()); CS.fromTr=false; cifTranscribe(true); }
 });
 function cifSuggestTitle(){ if(CS.tr&&CS.tr.structured&&CS.tr.structured.title) return CS.tr.structured.title; const l=cifLyricItems()[0]; if(!l) return ''; const w=l.text.replace(/[,.;:!?¡¿"]/g,'').split(/\s+/).slice(0,6).join(' '); return w.charAt(0).toUpperCase()+w.slice(1); }
@@ -423,7 +448,7 @@ window.cifNewFromAudio=function(){
       xhr.upload.onprogress=e=>{ if(e.lengthComputable){ const pc=Math.round(e.loaded/e.total*100); prog.textContent=pc<100?`Subiendo el audio… ${pc}%`:'Comprimiendo el audio…'; } };
       xhr.onload=()=>res(xhr.status===200); xhr.onerror=()=>res(false); xhr.send(file); });
     if(!ok){ prog.textContent='No se pudo subir el audio. La canción quedó creada sin audio; puedes subirlo desde la canción.'; go.disabled=false; return; }
-    lastSig=''; await loadData(); closeModal(); CS.autoTr=wantTr; CS.title=title; cifOpen(song.id);
+    lastSig=''; await loadData(); closeModal(); CS.autoTr=wantTr; CS.skipAuto=!wantTr; CS.title=title; cifOpen(song.id);
     toast(wantTr?'Escribiendo la letra del audio…':'Canción creada con su audio.');
   });
 };
