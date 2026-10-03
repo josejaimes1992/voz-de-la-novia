@@ -153,6 +153,129 @@ let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, p
 const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
+
+/* ================= Transcripción de letras ================= */
+const TR_VERSION = 3;
+const TR_INFLIGHT = new Map<string, Promise<{ body: any; status: number }>>();
+/* Frases que los modelos de voz "inventan" cuando hay música sin voz clara */
+const TR_FAKE = [
+  /iglesia de jesucristo de los santos/i, /santos de los [uú]ltimos d[ií]as/i, /amara\.org/i, /subt[ií]tulos? (realizados|por|hechos|de)/i,
+  /gracias por (ver|mirar|escuchar|su atenci[oó]n)/i, /suscr[ií]b/i, /dale (like|me gusta)/i, /no olvides/i, /canal de youtube/i,
+  /^\W*(m[uú]sica|music|aplausos|risas|instrumental|silencio)\W*$/i, /www\.|\.com\b/i, /transcri(pci[oó]n|to) (por|de)/i,
+];
+function trIsFake(t: string) { return TR_FAKE.some(r => r.test(t)); }
+function trToks(t: string) { return String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9ñ\s]/g, " ").split(/\s+/).filter(w => w.length > 1); }
+/* Prepara el audio para la voz: mono 16 kHz, quita graves y agudos que no son voz, iguala el volumen */
+async function trPrepare(path: string): Promise<string> {
+  const out = `/tmp/tr-${randomBytes(6).toString("hex")}.flac`;
+  try {
+    const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000",
+      "-af", "highpass=f=100,lowpass=f=7000,dynaudnorm=f=200:g=15", "-c:a", "flac", out], { stdout: "ignore", stderr: "pipe" });
+    const code = await proc.exited;
+    if (code === 0 && existsSync(out) && statSync(out).size > 1000 && statSync(out).size < 24_000_000) return out;
+  } catch (e) { console.error("Preparar audio", e); }
+  try { unlinkSync(out); } catch {}
+  return path;
+}
+async function transcribeAudio(o: { song: any; songId: string; audioId: string; entry: any; path: string; mode: string; key: string; cached: any; userName: string }): Promise<{ body: any; status: number }> {
+  const { song, songId, audioId, entry, mode, key, cached } = o;
+  const base = Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com";
+  const known = String(song.body || song.bodyPro || "").replace(/\[[^\]]*\]/g, "").replace(/^#.*$/gm, "").replace(/\s+/g, " ").trim();
+  /* Sin letra conocida, la pista es neutra: una pista "religiosa" hace que el modelo invente frases de iglesia */
+  const context = known ? `Letra de la canción: ${known}`.slice(0, 800) : "Canción cantada en español. Transcribe solo las palabras que se cantan, sin agregar nada.";
+  const fail = (r: Response, t: string) => { console.error("Transcripción falló", r.status, t.slice(0, 300)); return { body: { error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, status: 502 }; };
+  const file = await trPrepare(o.path);
+  const fileName = file === o.path ? audioId : "voz.flac";
+  if (statSync(file).size > 24_000_000) return { body: { error: "too_large" }, status: 413 };
+  try {
+    /* 1. Tiempos de cada palabra (whisper-1), descartando lo que no es voz */
+    let timing: any = cached && cached.v === TR_VERSION && cached.words ? { words: cached.words, segments: cached.segments, duration: cached.duration, whisperText: cached.whisperText ?? "" } : null;
+    if (!timing) {
+      const fd = new FormData();
+      fd.append("file", Bun.file(file), fileName); fd.append("model", "whisper-1"); fd.append("language", "es"); fd.append("temperature", "0");
+      fd.append("response_format", "verbose_json"); fd.append("timestamp_granularities[]", "word"); fd.append("timestamp_granularities[]", "segment");
+      if (known) fd.append("prompt", context.slice(0, 600));
+      const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+      if (!r.ok) return fail(r, await r.text());
+      const out: any = await r.json();
+      let prev = ""; let dropped = 0;
+      const segs = (out.segments ?? []).filter((g: any) => {
+        const t = String(g.text ?? "").trim(); const n = trToks(t).join(" ");
+        const bad = !n || trIsFake(t) || (g.no_speech_prob ?? 0) > 0.6 && (g.avg_logprob ?? 0) < -0.6 || (g.compression_ratio ?? 0) > 2.4 || (g.avg_logprob ?? 0) < -1.2;
+        const rep = n === prev; prev = n || prev;
+        if (bad) dropped++;
+        return !bad && !(rep && (g.end - g.start) < 1.2);
+      });
+      const inSeg = (w: any) => segs.some((g: any) => w.start >= g.start - 0.1 && w.start < g.end + 0.1);
+      timing = { duration: out.duration ?? entry.duration ?? 0,
+        words: (out.words ?? []).filter(inSeg).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
+        segments: segs.map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })),
+        whisperText: segs.map((g: any) => String(g.text ?? "").trim()).join(" ") };
+      if (dropped) console.log("Transcripción: descartados", dropped, "segmentos que no eran voz");
+    }
+    const data: any = { v: TR_VERSION, ...timing, songId, by: o.userName, at: Date.now() };
+    if (mode === "full") {
+      /* 2. Texto preciso (modelo nuevo), también limpio de frases inventadas */
+      let precise = "";
+      for (const model of ["gpt-transcribe", "gpt-4o-transcribe"]) {
+        const fd = new FormData();
+        fd.append("file", Bun.file(file), fileName); fd.append("model", model); fd.append("prompt", context); fd.append("temperature", "0");
+        if (model === "gpt-transcribe") { fd.append("languages[]", "es"); for (const k of ["Dios", "Jesús", "Señor", "Jehová", "Cristo", "Espíritu Santo", "aleluya", "Cordero", "Sion", "Rey de reyes"]) fd.append("keywords[]", k); }
+        else fd.append("language", "es");
+        const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+        if (r.ok) { const j: any = await r.json(); precise = String(j.text ?? ""); data.preciseModel = model; break; }
+        const t = await r.text(); console.error("Modelo de transcripción", model, r.status, t.slice(0, 200));
+        if (r.status === 401 || r.status === 429) return fail(r, t);
+      }
+      precise = precise.split(/(?<=[.!?¡¿\n])\s+/).filter(x => !trIsFake(x)).join(" ").trim();
+      data.text = precise || timing.whisperText || "";
+      if (trToks(data.text).length < 4) { data.structured = { title: "", model: "", sections: [], empty: true }; }
+      else {
+        /* 3. Revisión: une las dos versiones, quita lo inventado y ordena estrofas y coros */
+        const timed = timing.segments.map((g: any) => `[${g.s.toFixed(1)}] ${g.t}`).join("\n").slice(0, 12000);
+        const sys = `Eres un editor experto en letras de alabanzas cristianas en español. Recibes dos transcripciones automáticas e independientes de la MISMA grabación cantada:
+A) TEXTO PRECISO: el más confiable para las palabras, pero sin tiempos.
+B) SEGMENTOS CON TIEMPO (en segundos): sirven para el orden y los tiempos, pero tienen más errores y a veces frases inventadas.
+Tu trabajo es devolver la letra tal como se canta en la grabación.
+Reglas:
+- La letra sale del TEXTO PRECISO. Una frase que aparece solo en B y no en A probablemente es inventada: descártala.
+- Los modelos de voz a veces inventan frases cuando hay música sin voz clara, por ejemplo "La Iglesia de Jesucristo de los Santos de los Últimos Días", "Subtítulos realizados por...", "Gracias por ver", "Suscríbete". Elimina esas frases y cualquier otra que no tenga sentido como letra de la canción.
+- Corrige una palabra solo cuando el error es evidente por el sentido de la frase o la rima. No inventes versos, no completes partes que no se oyen y no cambies el estilo.
+- Divide en líneas como frases musicales (normalmente de 4 a 10 palabras). Mayúscula al inicio de cada línea y en los nombres de Dios; tildes correctas; sin punto final.
+- Agrupa en secciones en el orden en que se cantan, incluidas las repeticiones: "Estrofa I", "Estrofa II", ..., "Pre-coro", "Coro", "Puente", "Final". La parte que se repite con la misma letra es el "Coro".
+- Para cada línea pon "start": el segundo en que empieza, tomado del segmento de B que mejor coincide (null si no hay).
+- Propón un título corto (normalmente la frase principal del coro).
+- Si casi nada se entiende como letra cantada, devuelve "sections": [].
+Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines": [{"text": string, "start": number|null}]}]}`;
+        const userMsg = `TÍTULO CONOCIDO: ${song.title && !song.titleAuto ? song.title : "(desconocido)"}\n\nA) TEXTO PRECISO:\n${data.text.slice(0, 8000)}\n\nB) SEGMENTOS CON TIEMPO:\n${timed || "(ninguno)"}`;
+        const pTok = new Set(trToks(precise || data.text));
+        for (const model of ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o-mini"]) {
+          const body: any = { model, response_format: { type: "json_object" }, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] };
+          if (model.startsWith("gpt-5")) body.reasoning_effort = "low";
+          const r = await fetch(`${base}/v1/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          if (!r.ok) { const t = await r.text(); console.error("Revisión", model, r.status, t.slice(0, 200)); if (r.status === 401 || r.status === 429) break; continue; }
+          try {
+            const j: any = await r.json(); const st = JSON.parse(j.choices?.[0]?.message?.content ?? "{}");
+            if (Array.isArray(st.sections)) {
+              /* Control final: cada línea tiene que estar respaldada por el texto preciso */
+              const ok = (t: string) => { if (trIsFake(t)) return false; const w = trToks(t); if (!w.length) return false; if (!pTok.size) return true; return w.filter(x => pTok.has(x)).length / w.length >= 0.5; };
+              data.structured = { title: String(st.title ?? "").slice(0, 100), model,
+                sections: st.sections.slice(0, 40).map((x: any) => ({ label: String(x.label ?? "").slice(0, 40), lines: (Array.isArray(x.lines) ? x.lines : []).slice(0, 40).map((l: any) => ({ text: String(l.text ?? l ?? "").slice(0, 200).trim(), start: l.start != null && Number.isFinite(+l.start) ? +l.start : null })).filter((l: any) => l.text && ok(l.text)) })).filter((x: any) => x.lines.length) };
+              if (trIsFake(data.structured.title)) data.structured.title = "";
+              if (!data.structured.sections.length) data.structured.empty = true;
+              break;
+            }
+          } catch (e) { console.error("Revisión: respuesta no válida", model); }
+        }
+      }
+    }
+    await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('transcripts', ${audioId}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
+             ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+    console.log("Transcripción", mode, songId, audioId, Math.round(data.duration), "s por", o.userName, data.structured ? "con revisión " + (data.structured.model || "-") + (data.structured.empty ? " (sin letra clara)" : "") : "sin revisión");
+    return { body: data, status: 200 };
+  } finally { if (file !== o.path) { try { unlinkSync(file); } catch {} } }
+}
+
 const SERVER = Bun.serve({
   maxRequestBodySize: 120 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
@@ -327,9 +450,10 @@ const SERVER = Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const [, songId, audioId] = tm;
         const mode = url.searchParams.get("mode") === "sync" ? "sync" : "full";
+        const force = url.searchParams.get("force") === "1";
         const cachedRow = await db`SELECT data FROM docs WHERE col = 'transcripts' AND id = ${audioId}`;
         const cached: any = cachedRow[0] ? parseJ(cachedRow[0].data) : null;
-        if (cached && cached.v === 2 && (mode === "sync" || cached.structured)) return json({ ...cached, cached: true });
+        if (!force && cached && cached.v === TR_VERSION && (mode === "sync" || cached.structured)) return json({ ...cached, cached: true });
         const key = Bun.env.OPENAI_API_KEY ?? "";
         if (!key) return json({ error: "no_key" }, 503);
         const rows = await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${songId}`;
@@ -338,71 +462,13 @@ const SERVER = Bun.serve({
         const entry = (song.audio ?? []).find((a: any) => a.id === audioId);
         const path = `${AUDIO_DIR}/${audioId}`;
         if (!entry || !AUDIO_RE.test(audioId) || !existsSync(path)) return json({ error: "no_audio" }, 404);
-        if (statSync(path).size > 24_000_000) return json({ error: "too_large" }, 413);
-        const base = Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com";
-        const lyricsHint = String(song.body || song.bodyPro || "").replace(/\[[^\]]*\]/g, "").replace(/^#.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, 600);
-        const context = `Alabanza cristiana cantada en español${song.title && !song.titleAuto ? `: "${song.title}"` : ""}. ${lyricsHint}`.slice(0, 800);
-        const fail = (r: Response, t: string) => { console.error("Transcripción falló", r.status, t.slice(0, 300)); return json({ error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, 502); };
-        /* 1. Tiempos de cada palabra (whisper-1) */
-        let timing: any = cached && cached.words ? { words: cached.words, segments: cached.segments, duration: cached.duration } : null;
-        if (!timing) {
-          const fd = new FormData();
-          fd.append("file", Bun.file(path), audioId); fd.append("model", "whisper-1"); fd.append("language", "es");
-          fd.append("response_format", "verbose_json"); fd.append("timestamp_granularities[]", "word"); fd.append("timestamp_granularities[]", "segment");
-          fd.append("prompt", context);
-          const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
-          if (!r.ok) return fail(r, await r.text());
-          const out: any = await r.json();
-          timing = { duration: out.duration ?? entry.duration ?? 0,
-            words: (out.words ?? []).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
-            segments: (out.segments ?? []).map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })), whisperText: out.text ?? "" };
-        }
-        let data: any = { v: 2, ...timing, songId, by: user.name, at: Date.now() };
-        if (mode === "full") {
-          /* 2. Texto más preciso (modelo nuevo de transcripción) */
-          let precise = "";
-          for (const model of ["gpt-transcribe", "gpt-4o-transcribe"]) {
-            const fd = new FormData();
-            fd.append("file", Bun.file(path), audioId); fd.append("model", model); fd.append("prompt", context);
-            if (model === "gpt-transcribe") { fd.append("languages[]", "es"); for (const k of ["Dios", "Jesús", "Señor", "Jehová", "Cristo", "Espíritu Santo", "aleluya", "gloria", "santo", "Cordero", "Sion", "alabanza", "adoración", "gracia", "Rey de reyes"]) fd.append("keywords[]", k); }
-            else fd.append("language", "es");
-            const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
-            if (r.ok) { const o: any = await r.json(); precise = String(o.text ?? ""); break; }
-            const t = await r.text(); console.error("Modelo de transcripción", model, r.status, t.slice(0, 200));
-            if (r.status === 401 || r.status === 429) return fail(r, t);
-          }
-          data.text = precise || timing.whisperText || timing.segments.map((g: any) => g.t).join(" ");
-          /* 3. Revisión: corrige palabras mal escuchadas y ordena estrofas y coros */
-          const timed = timing.segments.map((g: any) => `[${g.s.toFixed(1)}] ${g.t}`).join("\n").slice(0, 12000);
-          const sys = `Eres un editor experto en letras de alabanzas cristianas en español (iglesias pentecostales y evangélicas). Recibes dos transcripciones automáticas de una canción cantada: un TEXTO PRECISO sin tiempos y SEGMENTOS CON TIEMPO (en segundos) que pueden tener errores. Devuelve la letra corregida tal como se canta.
-Reglas:
-- Usa sobre todo el TEXTO PRECISO; usa los segmentos para el orden y los tiempos.
-- Corrige palabras mal escuchadas solo cuando sea evidente por el sentido o el vocabulario cristiano (Dios, Jesús, Señor, Jehová, Cristo, Espíritu Santo, gloria, santo, aleluya, Cordero, Sion, gracia, etc.). No inventes frases que no se cantan ni agregues versos.
-- Ignora textos que no son canto (aplausos, "gracias por ver", "suscríbete", ruidos, subtítulos).
-- Divide en líneas como frases musicales (normalmente de 4 a 10 palabras). Escritura normal: mayúscula al inicio de línea y en nombres de Dios; tildes correctas.
-- Agrupa en secciones en el orden en que se cantan, incluidas las repeticiones: "Estrofa I", "Estrofa II", ..., "Pre-coro", "Coro", "Puente", "Final". La parte que se repite con la misma letra es el "Coro".
-- Para cada línea pon "start": el segundo aproximado en que empieza, tomado de los segmentos.
-- Propón un título corto (normalmente la frase principal del coro).
-Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines": [{"text": string, "start": number}]}]}`;
-          const userMsg = `TÍTULO CONOCIDO: ${song.title && !song.titleAuto ? song.title : "(desconocido)"}\n\nTEXTO PRECISO:\n${data.text.slice(0, 8000)}\n\nSEGMENTOS CON TIEMPO:\n${timed}`;
-          for (const model of ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]) {
-            const r = await fetch(`${base}/v1/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ model, response_format: { type: "json_object" }, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] }) });
-            if (!r.ok) { const t = await r.text(); console.error("Revisión", model, r.status, t.slice(0, 200)); if (r.status === 401 || r.status === 429) break; continue; }
-            try {
-              const o: any = await r.json(); const st = JSON.parse(o.choices?.[0]?.message?.content ?? "{}");
-              if (Array.isArray(st.sections) && st.sections.length) {
-                data.structured = { title: String(st.title ?? "").slice(0, 100), model,
-                  sections: st.sections.slice(0, 40).map((x: any) => ({ label: String(x.label ?? "").slice(0, 40), lines: (Array.isArray(x.lines) ? x.lines : []).slice(0, 40).map((l: any) => ({ text: String(l.text ?? l ?? "").slice(0, 200), start: Number.isFinite(+l.start) ? +l.start : null })).filter((l: any) => l.text.trim()) })).filter((x: any) => x.lines.length) };
-                break;
-              }
-            } catch (e) { console.error("Revisión: respuesta no válida", model); }
-          }
-        }
-        await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('transcripts', ${audioId}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
-                 ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
-        console.log("Transcripción", mode, songId, audioId, Math.round(data.duration), "s por", user.name, data.structured ? "con revisión " + data.structured.model : "sin revisión");
-        return json(data);
+        /* Si ya se está transcribiendo este audio, espera ese mismo resultado (no se cobra dos veces) */
+        const flightKey = audioId + ":" + mode;
+        const running = TR_INFLIGHT.get(flightKey);
+        if (running) { const r = await running; return json(r.body, r.status); }
+        const job = transcribeAudio({ song, songId, audioId, entry, path, mode, key, cached: force ? null : cached, userName: user.name });
+        TR_INFLIGHT.set(flightKey, job);
+        try { const r = await job; return json(r.body, r.status); } finally { TR_INFLIGHT.delete(flightKey); }
       }
       if (p === "/api/transcribe/status") {
         const key = Bun.env.OPENAI_API_KEY ?? "";

@@ -669,7 +669,7 @@ function viewSong(){
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
     ${S.canWrite?`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`:''}
-    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎼 Sacar acordes del audio</button>`:''}`:''}
+    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎙 Sacar la letra del audio</button>`:''}`:''}
   </div>
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
   ${V.chords?verBar(s):''}
@@ -1063,5 +1063,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
-<script src="/cifrador.js?v=6"></script>
+<script src="/cifrador.js?v=7"></script>
 </body></html>
