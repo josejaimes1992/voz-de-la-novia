@@ -202,7 +202,7 @@ if(typeof window==='undefined'&&typeof importScripts==='function'){
 }
 /* ======================= Pantalla del cifrador (navegador) ======================= */
 if(typeof window!=='undefined'){
-const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false};
+const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false,withChords:true};
 const CIF_ROOT_HUE=[0,30,55,85,120,160,190,210,235,265,295,330];
 function cifSong(){ return S.songs.get(CS.songId); }
 function cifItems(s){
@@ -219,7 +219,7 @@ function cifOpts(){
 }
 window.cifOpen=function(id){
   const s=S.songs.get(id); if(!s||!(s.audio||[]).length){ toast('Primero sube un audio a esta canción.'); return; }
-  cifStop(); Object.assign(CS,{songId:id,audioId:(s.sync&&s.audio.some(a=>a.id===s.sync.audio))?s.sync.audio:s.audio[0].id,res:null,busy:false,err:'',keyMode:s.key?'song':'audio',target:'bodyPro'});
+  cifStop(); Object.assign(CS,{songId:id,audioId:(s.sync&&s.audio.some(a=>a.id===s.sync.audio))?s.sync.audio:s.audio[0].id,res:null,busy:false,err:'',keyMode:s.key?'song':'audio',target:'bodyPro',withChords:true});
   CS.items=cifItems(s); CS.tr=null; CS.trMsg=''; CS.fromTr=false; if(!cifLyricItems().length) CS.target='body'; const ly=cifLyricItems();
   if(CS.trEnabled===null) fetch('/api/transcribe/status').then(r=>r.json()).then(d=>{ CS.trEnabled=!!d.enabled; cifPaintTr(); }).catch(()=>{});
   if(s.sync&&Array.isArray(s.sync.times)&&s.sync.times.length===ly.length&&s.sync.audio===CS.audioId) ly.forEach((l,i)=>l.t=s.sync.times[i]);
@@ -250,7 +250,7 @@ window.viewCifrar=function(){
     <div class="cif-step"><span>3</span><b>Revisar y guardar</b></div>
     <div id="cif-opts"></div>
     <div id="cif-prev" class="preview" style="max-height:none"></div>
-    <div class="actions"><button class="btn pri" data-act="cif-save" id="cif-save">Guardar borrador</button><span class="muted" style="font-size:13px">Queda marcado como “detección automática” hasta que alguien lo revise.</span></div>
+    <div class="actions"><button class="btn pri" data-act="cif-save" id="cif-save">Guardar borrador</button><span class="muted" style="font-size:13px" id="cif-savenote">Queda marcado como “detección automática” hasta que alguien lo revise.</span></div>
   </section>`;
 };
 window.cifAfterRender=function(){ if(V.view!=='cifrar') return; cifPaintTr(); cifPaintLines(); cifPaintTimeline(); cifPaintResult(); cifStatus(); cifLoop();
@@ -311,7 +311,13 @@ async function cifTranscribe(){
   CS.trBusy=false; if(CS.fromTr){ render(); } else { cifPaintTr(); cifPaintLines(); cifPaintResult(); }
 }
 function cifFmt(t){ return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0'); }
+function cifLyricsText(){
+  const out=[]; for(const it of CS.items){ if(it.type==='sec') out.push('# '+it.text); else if(it.type==='gap'){ if(out.length&&out[out.length-1]!=='') out.push(''); } else if(it.type==='ln') out.push(it.text); }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function cifLyricsOnly(){ return !CS.withChords&&cifLyricItems().length>0; }
 function cifResultText(){
+  if(cifLyricsOnly()) return cifLyricsText();
   if(!CS.res) return ''; const o=cifOpts(); const ly=cifLyricItems();
   if(!ly.length){ const names=[]; for(const g of CS.res.segments){ const n=cifName(g,o.shift,o.flat); if(n&&names[names.length-1]!==n) names.push(n); } const rows=[]; for(let i=0;i<names.length;i+=4) rows.push(names.slice(i,i+4).map(n=>`[${n}]`).join('   ')); return '# Acordes\n'+rows.join('\n'); }
   return cifBuild(CS.items,CS.res.segments,CS.res.duration,o);
@@ -321,15 +327,19 @@ function cifPaintResult(){
   const s=cifSong(); const ka=CS.res&&CS.res.key, ks=parseKey(s.key); const ly=cifLyricItems(); const marked=ly.filter(l=>l.t!=null).length;
   const sameKey=ka&&ks&&cifRelMaj(ka)===cifRelMaj(ks);
   const dupW=CS.fromTr&&window.findDuplicate?findDuplicate({title:s.title,body:cifResultText()},[...S.songs.values()].filter(x=>x.id!==s.id)):null;
-  op.innerHTML=!CS.res?'':`${s.titleAuto?`<label class="f" style="margin-bottom:8px">Título de la canción<input id="cif-title" value="${esc(CS.title||cifSuggestTitle())}"></label>`:''}${dupW?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>Atención:</b> parece que esta canción ya existe como ${esc(dupLabel(dupW))}. <button class="btn" data-act="open-song" data-id="${esc(dupW.song.id)}">Abrir la existente</button></div>`:''}<div class="grid2">
+  const lo=cifLyricsOnly();
+  const modeSel=ly.length?`<label class="f" style="margin-bottom:8px">¿Qué quieres guardar?<select id="cif-with"><option value="1" ${CS.withChords?'selected':''}>Letra con acordes</option><option value="0" ${CS.withChords?'':'selected'}>Solo la letra (sin acordes)</option></select></label>${lo?`<p class="muted" style="margin:-2px 0 8px;font-size:13px">Se guarda solo la letra${CS.fromTr?'':' (los acordes que ya tenga la canción no se tocan)'}. Los acordes los puedes poner después con “Poner acordes tocando”.</p>`:''}`:'';
+  op.innerHTML=(!CS.res&&!lo)?modeSel:`${modeSel}${s.titleAuto?`<label class="f" style="margin-bottom:8px">Título de la canción<input id="cif-title" value="${esc(CS.title||cifSuggestTitle())}"></label>`:''}${dupW?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>Atención:</b> parece que esta canción ya existe como ${esc(dupLabel(dupW))}. <button class="btn" data-act="open-song" data-id="${esc(dupW.song.id)}">Abrir la existente</button></div>`:''}${lo?'':`<div class="grid2">
     ${ks&&!sameKey?`<label class="f">Tono del cifrado<select id="cif-keymode"><option value="song" ${CS.keyMode==='song'?'selected':''}>Tono de la canción (${esc(keyText(ks))})</option><option value="audio" ${CS.keyMode==='audio'?'selected':''}>Tono del audio (${esc(keyText(ka))}) — cambia el tono de la canción</option></select></label>`:''}
-    <label class="f">Guardar en<select id="cif-target"><option value="bodyPro" ${CS.target==='bodyPro'?'selected':''}>Versión original (recomendado)</option><option value="body" ${CS.target==='body'?'selected':''}>Acordes básicos (reemplaza los actuales)</option></select></label></div>
-    ${ly.length&&marked<ly.length?`<p class="muted" style="margin:6px 0 0;font-size:13px">Faltan ${ly.length-marked} líneas por marcar: quedarán sin acordes.</p>`:''}`;
+    <label class="f">Guardar en<select id="cif-target"><option value="bodyPro" ${CS.target==='bodyPro'?'selected':''}>Versión original (recomendado)</option><option value="body" ${CS.target==='body'?'selected':''}>Acordes básicos (reemplaza los actuales)</option></select></label></div>`}
+    ${!lo&&ly.length&&marked<ly.length?`<p class="muted" style="margin:6px 0 0;font-size:13px">Faltan ${ly.length-marked} líneas por marcar: quedarán sin acordes.</p>`:''}`;
   const km=$('#cif-keymode'); if(km) km.addEventListener('change',e=>{ CS.keyMode=e.target.value; cifPaintTimeline(); cifPaintResult(); });
+  const cw=$('#cif-with'); if(cw) cw.addEventListener('change',e=>{ CS.withChords=e.target.value==='1'; cifPaintResult(); });
   const tg=$('#cif-target'); if(tg) tg.addEventListener('change',e=>{ CS.target=e.target.value; });
   const ti=$('#cif-title'); if(ti) ti.addEventListener('input',e=>{ CS.title=e.target.value; });
-  const txt=cifResultText(); pv.innerHTML=CS.res?renderSheet(txt,{chords:true,key:cifOpts().key}):'<p class="muted">El resultado aparecerá aquí cuando termine el análisis.</p>';
-  if(sv) sv.disabled=!CS.res||(ly.length&&!marked);
+  const txt=cifResultText(); pv.innerHTML=(CS.res||lo)?renderSheet(txt,{chords:!lo,key:lo?parseKey(s.key):cifOpts().key}):'<p class="muted">El resultado aparecerá aquí cuando termine el análisis.</p>';
+  if(sv){ sv.disabled=lo?false:(!CS.res||(ly.length&&!marked)); sv.textContent=lo?'Guardar solo la letra':'Guardar borrador'; }
+  const sn=$('#cif-savenote'); if(sn) sn.textContent=lo?(CS.fromTr?'La letra queda marcada como “transcrita automáticamente” hasta que alguien la revise.':'Se guarda la sincronización de las líneas con el audio.'):'Queda marcado como “detección automática” hasta que alguien lo revise.';
 }
 function cifLoop(){
   if(CS.raf) cancelAnimationFrame(CS.raf);
@@ -344,7 +354,18 @@ function cifStop(){ if(CS.raf) cancelAnimationFrame(CS.raf); CS.raf=null; const 
 function cifMark(i){ const a=$('#cif-audio'); if(!a) return; const ly=cifLyricItems(); if(i==null) i=ly.findIndex(l=>l.t==null); if(i<0) return; ly[i].t=Math.max(0,a.currentTime-0.15); if(a.paused&&i===0) a.play().catch(()=>{}); cifPaintLines(); cifPaintResult(); }
 function cifChordSig(t){ return String(t||'').split('\n').map(l=>(l.match(/\[[^\]]*\]/g)||[]).join('')).join('|').replace(/\|+$/,''); }
 window.cifChordSig=cifChordSig;
+async function cifSaveLyrics(){
+  const s=cifSong(); if(!s) return; const txt=cifLyricsText(); const data=JSON.parse(JSON.stringify(s));
+  if(CS.fromTr){ data.body=txt; data.lyricsAuto=true; }
+  else if(!(data.body||'').trim()&&!(data.bodyPro||'').trim()) data.body=txt;
+  const times=cifLyricItems().map(l=>l.t==null?null:Math.round(l.t*100)/100);
+  if(times.some(t=>t!=null)) data.sync={audio:CS.audioId,times,at:Date.now()};
+  if(s.titleAuto){ const t=(CS.title||cifSuggestTitle()||'').trim(); if(t) data.title=t; delete data.titleAuto; }
+  delete data.updatedBy; delete data.updatedAt;
+  if(await writeDoc('songs',data)){ cifStop(); toast(CS.fromTr?'Letra guardada sin acordes. Revísala y pon los acordes cuando quieras.':'Guardado.'); go('song',{songId:s.id,shift:0}); }
+}
 async function cifSave(){
+  if(cifLyricsOnly()) return cifSaveLyrics();
   const s=cifSong(); if(!s||!CS.res) return; const txt=cifResultText(); const o=cifOpts();
   const data=JSON.parse(JSON.stringify(s)); data[CS.target]=txt; if(CS.target==='bodyPro') data.chordsProAuto=true; else data.chordsAuto=true;
   if(CS.keyMode==='audio'||!s.key) data.key=keyCanon(CS.res.key.idx,CS.res.key.minor);
