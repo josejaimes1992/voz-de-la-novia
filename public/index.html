@@ -221,6 +221,30 @@ mark{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inherit;b
 .ask{grid-column:1/-1;display:grid;gap:6px;font-size:13.5px;border-top:1px dashed var(--line);padding-top:8px}
 .ask-snip{font-family:var(--f-display);color:var(--muted);font-size:13px}
 .ask-banner{border:1px solid #C9962B;color:var(--ink)}
+.cif-box{display:grid;gap:10px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.cif-step{display:flex;align-items:center;gap:10px}
+.cif-step span{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:13px}
+.cif-step b{font-family:var(--f-display);font-size:17px}
+.cif-now{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cif-now div{display:grid;justify-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
+.cif-now small{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em}
+.cif-now b{font-family:var(--f-ui);font-size:30px;color:var(--chord);line-height:1.15}
+.cif-now div:last-child b{font-size:20px;color:var(--ink)}
+.cif-tl{position:relative;overflow-x:auto}
+.cif-tl-in{display:flex;height:40px;min-width:640px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.cif-seg{border:0;border-right:1px solid var(--line);background:transparent;padding:0;font:600 11px var(--f-ui);color:var(--ink);overflow:hidden;white-space:nowrap;cursor:pointer;min-width:0}
+.cif-head{position:absolute;top:0;width:2px;height:40px;background:var(--chord);pointer-events:none}
+.cif-mark{font-size:16px;padding:12px 18px}
+.cif-lines{display:grid;gap:4px;max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg)}
+.cif-sec{font:700 11.5px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-top:6px}
+.cif-ln{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;border-radius:6px;padding:2px}
+.cif-ln.nextl{outline:2px dashed var(--accent)}
+.cif-ln.sing{background:var(--accent-soft)}
+.cif-tm{font:600 12px var(--f-mono);min-width:48px;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:4px 6px;color:var(--muted)}
+.cif-ln.done .cif-tm{color:var(--ok);border-color:var(--ok)}
+.cif-tx{text-align:left;border:0;background:none;font-family:var(--f-display);font-size:15.5px;color:var(--ink);padding:4px 2px}
+.auto-note{margin:-8px 0 14px;font-size:13px;color:#9A6B00;font-style:italic}
+.auto-note b{font-style:normal}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -472,7 +496,7 @@ function sortedSongs(){ return [...S.songs.values()].sort((a,b)=>a.title.localeC
 function norm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 
 /* ============ Render principal ============ */
-function onData(){ if(V.view==='edit') return; render(); if(V.live) renderLive(); }
+function onData(){ if(V.view==='edit'||V.view==='cifrar') return; render(); if(V.live) renderLive(); }
 function render(){
   $('#tab-songs').setAttribute('aria-pressed',V.tab==='songs');
   $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs');
@@ -487,8 +511,10 @@ function render(){
   else if(V.view==='programs') html=viewPrograms();
   else if(V.view==='program') html=viewProgram();
   else if(V.view==='trash') html=window.viewTrash?viewTrash():'';
+  else if(V.view==='cifrar') html=window.viewCifrar?viewCifrar():'';
   m.innerHTML=html;
   if(V.view==='edit') bindEditor();
+  if(V.view==='cifrar'&&window.cifAfterRender) cifAfterRender();
 }
 function banner(){
   if(S.error) return '<div class="banner">No se pudo conectar con el servidor. Revisa tu internet; la página lo volverá a intentar sola.</div>';
@@ -620,7 +646,7 @@ function instBar(song,capo,inLive){
   </div>`;
 }
 function fmtWhen(t){ if(!t) return ''; const d=new Date(t); return d.toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
-function chordsByLine(s){ const by=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim()?(s.chordsProBy||s.updatedBy):(s.chordsBy||s.createdBy); return by?`<p class="muted" style="margin:-8px 0 14px;font-size:13px;font-style:italic">Acordes por: ${esc(by)}</p>`:''; }
+function chordsByLine(s){ const isPro=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim(); const auto=isPro?s.chordsProAuto:s.chordsAuto; if(auto) return `<p class="auto-note">Acordes por: detección automática desde el audio${(isPro?s.chordsProBy:s.chordsBy)?` · sincronizó ${esc(isPro?s.chordsProBy:s.chordsBy)}`:''} · <b>falta revisar</b></p>`; const by=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim()?(s.chordsProBy||s.updatedBy):(s.chordsBy||s.createdBy); return by?`<p class="muted" style="margin:-8px 0 14px;font-size:13px;font-style:italic">Acordes por: ${esc(by)}</p>`:''; }
 function verBar(s){
   const has=!!(s.bodyPro&&s.bodyPro.trim());
   return `<div class="inst-bar"><div class="seg" role="group" aria-label="Versión de acordes"><button data-act="ver" data-v="basica" aria-pressed="${V.ver!=='original'||!has}">Acordes básicos</button><button data-act="ver" data-v="original" aria-pressed="${V.ver==='original'&&has}" ${has?'':'disabled title="Aún no tiene versión original"'}>Versión original</button></div>
@@ -641,7 +667,7 @@ function viewSong(){
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
     ${S.canWrite?`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`:''}
-    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎼 Sacar acordes del audio</button>`:''}`:''}
   </div>
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
   ${V.chords?verBar(s):''}
@@ -989,7 +1015,7 @@ document.addEventListener('click',async ev=>{
     case 'edit-song': V.placer=false; V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
     case 'cancel-edit': V.draft=null; S.songs.has(V.songId)?go('song'):go('list'); break;
     case 'convert': { const ta=edTA(); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
-    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } if(!S.songs.has(d.id)&&V.confirm!=='dup-save'){ const dup=findDuplicate(d,[...S.songs.values()],d.id); if(dup){ V.confirm='dup-save'; V.dupInfo=dup; render(); toast('Esta canción parece que ya existe. Revisa el aviso.'); break; } } if(V.confirm==='dup-save') V.confirm=null; delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
+    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } if(!S.songs.has(d.id)&&V.confirm!=='dup-save'){ const dup=findDuplicate(d,[...S.songs.values()],d.id); if(dup){ V.confirm='dup-save'; V.dupInfo=dup; render(); toast('Esta canción parece que ya existe. Revisa el aviso.'); break; } } if(V.confirm==='dup-save') V.confirm=null; delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; { const o=S.songs.get(d.id); if(o&&window.cifChordSig){ if(cifChordSig(o.body)!==cifChordSig(d.body)) delete d.chordsAuto; if(cifChordSig(o.bodyPro)!==cifChordSig(d.bodyPro)) delete d.chordsProAuto; } } if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
     case 'del-song': readDraft(); V.confirm='del-song'; render(); break;
     case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción enviada a la papelera. Puedes rescatarla durante 60 días.'); break;
     case 'confirm-no': if(V.view==='edit') readDraft(); V.confirm=null; render(); break;
@@ -1034,4 +1060,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
+<script src="/cifrador.js?v=2"></script>
 </body></html>
