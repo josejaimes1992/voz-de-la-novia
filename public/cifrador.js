@@ -30,58 +30,88 @@ function cifDiatonic(key){
   const set=new Map(); [[0,false],[2,true],[4,true],[5,false],[7,false],[9,true]].forEach(([d,m])=>set.set(((tonic+d)%12)+(m?'m':''),true));
   return set;
 }
+function cifMedian(buf,n){ for(let i=1;i<n;i++){ const v=buf[i]; let j=i-1; while(j>=0&&buf[j]>v){ buf[j+1]=buf[j]; j--; } buf[j+1]=v; } return buf[n>>1]; }
+/* Detector v2: separa batería de armonía, corrige afinación, sigue el pulso y decide acorde por tiempo de compás */
 function cifAnalyze(x,sr,onProgress){
-  const N=8192, hop=2048, nb=N/2, fft=cifFFT(N), win=new Float64Array(N), frame=new Float64Array(N), mag=new Float64Array(nb);
+  const N=8192, hop=1024, fmax=2400, kmax=Math.min(N/2,Math.ceil(fmax*N/sr)), fft=cifFFT(N), win=new Float64Array(N), frame=new Float64Array(N), mag=new Float64Array(N/2);
   for(let i=0;i<N;i++) win[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
-  /* qué semitono corresponde a cada banda de frecuencia */
-  const pcT=new Int8Array(nb).fill(-1), pcB=new Int8Array(nb).fill(-1), wT=new Float32Array(nb);
-  for(let k=1;k<nb;k++){ const f=k*sr/N; const m=69+12*Math.log2(f/440); const d=Math.abs(m-Math.round(m)); if(d>0.42) continue; const pc=((Math.round(m)%12)+12)%12;
-    if(f>=110&&f<=2000){ pcT[k]=pc; wT[k]=1-d; } if(f>=41&&f<=200) pcB[k]=pc; }
-  const frames=Math.max(1,Math.floor((x.length-N)/hop)+1); const T=[], B=[], E=new Float32Array(frames);
-  for(let t=0;t<frames;t++){
-    const off=t*hop; let e=0; for(let i=0;i<N;i++){ const v=x[off+i]||0; frame[i]=v*win[i]; e+=v*v; } E[t]=Math.sqrt(e/N);
-    fft(frame,mag); const ct=new Float32Array(12), cb=new Float32Array(12);
-    for(let k=1;k<nb;k++){ if(pcT[k]>=0) ct[pcT[k]]+=mag[k]*wT[k]; if(pcB[k]>=0) cb[pcB[k]]+=mag[k]; }
-    T.push(ct); B.push(cb);
-    if(onProgress&&t%200===0) onProgress(t/frames);
-  }
-  /* suaviza en el tiempo (≈0,5 s) y normaliza */
-  const smooth=(arr,w)=>arr.map((_,t)=>{ const o=new Float32Array(12); let n=0; for(let k=Math.max(0,t-w);k<=Math.min(arr.length-1,t+w);k++){ for(let i=0;i<12;i++) o[i]+=arr[k][i]; n++; } for(let i=0;i<12;i++) o[i]/=n; return o; });
-  const Ts=smooth(T,2), Bs=smooth(B,2);
-  const total=new Array(12).fill(0); Ts.forEach((c,t)=>{ for(let i=0;i<12;i++) total[i]+=c[i]*E[t]; });
-  const key=cifDetectKey(total); const dia=cifDiatonic(key);
-  const eMax=Math.max(...E)||1;
-  /* plantillas: 12 mayores + 12 menores + silencio */
-  const states=[]; for(let r=0;r<12;r++){ states.push({r,m:false,pcs:[r,(r+4)%12,(r+7)%12]}); states.push({r,m:true,pcs:[r,(r+3)%12,(r+7)%12]}); }
-  const S=states.length; const em=new Array(frames);
-  for(let t=0;t<frames;t++){
-    const c=Ts[t], b=Bs[t]; let n=0; for(let i=0;i<12;i++) n+=c[i]*c[i]; n=Math.sqrt(n)||1; let bmax=0; for(let i=0;i<12;i++) bmax=Math.max(bmax,b[i]); bmax=bmax||1;
-    const row=new Float32Array(S+1);
-    for(let s=0;s<S;s++){ const st=states[s]; let dot=0; dot+=c[st.pcs[0]]*1.0+c[st.pcs[1]]*0.85+c[st.pcs[2]]*0.9; const tn=Math.sqrt(1+0.85*0.85+0.9*0.9);
-      let sc=dot/(n*tn); sc+=0.18*(b[st.r]/bmax); if(dia.has(st.r+(st.m?'m':''))) sc+=0.06; row[s]=sc; }
-    row[S]=E[t]<eMax*0.04?1.2:0.2; em[t]=row;
-  }
-  /* Viterbi: penaliza los cambios para evitar saltos falsos */
-  const P=0.55; let prev=new Float32Array(S+1); const back=[]; for(let s=0;s<=S;s++) prev[s]=em[0][s];
-  for(let t=1;t<frames;t++){ let bi=0; for(let s=1;s<=S;s++) if(prev[s]>prev[bi]) bi=s; const cur=new Float32Array(S+1), bk=new Int16Array(S+1);
-    for(let s=0;s<=S;s++){ const stay=prev[s], jump=prev[bi]-P; if(stay>=jump){ cur[s]=stay+em[t][s]; bk[s]=s; } else { cur[s]=jump+em[t][s]; bk[s]=bi; } }
+  const frames=Math.max(1,Math.floor((x.length-N)/hop)+1), dt=hop/sr, off0=N/sr/2;
+  const S=new Array(frames), E=new Float32Array(frames);
+  for(let t=0;t<frames;t++){ const o=t*hop; let e=0; for(let i=0;i<N;i++){ const v=x[o+i]||0; frame[i]=v*win[i]; e+=v*v; } E[t]=Math.sqrt(e/N); fft(frame,mag); S[t]=Float32Array.from(mag.subarray(0,kmax)); if(onProgress&&t%300===0) onProgress(0.4*t/frames); }
+  /* 1. Separación armónico/percusivo (filtros de mediana) */
+  const K=17, half=K>>1, tmp=new Float32Array(K), H=new Array(frames), Pf=new Float32Array(frames);
+  for(let t=0;t<frames;t++) H[t]=new Float32Array(kmax);
+  const hMed=new Array(frames); for(let t=0;t<frames;t++) hMed[t]=new Float32Array(kmax);
+  for(let k=0;k<kmax;k++){ for(let t=0;t<frames;t++){ let n=0; for(let d=-half;d<=half;d++){ const tt=t+d; if(tt>=0&&tt<frames) tmp[n++]=S[tt][k]; } hMed[t][k]=cifMedian(tmp,n); } }
+  let prevP=null;
+  for(let t=0;t<frames;t++){ const row=S[t], hm=hMed[t], P=new Float32Array(kmax);
+    for(let k=0;k<kmax;k++){ let n=0; for(let d=-half;d<=half;d++){ const kk=k+d; if(kk>=0&&kk<kmax) tmp[n++]=row[kk]; } const pm=cifMedian(tmp,n), h=hm[k]; const m=h*h/(h*h+pm*pm+1e-12); H[t][k]=row[k]*m; P[k]=row[k]*(1-m); }
+    let flux=0; if(prevP) for(let k=0;k<kmax;k++){ const d=P[k]-prevP[k]; if(d>0) flux+=d; } Pf[t]=flux; prevP=P;
+    if(onProgress&&t%300===0) onProgress(0.4+0.3*t/frames); }
+  /* 2. Afinación (muchas grabaciones no están en La=440) */
+  const hist=new Float32Array(50);
+  for(let t=0;t<frames;t+=2){ const r=H[t]; for(let k=3;k<kmax-1;k++){ if(r[k]>r[k-1]&&r[k]>=r[k+1]&&r[k]>0){ const a=r[k-1],b=r[k],c=r[k+1]; const p=0.5*(a-c)/(a-2*b+c||1e-9); const f=(k+p)*sr/N; if(f<80) continue; const m=69+12*Math.log2(f/440); let dev=m-Math.round(m); hist[((Math.floor((dev+0.5)*50))%50+50)%50]+=b; } } }
+  let hb=0; for(let i=1;i<50;i++) if(hist[i]>hist[hb]) hb=i; const tune=(hb+0.5)/50-0.5; /* en semitonos */
+  /* 3. Espectro por semitonos con supresión de armónicos */
+  const M0=28, M1=96, NM=M1-M0+1; const map=[]; for(let k=1;k<kmax;k++){ const f=k*sr/N; const m=69+12*Math.log2(f/440)-tune; const mi=Math.round(m); const d=Math.abs(m-mi); if(mi<M0||mi>M1||d>0.5) continue; map.push([k,mi-M0,1-d]); }
+  let gmax=0; const L=new Array(frames);
+  for(let t=0;t<frames;t++){ const v=new Float32Array(NM); for(const [k,mi,w] of map) v[mi]+=H[t][k]*w; L[t]=v; for(let i=0;i<NM;i++) if(v[i]>gmax) gmax=v[i]; }
+  const T=new Array(frames), B=new Array(frames);
+  for(let t=0;t<frames;t++){ const v=L[t]; for(let i=0;i<NM;i++) v[i]=Math.log(1+100*v[i]/(gmax||1));
+    const w=new Float32Array(NM); for(let i=0;i<NM;i++){ let s=0,n=0; for(let d=-9;d<=9;d++){ const ii=i+d; if(ii>=0&&ii<NM){ s+=v[ii]; n++; } } w[i]=Math.max(0,v[i]-s/n); }
+    const sal=new Float32Array(NM); for(let i=0;i<NM;i++){ let a=w[i]; if(i>=12) a-=0.5*w[i-12]; if(i>=19) a-=0.3*w[i-19]; if(i>=24) a-=0.2*w[i-24]; sal[i]=Math.max(0,a); }
+    const ct=new Float32Array(12), cb=new Float32Array(12);
+    for(let i=0;i<NM;i++){ const m=i+M0, pc=((m%12)+12)%12; if(m>=45&&m<=86){ const g=Math.exp(-0.5*Math.pow((m-64)/12,2)); ct[pc]+=sal[i]*g; } if(m>=28&&m<=54){ const g=Math.exp(-0.5*Math.pow((m-40)/8,2)); cb[pc]+=w[i]*g; } }
+    T[t]=ct; B[t]=cb; }
+  if(onProgress) onProgress(0.8);
+  /* 4. Pulso (beats) a partir de los golpes */
+  let om=0; const on=new Float32Array(frames); for(let t=0;t<frames;t++){ let s=0,n=0; for(let d=-2;d<=2;d++){ const tt=t+d; if(tt>=0&&tt<frames){ s+=Pf[tt]; n++; } } on[t]=s/n; om=Math.max(om,on[t]); }
+  for(let t=0;t<frames;t++){ let s=0,n=0; for(let d=-40;d<=40;d++){ const tt=t+d; if(tt>=0&&tt<frames){ s+=on[tt]; n++; } } on[t]=Math.max(0,on[t]-s/n)/(om||1); }
+  let bestLag=Math.round(0.6/dt), bestAc=-1;
+  for(let lag=Math.round(60/180/dt);lag<=Math.round(60/55/dt);lag++){ let ac=0; for(let t=lag;t<frames;t++) ac+=on[t]*on[t-lag]; const bpm=60/(lag*dt); ac*=Math.exp(-0.5*Math.pow(Math.log2(bpm/100)/0.9,2)); if(ac>bestAc){ bestAc=ac; bestLag=lag; } }
+  const per=bestLag, sc=new Float32Array(frames), bp=new Int32Array(frames).fill(-1);
+  for(let t=0;t<frames;t++){ let best=0,bi=-1; for(let p=t-Math.round(2*per);p<=t-Math.round(per/2);p++){ if(p<0) continue; const pen=-6*Math.pow(Math.log((t-p)/per),2); const v=sc[p]+pen; if(bi<0||v>best){ best=v; bi=p; } } sc[t]=on[t]+(bi>=0?Math.max(0,best):0); bp[t]=bi>=0&&best>0?bi:-1; }
+  let last=0; for(let t=frames-Math.round(per);t<frames;t++) if(t>=0&&sc[t]>sc[last]) last=t;
+  let beats=[]; for(let t=last;t>=0;t=bp[t]){ beats.unshift(t); if(bp[t]<0) break; }
+  if(beats.length<8){ beats=[]; for(let t=0;t<frames;t+=per) beats.push(t); }
+  while(beats[0]>per) beats.unshift(beats[0]-per); if(beats[0]!==0) beats.unshift(0);
+  while(beats[beats.length-1]+per<frames) beats.push(beats[beats.length-1]+per); beats.push(frames);
+  /* 5. Cromagrama por pulso */
+  const nb=beats.length-1, BT=[], BB=[], BE=new Float32Array(nb); let eMax=0;
+  for(let b=0;b<nb;b++){ const a=beats[b], z=Math.max(a+1,beats[b+1]); const ct=new Float32Array(12), cb=new Float32Array(12); let e=0; for(let t=a;t<z&&t<frames;t++){ for(let i=0;i<12;i++){ ct[i]+=T[t][i]; cb[i]+=B[t][i]; } e+=E[t]; } BT.push(ct); BB.push(cb); BE[b]=e/(z-a); eMax=Math.max(eMax,BE[b]); }
+  const total=new Array(12).fill(0); BT.forEach((c,b)=>{ for(let i=0;i<12;i++) total[i]+=c[i]*BE[b]; });
+  const key=cifDetectKey(total); const dia=cifDiatonic(key); const tonicMaj=key.minor?(key.idx+3)%12:key.idx; const V7=(tonicMaj+7)%12;
+  /* 6. Plantillas de acordes (mayor, menor, séptima) con armónicos */
+  const QS={maj:[[0,1],[4,0.8],[7,0.9]],min:[[0,1],[3,0.8],[7,0.9]],'7':[[0,1],[4,0.75],[7,0.8],[10,0.6]]};
+  const states=[]; for(let r=0;r<12;r++) for(const q of ['maj','min','7']){ const tp=new Float32Array(12); for(const [d,w] of QS[q]){ const pc=(r+d)%12; tp[pc]+=w; tp[(pc+7)%12]+=w*0.15; tp[(pc+4)%12]+=w*0.06; } let n=0; for(let i=0;i<12;i++) n+=tp[i]*tp[i]; n=Math.sqrt(n); for(let i=0;i<12;i++) tp[i]/=n; states.push({r,q,m:q==='min',tp,tones:QS[q].map(([d])=>(r+d)%12)}); }
+  const NS=states.length; const em=[];
+  for(let b=0;b<nb;b++){ const c=BT[b], bb=BB[b]; let n=0; for(let i=0;i<12;i++) n+=c[i]*c[i]; n=Math.sqrt(n)||1; let bm=0; for(let i=0;i<12;i++) bm=Math.max(bm,bb[i]); bm=bm||1;
+    const row=new Float32Array(NS+1);
+    for(let s=0;s<NS;s++){ const st=states[s]; let dot=0; for(let i=0;i<12;i++) dot+=c[i]*st.tp[i]; let v=dot/n; v+=0.22*bb[st.r]/bm; v+=0.06*Math.max(...st.tones.slice(1).map(p=>bb[p]))/bm;
+      const dname=st.r+(st.m?'m':''); if(st.q==='7'){ v-=0.05; if(st.r===V7) v+=0.05; } else if(dia.has(dname)) v+=0.07; row[s]=v; }
+    row[NS]=BE[b]<eMax*0.06?2:0; em.push(row); }
+  /* 7. Viterbi por pulso con preferencia por cambiar en el primer pulso del compás */
+  const P=0.42; let prev=Float32Array.from(em[0]||new Float32Array(NS+1)); const back=[];
+  for(let b=1;b<nb;b++){ let bi=0; for(let s=1;s<=NS;s++) if(prev[s]>prev[bi]) bi=s; const cur=new Float32Array(NS+1), bk=new Int16Array(NS+1);
+    for(let s=0;s<=NS;s++){ const stay=prev[s], jump=prev[bi]-P; if(stay>=jump){ cur[s]=stay+em[b][s]; bk[s]=s; } else { cur[s]=jump+em[b][s]; bk[s]=bi; } }
     back.push(bk); prev=cur; }
-  let s=0; for(let k=1;k<=S;k++) if(prev[k]>prev[s]) s=k; const path=new Int16Array(frames); path[frames-1]=s; for(let t=frames-1;t>0;t--){ s=back[t-1][s]; path[t-1]=s; }
-  /* a segmentos */
-  const dt=hop/sr, segs=[]; for(let t=0;t<frames;t++){ const st=path[t]; const last=segs[segs.length-1]; if(last&&last.s===st) last.t1=(t+1)*dt+N/sr/2; else segs.push({s:st,t0:t*dt+N/sr/2,t1:(t+1)*dt+N/sr/2}); }
-  if(segs.length) segs[0].t0=0;
-  /* une segmentos muy cortos con el vecino */
-  for(let changed=true;changed;){ changed=false; for(let i=0;i<segs.length;i++){ const g=segs[i]; if(g.t1-g.t0<0.6&&segs.length>1){ const j=i>0?i-1:i+1; const o=segs[j]; o.t0=Math.min(o.t0,g.t0); o.t1=Math.max(o.t1,g.t1); segs.splice(i,1); changed=true; break; } }
-    for(let i=1;i<segs.length;i++) if(segs[i].s===segs[i-1].s){ segs[i-1].t1=segs[i].t1; segs.splice(i,1); changed=true; break; } }
-  const out=segs.map(g=>g.s===S?{t0:g.t0,t1:g.t1,root:null,minor:false}:{t0:g.t0,t1:g.t1,root:states[g.s].r,minor:states[g.s].m});
-  return {key:{idx:key.idx,minor:key.minor},segments:out,duration:x.length/sr};
+  let st=0; for(let k=1;k<=NS;k++) if(prev[k]>prev[st]) st=k; const path=new Int16Array(nb); if(nb){ path[nb-1]=st; for(let b=nb-1;b>0;b--){ st=back[b-1][st]; path[b-1]=st; } }
+  /* 8. Segmentos, acordes con bajo (G/B) */
+  const tOf=f=>Math.min(x.length/sr,f*dt+off0);
+  const segs=[]; for(let b=0;b<nb;b++){ const s2=path[b]; const lst=segs[segs.length-1]; if(lst&&lst.s===s2){ lst.b1=b+1; } else segs.push({s:s2,b0:b,b1:b+1}); }
+  const out=segs.map(g=>{ const t0=g.b0===0?0:tOf(beats[g.b0]), t1=tOf(beats[g.b1]); if(g.s===NS) return {t0,t1,root:null,minor:false};
+    const sx=states[g.s]; const bass=new Float32Array(12); for(let b=g.b0;b<g.b1;b++) for(let i=0;i<12;i++) bass[i]+=BB[b][i];
+    let bp2=0; for(let i=1;i<12;i++) if(bass[i]>bass[bp2]) bp2=i; const slash=bp2!==sx.r&&sx.tones.includes(bp2)&&bass[bp2]>1.6*bass[sx.r]&&(g.b1-g.b0)>=2?bp2:null;
+    return {t0,t1,root:sx.r,minor:sx.m,q:sx.q,bass:slash}; });
+  if(onProgress) onProgress(1);
+  return {key:{idx:key.idx,minor:key.minor},segments:out,duration:x.length/sr,tuning:Math.round(tune*100),bpm:Math.round(60/(per*dt))};
 }
 CIF.analyze=cifAnalyze; CIF.detectKey=cifDetectKey;
 if(typeof module!=='undefined') module.exports=CIF;
 
 /* ---------- Letra + tiempos + acordes -> cifrado ---------- */
 const CIF_N=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
-function cifName(seg,shift,flat){ if(seg.root==null) return null; const r=((seg.root+shift)%12+12)%12; const sharp=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'], fl=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B']; return (flat?fl:sharp)[r]+(seg.minor?'m':''); }
+function cifName(seg,shift,flat){ if(seg.root==null) return null; const sharp=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'], fl=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B']; const nm=i=>(flat?fl:sharp)[((i+shift)%12+12)%12]; return nm(seg.root)+(seg.minor?'m':'')+(seg.q==='7'?'7':'')+(seg.bass!=null&&seg.bass!==seg.root?'/'+nm(seg.bass):''); }
 /* items: [{type:'sec',text}|{type:'gap'}|{type:'ln',text,t}] ; t = segundo en que empieza la línea (o null) */
 function cifBuild(items,segments,duration,opts){
   const shift=opts&&opts.shift||0, flat=!!(opts&&opts.flat);
@@ -128,6 +158,14 @@ function cifNormTok(t){ return String(t).normalize('NFD').replace(/[̀-ͯ]/g,'')
 function cifEq(a,b){ return a===b||(a.length>=4&&b.length>=4&&a.slice(0,4)===b.slice(0,4)); }
 /* Arma estrofas y coros a partir de los segmentos que devuelve el servicio */
 function cifItemsFromTranscript(tr){
+  if(tr.structured&&Array.isArray(tr.structured.sections)&&tr.structured.sections.length){
+    const items=[]; const lns=[];
+    tr.structured.sections.forEach((sec,i)=>{ if(i) items.push({type:'gap'}); items.push({type:'sec',text:sec.label||'Estrofa'}); for(const l of sec.lines){ const it={type:'ln',text:String(l.text).trim(),t:null,llm:l.start}; items.push(it); lns.push(it); } });
+    cifAlignLines(lns,tr);
+    /* las que no se ubicaron por la voz usan el tiempo de la revisión, siempre en orden */
+    let lastT=-1; for(const l of lns){ if(l.t==null&&Number.isFinite(l.llm)) l.t=Math.max(0,l.llm-0.1); if(l.t!=null&&l.t<lastT) l.t=null; if(l.t!=null) lastT=l.t; delete l.llm; }
+    return items;
+  }
   let lines=[];
   for(const g of tr.segments||[]){ const words=(tr.words||[]).filter(w=>w.s>=g.s-0.05&&w.s<g.e+0.05);
     if(words.length>11){ let cut=Math.floor(words.length/2), best=-1; for(let k=3;k<words.length-3;k++){ const gap=words[k].s-words[k-1].e; if(gap>best&&Math.abs(k-words.length/2)<words.length/3){ best=gap; cut=k; } }
@@ -158,6 +196,10 @@ function cifAlignLines(lines,tr){
 CIF.itemsFromTranscript=cifItemsFromTranscript; CIF.alignLines=cifAlignLines;
 if(typeof module!=='undefined') module.exports=CIF;
 
+/* En segundo plano (Web Worker): mismo archivo, sin pantalla */
+if(typeof window==='undefined'&&typeof importScripts==='function'){
+  self.onmessage=e=>{ try{ const r=cifAnalyze(e.data.x,e.data.sr,p=>self.postMessage({progress:p})); self.postMessage({result:r}); }catch(err){ self.postMessage({error:String(err&&err.message||err)}); } };
+}
 /* ======================= Pantalla del cifrador (navegador) ======================= */
 if(typeof window!=='undefined'){
 const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false};
@@ -213,7 +255,7 @@ window.viewCifrar=function(){
 };
 window.cifAfterRender=function(){ if(V.view!=='cifrar') return; cifPaintTr(); cifPaintLines(); cifPaintTimeline(); cifPaintResult(); cifStatus(); cifLoop();
   const sel=$('#cif-aud'); if(sel) sel.addEventListener('change',e=>{ CS.audioId=e.target.value; CS.res=null; render(); cifAnalyzeCurrent(); }); };
-function cifStatus(){ const el=$('#cif-status'); if(!el) return; el.textContent=CS.err||(CS.busy?'Analizando el audio… puede tardar unos segundos.':CS.res?`Listo: ${CS.res.segments.filter(x=>x.root!=null).length} acordes detectados en ${Math.floor(CS.res.duration/60)}:${String(Math.round(CS.res.duration%60)).padStart(2,'0')}.`:''); const k=$('#cif-key'); if(k&&CS.res) k.textContent=keyText(CS.res.key); }
+function cifStatus(){ const el=$('#cif-status'); if(!el) return; el.textContent=CS.err||(CS.busy?'Analizando el audio… puede tardar unos segundos.':CS.res?`Listo: ${CS.res.segments.filter(x=>x.root!=null).length} acordes en ${Math.floor(CS.res.duration/60)}:${String(Math.round(CS.res.duration%60)).padStart(2,'0')}${CS.res.bpm?` · ${CS.res.bpm} BPM aprox.`:''}${CS.res.tuning&&Math.abs(CS.res.tuning)>=8?` · afinación ${CS.res.tuning>0?'+':''}${CS.res.tuning} cents`:''}.`:''); const k=$('#cif-key'); if(k&&CS.res) k.textContent=keyText(CS.res.key); }
 async function cifAnalyzeCurrent(){
   CS.busy=true; CS.err=''; cifStatus();
   try{
@@ -222,8 +264,15 @@ async function cifAnalyzeCurrent(){
     const sr=22050; const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext; const off=new OAC(1,Math.ceil(dec.duration*sr),sr);
     const src=off.createBufferSource(); src.buffer=dec; src.connect(off.destination); src.start(0);
     const rendered=await new Promise((ok,ko)=>{ off.oncomplete=e=>ok(e.renderedBuffer); const p=off.startRendering(); if(p&&p.then) p.then(ok,ko); });
-    await new Promise(r=>setTimeout(r,30));
-    CS.res=cifAnalyze(rendered.getChannelData(0),sr);
+    const data=rendered.getChannelData(0);
+    CS.res=await new Promise(resolve=>{
+      let w=null; try{ w=new Worker('/cifrador.js?w=2'); }catch{}
+      const fallback=()=>{ setTimeout(()=>resolve(cifAnalyze(data,sr)),30); };
+      if(!w) return fallback();
+      w.onmessage=e=>{ const d=e.data; if(d.progress!=null){ const el=$('#cif-status'); if(el) el.textContent=`Analizando el audio… ${Math.round(d.progress*100)}%`; } else if(d.result){ w.terminate(); resolve(d.result); } else if(d.error){ w.terminate(); fallback(); } };
+      w.onerror=()=>{ w.terminate(); fallback(); };
+      const copy=new Float32Array(data); w.postMessage({x:copy,sr},[copy.buffer]);
+    });
   }catch(e){ console.error(e); CS.err='No se pudo analizar este audio. Prueba con otro archivo o recarga la página.'; }
   CS.busy=false; if(V.view==='cifrar'){ cifStatus(); cifPaintTimeline(); cifPaintResult(); }
   if(CS.autoTr&&CS.res){ CS.autoTr=false; if(CS.trEnabled===null){ try{ const d=await (await fetch('/api/transcribe/status')).json(); CS.trEnabled=!!d.enabled; }catch{} } if(CS.trEnabled) cifTranscribe(); else cifPaintTr(); }
@@ -248,14 +297,15 @@ function cifPaintTr(){
     :`<div class="actions"><button class="btn" data-act="cif-tr" ${CS.trBusy?'disabled':''}>${CS.trBusy?'Escuchando la voz…':label}</button><span class="muted" style="font-size:12.5px">${esc(CS.trMsg||help)}</span></div>`;
 }
 async function cifTranscribe(){
-  if(CS.trBusy) return; CS.trBusy=true; CS.trMsg='Enviando el audio al servicio… suele tardar entre 10 y 60 segundos.'; cifPaintTr();
+  if(CS.trBusy) return; CS.trBusy=true; CS.trMsg='Escuchando la voz y revisando la letra… suele tardar entre 20 y 90 segundos.'; cifPaintTr();
   try{
-    const r=await fetch(`/api/transcribe/${encodeURIComponent(CS.songId)}/${CS.audioId}`,{method:'POST',headers:{Authorization:'Bearer '+S.token}});
+    const syncOnly=cifLyricItems().length&&!CS.fromTr;
+    const r=await fetch(`/api/transcribe/${encodeURIComponent(CS.songId)}/${CS.audioId}${syncOnly?'?mode=sync':''}`,{method:'POST',headers:{Authorization:'Bearer '+S.token}});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ CS.trMsg={no_key:'Falta configurar la clave del servicio de transcripción.',bad_key:'La clave del servicio no es válida. Revísala en Railway.',quota:'El servicio no tiene saldo o está ocupado. Revisa tu cuenta.',too_large:'El audio es demasiado largo para transcribir.',unauthorized:'Vuelve a ingresar con tu usuario.'}[d.error]||'No se pudo transcribir. Inténtalo de nuevo.'; }
     else { CS.tr=d;
       if(cifLyricItems().length&&!CS.fromTr){ const ly=cifLyricItems(); ly.forEach(l=>l.t=null); const n=cifAlignLines(ly,d); CS.trMsg=`Ubiqué ${n} de ${ly.length} líneas. Revisa las marcas y corrige las que falten con ⏱.`; }
-      else { const items=cifItemsFromTranscript(d); if(items.length){ CS.items=items; CS.fromTr=true; CS.target='body'; CS.trMsg='Letra transcrita. Revísala: el servicio puede equivocarse con palabras cantadas.'; } else CS.trMsg='No se escuchó letra cantada en este audio.'; }
+      else { const items=cifItemsFromTranscript(d); if(items.length){ CS.items=items; CS.fromTr=true; CS.target='body'; CS.trMsg=d.structured?'Letra transcrita y revisada (palabras corregidas y estrofas/coros ordenados). Revísala igual antes de guardar.':'Letra transcrita. Revísala: el servicio puede equivocarse con palabras cantadas.'; } else CS.trMsg='No se escuchó letra cantada en este audio.'; }
       if(d.cached) CS.trMsg+=' (ya estaba transcrito: sin costo)'; }
   }catch(e){ CS.trMsg='No se pudo conectar con el servicio.'; }
   CS.trBusy=false; if(CS.fromTr){ render(); } else { cifPaintTr(); cifPaintLines(); cifPaintResult(); }
@@ -317,7 +367,7 @@ document.addEventListener('click',ev=>{
   else if(a==='cif-save') cifSave();
   else if(a==='cif-tr') cifTranscribe();
 });
-function cifSuggestTitle(){ const l=cifLyricItems()[0]; if(!l) return ''; const w=l.text.replace(/[,.;:!?¡¿"]/g,'').split(/\s+/).slice(0,6).join(' '); return w.charAt(0).toUpperCase()+w.slice(1); }
+function cifSuggestTitle(){ if(CS.tr&&CS.tr.structured&&CS.tr.structured.title) return CS.tr.structured.title; const l=cifLyricItems()[0]; if(!l) return ''; const w=l.text.replace(/[,.;:!?¡¿"]/g,'').split(/\s+/).slice(0,6).join(' '); return w.charAt(0).toUpperCase()+w.slice(1); }
 /* ---------- Crear una canción nueva a partir de un audio ---------- */
 window.cifNewFromAudio=function(){
   $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><form class="modal" id="cifnew" role="dialog" aria-label="Crear desde un audio" data-stop style="width:min(480px,100%)">

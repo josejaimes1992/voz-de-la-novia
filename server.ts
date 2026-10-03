@@ -326,40 +326,82 @@ const SERVER = Bun.serve({
       if (tm && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const [, songId, audioId] = tm;
-        const cached = await db`SELECT data FROM docs WHERE col = 'transcripts' AND id = ${audioId}`;
-        if (cached[0]) return json({ ...parseJ(cached[0].data), cached: true });
+        const mode = url.searchParams.get("mode") === "sync" ? "sync" : "full";
+        const cachedRow = await db`SELECT data FROM docs WHERE col = 'transcripts' AND id = ${audioId}`;
+        const cached: any = cachedRow[0] ? parseJ(cachedRow[0].data) : null;
+        if (cached && cached.v === 2 && (mode === "sync" || cached.structured)) return json({ ...cached, cached: true });
         const key = Bun.env.OPENAI_API_KEY ?? "";
         if (!key) return json({ error: "no_key" }, 503);
         const rows = await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${songId}`;
         if (!rows[0]) return json({ error: "not_found" }, 404);
         const song = parseJ(rows[0].data);
         const entry = (song.audio ?? []).find((a: any) => a.id === audioId);
-        if (!entry || !AUDIO_RE.test(audioId) || !existsSync(`${AUDIO_DIR}/${audioId}`)) return json({ error: "no_audio" }, 404);
-        if (statSync(`${AUDIO_DIR}/${audioId}`).size > 24_000_000) return json({ error: "too_large" }, 413);
+        const path = `${AUDIO_DIR}/${audioId}`;
+        if (!entry || !AUDIO_RE.test(audioId) || !existsSync(path)) return json({ error: "no_audio" }, 404);
+        if (statSync(path).size > 24_000_000) return json({ error: "too_large" }, 413);
+        const base = Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com";
         const lyricsHint = String(song.body || song.bodyPro || "").replace(/\[[^\]]*\]/g, "").replace(/^#.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, 600);
-        const fd = new FormData();
-        fd.append("file", Bun.file(`${AUDIO_DIR}/${audioId}`), audioId);
-        fd.append("model", "whisper-1");
-        fd.append("language", "es");
-        fd.append("response_format", "verbose_json");
-        fd.append("timestamp_granularities[]", "word");
-        fd.append("timestamp_granularities[]", "segment");
-        fd.append("prompt", `Alabanza cristiana en español: "${song.title ?? ""}". ${lyricsHint}`.slice(0, 800));
-        const r = await fetch(`${Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com"}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
-        if (!r.ok) {
-          const errText = await r.text(); console.error("Transcripción falló", r.status, errText.slice(0, 300));
-          return json({ error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, 502);
+        const context = `Alabanza cristiana cantada en español${song.title && !song.titleAuto ? `: "${song.title}"` : ""}. ${lyricsHint}`.slice(0, 800);
+        const fail = (r: Response, t: string) => { console.error("Transcripción falló", r.status, t.slice(0, 300)); return json({ error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, 502); };
+        /* 1. Tiempos de cada palabra (whisper-1) */
+        let timing: any = cached && cached.words ? { words: cached.words, segments: cached.segments, duration: cached.duration } : null;
+        if (!timing) {
+          const fd = new FormData();
+          fd.append("file", Bun.file(path), audioId); fd.append("model", "whisper-1"); fd.append("language", "es");
+          fd.append("response_format", "verbose_json"); fd.append("timestamp_granularities[]", "word"); fd.append("timestamp_granularities[]", "segment");
+          fd.append("prompt", context);
+          const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+          if (!r.ok) return fail(r, await r.text());
+          const out: any = await r.json();
+          timing = { duration: out.duration ?? entry.duration ?? 0,
+            words: (out.words ?? []).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
+            segments: (out.segments ?? []).map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })), whisperText: out.text ?? "" };
         }
-        const out: any = await r.json();
-        const data = {
-          text: out.text ?? "", duration: out.duration ?? entry.duration ?? 0,
-          words: (out.words ?? []).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
-          segments: (out.segments ?? []).map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })),
-          songId, by: user.name, at: Date.now(),
-        };
+        let data: any = { v: 2, ...timing, songId, by: user.name, at: Date.now() };
+        if (mode === "full") {
+          /* 2. Texto más preciso (modelo nuevo de transcripción) */
+          let precise = "";
+          for (const model of ["gpt-transcribe", "gpt-4o-transcribe"]) {
+            const fd = new FormData();
+            fd.append("file", Bun.file(path), audioId); fd.append("model", model); fd.append("prompt", context);
+            if (model === "gpt-transcribe") { fd.append("languages[]", "es"); for (const k of ["Dios", "Jesús", "Señor", "Jehová", "Cristo", "Espíritu Santo", "aleluya", "gloria", "santo", "Cordero", "Sion", "alabanza", "adoración", "gracia", "Rey de reyes"]) fd.append("keywords[]", k); }
+            else fd.append("language", "es");
+            const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+            if (r.ok) { const o: any = await r.json(); precise = String(o.text ?? ""); break; }
+            const t = await r.text(); console.error("Modelo de transcripción", model, r.status, t.slice(0, 200));
+            if (r.status === 401 || r.status === 429) return fail(r, t);
+          }
+          data.text = precise || timing.whisperText || timing.segments.map((g: any) => g.t).join(" ");
+          /* 3. Revisión: corrige palabras mal escuchadas y ordena estrofas y coros */
+          const timed = timing.segments.map((g: any) => `[${g.s.toFixed(1)}] ${g.t}`).join("\n").slice(0, 12000);
+          const sys = `Eres un editor experto en letras de alabanzas cristianas en español (iglesias pentecostales y evangélicas). Recibes dos transcripciones automáticas de una canción cantada: un TEXTO PRECISO sin tiempos y SEGMENTOS CON TIEMPO (en segundos) que pueden tener errores. Devuelve la letra corregida tal como se canta.
+Reglas:
+- Usa sobre todo el TEXTO PRECISO; usa los segmentos para el orden y los tiempos.
+- Corrige palabras mal escuchadas solo cuando sea evidente por el sentido o el vocabulario cristiano (Dios, Jesús, Señor, Jehová, Cristo, Espíritu Santo, gloria, santo, aleluya, Cordero, Sion, gracia, etc.). No inventes frases que no se cantan ni agregues versos.
+- Ignora textos que no son canto (aplausos, "gracias por ver", "suscríbete", ruidos, subtítulos).
+- Divide en líneas como frases musicales (normalmente de 4 a 10 palabras). Escritura normal: mayúscula al inicio de línea y en nombres de Dios; tildes correctas.
+- Agrupa en secciones en el orden en que se cantan, incluidas las repeticiones: "Estrofa I", "Estrofa II", ..., "Pre-coro", "Coro", "Puente", "Final". La parte que se repite con la misma letra es el "Coro".
+- Para cada línea pon "start": el segundo aproximado en que empieza, tomado de los segmentos.
+- Propón un título corto (normalmente la frase principal del coro).
+Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines": [{"text": string, "start": number}]}]}`;
+          const userMsg = `TÍTULO CONOCIDO: ${song.title && !song.titleAuto ? song.title : "(desconocido)"}\n\nTEXTO PRECISO:\n${data.text.slice(0, 8000)}\n\nSEGMENTOS CON TIEMPO:\n${timed}`;
+          for (const model of ["gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]) {
+            const r = await fetch(`${base}/v1/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ model, response_format: { type: "json_object" }, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] }) });
+            if (!r.ok) { const t = await r.text(); console.error("Revisión", model, r.status, t.slice(0, 200)); if (r.status === 401 || r.status === 429) break; continue; }
+            try {
+              const o: any = await r.json(); const st = JSON.parse(o.choices?.[0]?.message?.content ?? "{}");
+              if (Array.isArray(st.sections) && st.sections.length) {
+                data.structured = { title: String(st.title ?? "").slice(0, 100), model,
+                  sections: st.sections.slice(0, 40).map((x: any) => ({ label: String(x.label ?? "").slice(0, 40), lines: (Array.isArray(x.lines) ? x.lines : []).slice(0, 40).map((l: any) => ({ text: String(l.text ?? l ?? "").slice(0, 200), start: Number.isFinite(+l.start) ? +l.start : null })).filter((l: any) => l.text.trim()) })).filter((x: any) => x.lines.length) };
+                break;
+              }
+            } catch (e) { console.error("Revisión: respuesta no válida", model); }
+          }
+        }
         await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('transcripts', ${audioId}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
                  ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
-        console.log("Transcripción hecha", songId, audioId, Math.round(data.duration), "s por", user.name);
+        console.log("Transcripción", mode, songId, audioId, Math.round(data.duration), "s por", user.name, data.structured ? "con revisión " + data.structured.model : "sin revisión");
         return json(data);
       }
       if (p === "/api/transcribe/status") {
