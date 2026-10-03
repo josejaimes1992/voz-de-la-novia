@@ -54,6 +54,7 @@ const ID_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
 const USER_RE = /^[a-z0-9._-]{2,30}$/;
 const ROLES = new Set(["admin", "moderator"]);
 const attempts = new Map<string, { n: number; t: number }>();
+let keyCheck: { ok: boolean; status: number; at: number } | null = null;
 type User = { id: number; username: string; name: string; role: string };
 
 function json(data: unknown, status = 200) {
@@ -361,7 +362,15 @@ const SERVER = Bun.serve({
         console.log("Transcripción hecha", songId, audioId, Math.round(data.duration), "s por", user.name);
         return json(data);
       }
-      if (p === "/api/transcribe/status") return json({ enabled: !!Bun.env.OPENAI_API_KEY });
+      if (p === "/api/transcribe/status") {
+        const key = Bun.env.OPENAI_API_KEY ?? "";
+        if (!key) return json({ enabled: false, keyOk: false });
+        if (!keyCheck || Date.now() - keyCheck.at > 10 * 60_000) {
+          try { const r = await fetch(`${Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com"}/v1/models/whisper-1`, { headers: { Authorization: `Bearer ${key}` } }); keyCheck = { ok: r.ok, status: r.status, at: Date.now() }; }
+          catch { keyCheck = { ok: false, status: 0, at: Date.now() }; }
+        }
+        return json({ enabled: true, keyOk: keyCheck.ok, status: keyCheck.status });
+      }
 
       /* ---- Audios de canciones ---- */
       const au = p.match(/^\/api\/audio\/([A-Za-z0-9_.:-]{1,80})(?:\/([a-f0-9]{24}\.[a-z0-9]+))?$/);
