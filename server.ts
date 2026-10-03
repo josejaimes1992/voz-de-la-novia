@@ -155,7 +155,7 @@ const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
 
 /* ================= Transcripción de letras ================= */
-const TR_VERSION = 3;
+const TR_VERSION = 4;
 const TR_INFLIGHT = new Map<string, Promise<{ body: any; status: number }>>();
 /* Frases que los modelos de voz "inventan" cuando hay música sin voz clara */
 const TR_FAKE = [
@@ -166,66 +166,89 @@ const TR_FAKE = [
 function trIsFake(t: string) { return TR_FAKE.some(r => r.test(t)); }
 function trToks(t: string) { return String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9ñ\s]/g, " ").split(/\s+/).filter(w => w.length > 1); }
 /* Prepara el audio para la voz: mono 16 kHz, quita graves y agudos que no son voz, iguala el volumen */
-async function trPrepare(path: string): Promise<string> {
-  const out = `/tmp/tr-${randomBytes(6).toString("hex")}.flac`;
+/* Prepara el audio para la voz y lo corta en partes de 30 s: los modelos escuchan mucho mejor el canto en partes cortas */
+const TR_CHUNK = 30;
+async function trPrepare(path: string): Promise<{ dir: string; files: string[] } | null> {
+  const dir = `/tmp/tr-${randomBytes(6).toString("hex")}`;
   try {
+    mkdirSync(dir, { recursive: true });
     const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000",
-      "-af", "highpass=f=100,lowpass=f=7000,dynaudnorm=f=200:g=15", "-c:a", "flac", out], { stdout: "ignore", stderr: "pipe" });
+      "-af", "highpass=f=80,dynaudnorm=f=250:g=11", "-f", "segment", "-segment_time", String(TR_CHUNK), "-reset_timestamps", "1", "-c:a", "flac", `${dir}/p%03d.flac`], { stdout: "ignore", stderr: "pipe" });
     const code = await proc.exited;
-    if (code === 0 && existsSync(out) && statSync(out).size > 1000 && statSync(out).size < 24_000_000) return out;
+    const files = code === 0 ? [...new Bun.Glob("p*.flac").scanSync(dir)].sort().map(f => `${dir}/${f}`).filter(f => statSync(f).size > 2000) : [];
+    if (files.length) return { dir, files };
+    console.error("Preparar audio: ffmpeg terminó con", code, await new Response(proc.stderr).text().then(t => t.slice(-300)));
   } catch (e) { console.error("Preparar audio", e); }
-  try { unlinkSync(out); } catch {}
-  return path;
+  trClean(dir); return null;
+}
+function trClean(dir: string) { try { for (const f of new Bun.Glob("*").scanSync(dir)) unlinkSync(`${dir}/${f}`); require("node:fs").rmdirSync(dir); } catch {} }
+async function trPool<T>(n: number, items: T[], fn: (x: T, i: number) => Promise<any>) {
+  const out: any[] = new Array(items.length); let k = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (k < items.length) { const i = k++; out[i] = await fn(items[i], i); } }));
+  return out;
 }
 async function transcribeAudio(o: { song: any; songId: string; audioId: string; entry: any; path: string; mode: string; key: string; cached: any; userName: string }): Promise<{ body: any; status: number }> {
   const { song, songId, audioId, entry, mode, key, cached } = o;
   const base = Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com";
   const known = String(song.body || song.bodyPro || "").replace(/\[[^\]]*\]/g, "").replace(/^#.*$/gm, "").replace(/\s+/g, " ").trim();
-  /* Sin letra conocida, la pista es neutra: una pista "religiosa" hace que el modelo invente frases de iglesia */
-  const context = known ? `Letra de la canción: ${known}`.slice(0, 800) : "Canción cantada en español. Transcribe solo las palabras que se cantan, sin agregar nada.";
+  /* Pista: que es una canción cantada (sin temas de iglesia, que hacen inventar frases) */
+  const context = known ? `Letra de la canción: ${known}`.slice(0, 800) : "Letra de una canción cantada en español, con estrofas y coros.";
   const fail = (r: Response, t: string) => { console.error("Transcripción falló", r.status, t.slice(0, 300)); return { body: { error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, status: 502 }; };
-  const file = await trPrepare(o.path);
-  const fileName = file === o.path ? audioId : "voz.flac";
-  if (statSync(file).size > 24_000_000) return { body: { error: "too_large" }, status: 413 };
+  const prep = await trPrepare(o.path);
+  const parts = prep ? prep.files : [o.path];
+  const offs = parts.map((_, i) => prep ? i * TR_CHUNK : 0);
+  let hardFail: any = null;
   try {
-    /* 1. Tiempos de cada palabra (whisper-1), descartando lo que no es voz */
+    /* 1. Tiempos de cada palabra (whisper-1), parte por parte, descartando lo que no es voz */
     let timing: any = cached && cached.v === TR_VERSION && cached.words ? { words: cached.words, segments: cached.segments, duration: cached.duration, whisperText: cached.whisperText ?? "" } : null;
     if (!timing) {
-      const fd = new FormData();
-      fd.append("file", Bun.file(file), fileName); fd.append("model", "whisper-1"); fd.append("language", "es"); fd.append("temperature", "0");
-      fd.append("response_format", "verbose_json"); fd.append("timestamp_granularities[]", "word"); fd.append("timestamp_granularities[]", "segment");
-      if (known) fd.append("prompt", context.slice(0, 600));
-      const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
-      if (!r.ok) return fail(r, await r.text());
-      const out: any = await r.json();
-      let prev = ""; let dropped = 0;
-      const segs = (out.segments ?? []).filter((g: any) => {
-        const t = String(g.text ?? "").trim(); const n = trToks(t).join(" ");
-        const bad = !n || trIsFake(t) || (g.no_speech_prob ?? 0) > 0.6 && (g.avg_logprob ?? 0) < -0.6 || (g.compression_ratio ?? 0) > 2.4 || (g.avg_logprob ?? 0) < -1.2;
-        const rep = n === prev; prev = n || prev;
-        if (bad) dropped++;
-        return !bad && !(rep && (g.end - g.start) < 1.2);
+      let dropped = 0;
+      const res = await trPool(4, parts, async (f, i) => {
+        const fd = new FormData();
+        fd.append("file", Bun.file(f), prep ? `p${i}.flac` : audioId); fd.append("model", "whisper-1"); fd.append("language", "es");
+        fd.append("response_format", "verbose_json"); fd.append("timestamp_granularities[]", "word"); fd.append("timestamp_granularities[]", "segment");
+        fd.append("prompt", context.slice(0, 600));
+        const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+        if (!r.ok) { const t = await r.text(); if (r.status === 401 || r.status === 429) hardFail = fail(r, t); else console.error("whisper parte", i, r.status, t.slice(0, 200)); return null; }
+        return r.json();
       });
-      const inSeg = (w: any) => segs.some((g: any) => w.start >= g.start - 0.1 && w.start < g.end + 0.1);
-      timing = { duration: out.duration ?? entry.duration ?? 0,
-        words: (out.words ?? []).filter(inSeg).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
-        segments: segs.map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })),
-        whisperText: segs.map((g: any) => String(g.text ?? "").trim()).join(" ") };
-      if (dropped) console.log("Transcripción: descartados", dropped, "segmentos que no eran voz");
+      if (hardFail) return hardFail;
+      const words: any[] = [], segments: any[] = []; let prev = "";
+      res.forEach((out: any, i: number) => { if (!out) return; const off = offs[i];
+        const segs = (out.segments ?? []).filter((g: any) => {
+          const t = String(g.text ?? "").trim(); const n = trToks(t).join(" ");
+          const bad = !n || trIsFake(t) || ((g.no_speech_prob ?? 0) > 0.8 && (g.avg_logprob ?? 0) < -0.8) || (g.compression_ratio ?? 0) > 2.6;
+          const rep = n && n === prev; if (n) prev = n;
+          if (bad) dropped++;
+          return !bad && !(rep && (g.end - g.start) < 1);
+        });
+        for (const g of segs) segments.push({ t: String(g.text ?? "").trim(), s: Math.round((g.start + off) * 100) / 100, e: Math.round((g.end + off) * 100) / 100 });
+        for (const w of out.words ?? []) if (segs.some((g: any) => w.start >= g.start - 0.1 && w.start < g.end + 0.1)) words.push({ w: w.word, s: Math.round((w.start + off) * 100) / 100, e: Math.round((w.end + off) * 100) / 100 });
+      });
+      const dur = prep ? offs[offs.length - 1] + (res[res.length - 1]?.duration ?? TR_CHUNK) : (res[0]?.duration ?? 0);
+      timing = { duration: dur || entry.duration || 0, words, segments, whisperText: segments.map((g: any) => g.t).join(" ") };
+      console.log("Transcripción whisper:", parts.length, "partes,", segments.length, "segmentos,", words.length, "palabras, descartados", dropped);
     }
     const data: any = { v: TR_VERSION, ...timing, songId, by: o.userName, at: Date.now() };
     if (mode === "full") {
       /* 2. Texto preciso (modelo nuevo), también limpio de frases inventadas */
       let precise = "";
       for (const model of ["gpt-transcribe", "gpt-4o-transcribe"]) {
-        const fd = new FormData();
-        fd.append("file", Bun.file(file), fileName); fd.append("model", model); fd.append("prompt", context); fd.append("temperature", "0");
-        if (model === "gpt-transcribe") { fd.append("languages[]", "es"); for (const k of ["Dios", "Jesús", "Señor", "Jehová", "Cristo", "Espíritu Santo", "aleluya", "Cordero", "Sion", "Rey de reyes"]) fd.append("keywords[]", k); }
-        else fd.append("language", "es");
-        const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
-        if (r.ok) { const j: any = await r.json(); precise = String(j.text ?? ""); data.preciseModel = model; break; }
-        const t = await r.text(); console.error("Modelo de transcripción", model, r.status, t.slice(0, 200));
-        if (r.status === 401 || r.status === 429) return fail(r, t);
+        let bad = false;
+        const texts = await trPool(4, parts, async (f, i) => {
+          const fd = new FormData();
+          fd.append("file", Bun.file(f), prep ? `p${i}.flac` : audioId); fd.append("model", model); fd.append("prompt", context);
+          if (model === "gpt-transcribe") { fd.append("languages[]", "es"); for (const k of ["Dios", "Jesús", "Señor", "Jehová", "Cristo", "Espíritu Santo", "aleluya", "Cordero", "Sion", "Rey de reyes"]) fd.append("keywords[]", k); }
+          else fd.append("language", "es");
+          const r = await fetch(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+          if (r.ok) { const j: any = await r.json(); return String(j.text ?? ""); }
+          const t = await r.text(); console.error("Modelo de transcripción", model, "parte", i, r.status, t.slice(0, 200));
+          if (r.status === 401 || r.status === 429) hardFail = fail(r, t); else bad = true;
+          return "";
+        });
+        if (hardFail) return hardFail;
+        if (bad && texts.every((t: string) => !t)) continue;
+        precise = texts.map((t: string) => t.trim()).filter(Boolean).join("\n"); data.preciseModel = model; break;
       }
       precise = precise.split(/(?<=[.!?¡¿\n])\s+/).filter(x => !trIsFake(x)).join(" ").trim();
       data.text = precise || timing.whisperText || "";
@@ -248,7 +271,7 @@ Reglas:
 - Si casi nada se entiende como letra cantada, devuelve "sections": [].
 Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines": [{"text": string, "start": number|null}]}]}`;
         const userMsg = `TÍTULO CONOCIDO: ${song.title && !song.titleAuto ? song.title : "(desconocido)"}\n\nA) TEXTO PRECISO:\n${data.text.slice(0, 8000)}\n\nB) SEGMENTOS CON TIEMPO:\n${timed || "(ninguno)"}`;
-        const pTok = new Set(trToks(precise || data.text));
+        const pTok = new Set([...trToks(precise), ...trToks(timing.whisperText || "")]);
         for (const model of ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o-mini"]) {
           const body: any = { model, response_format: { type: "json_object" }, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] };
           if (model.startsWith("gpt-5")) body.reasoning_effort = "low";
@@ -258,7 +281,7 @@ Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines":
             const j: any = await r.json(); const st = JSON.parse(j.choices?.[0]?.message?.content ?? "{}");
             if (Array.isArray(st.sections)) {
               /* Control final: cada línea tiene que estar respaldada por el texto preciso */
-              const ok = (t: string) => { if (trIsFake(t)) return false; const w = trToks(t); if (!w.length) return false; if (!pTok.size) return true; return w.filter(x => pTok.has(x)).length / w.length >= 0.5; };
+              const ok = (t: string) => { if (trIsFake(t)) return false; const w = trToks(t); if (!w.length) return false; if (!pTok.size) return true; return w.filter(x => pTok.has(x)).length / w.length >= 0.4; };
               data.structured = { title: String(st.title ?? "").slice(0, 100), model,
                 sections: st.sections.slice(0, 40).map((x: any) => ({ label: String(x.label ?? "").slice(0, 40), lines: (Array.isArray(x.lines) ? x.lines : []).slice(0, 40).map((l: any) => ({ text: String(l.text ?? l ?? "").slice(0, 200).trim(), start: l.start != null && Number.isFinite(+l.start) ? +l.start : null })).filter((l: any) => l.text && ok(l.text)) })).filter((x: any) => x.lines.length) };
               if (trIsFake(data.structured.title)) data.structured.title = "";
@@ -271,9 +294,9 @@ Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines":
     }
     await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('transcripts', ${audioId}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
              ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
-    console.log("Transcripción", mode, songId, audioId, Math.round(data.duration), "s por", o.userName, data.structured ? "con revisión " + (data.structured.model || "-") + (data.structured.empty ? " (sin letra clara)" : "") : "sin revisión");
+    console.log("Transcripción", mode, songId, audioId, Math.round(data.duration), "s,", (data.text || "").length, "letras de texto,", data.structured ? data.structured.sections.reduce((n: number, x: any) => n + x.lines.length, 0) + " líneas" : "", "por", o.userName, data.structured ? "con revisión " + (data.structured.model || "-") + (data.structured.empty ? " (sin letra clara)" : "") : "sin revisión");
     return { body: data, status: 200 };
-  } finally { if (file !== o.path) { try { unlinkSync(file); } catch {} } }
+  } finally { if (prep) trClean(prep.dir); }
 }
 
 const SERVER = Bun.serve({
