@@ -543,7 +543,7 @@ function viewSongsInner(){
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-excel">Excel</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button>`:''}
+    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-excel">Excel</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button><button class="btn" data-act="cif-new">🎙 Desde audio</button>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
@@ -685,6 +685,7 @@ function viewEdit(){
   const d=V.draft; const isNew=!S.songs.has(d.id);
   return `<button class="btn ghost back" data-act="cancel-edit">${ICON.back}${isNew?'Cancelar':'Volver sin guardar'}</button>
   <h2 style="font-family:var(--f-display);font-size:26px;margin-bottom:14px">${isNew?'Nueva canción':'Editar canción'}</h2>
+  ${isNew?`<div class="banner" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px"><span style="flex:1;min-width:200px">¿Tienes la grabación? La app puede sacar la letra y los acordes desde el audio.</span><button class="btn pri" data-act="cif-new">🎙 Crear desde un audio</button></div>`:''}
   <div class="form">
     <div class="grid2">
       <label class="f">Título<input id="e-title" value="${esc(d.title)}" placeholder="Ej. Cuán grande es Él"></label>
@@ -1062,5 +1063,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
-<script src="/cifrador.js?v=3"></script>
+<script src="/cifrador.js?v=4"></script>
 </body></html>

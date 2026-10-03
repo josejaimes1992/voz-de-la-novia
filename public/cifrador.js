@@ -160,7 +160,7 @@ if(typeof module!=='undefined') module.exports=CIF;
 
 /* ======================= Pantalla del cifrador (navegador) ======================= */
 if(typeof window!=='undefined'){
-const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false};
+const CS={songId:null,audioId:null,res:null,busy:false,times:[],items:[],keyMode:'song',target:'bodyPro',raf:null,err:'',tr:null,trBusy:false,trMsg:'',trEnabled:null,fromTr:false,autoTr:false};
 const CIF_ROOT_HUE=[0,30,55,85,120,160,190,210,235,265,295,330];
 function cifSong(){ return S.songs.get(CS.songId); }
 function cifItems(s){
@@ -226,6 +226,7 @@ async function cifAnalyzeCurrent(){
     CS.res=cifAnalyze(rendered.getChannelData(0),sr);
   }catch(e){ console.error(e); CS.err='No se pudo analizar este audio. Prueba con otro archivo o recarga la página.'; }
   CS.busy=false; if(V.view==='cifrar'){ cifStatus(); cifPaintTimeline(); cifPaintResult(); }
+  if(CS.autoTr&&CS.res){ CS.autoTr=false; if(CS.trEnabled===null){ try{ const d=await (await fetch('/api/transcribe/status')).json(); CS.trEnabled=!!d.enabled; }catch{} } if(CS.trEnabled) cifTranscribe(); else cifPaintTr(); }
 }
 function cifChordLabel(seg){ if(!seg||seg.root==null) return '—'; const o=cifOpts(); return fmtChord(cifName(seg,o.shift,o.flat),0,o.flat,V.latin); }
 function cifPaintTimeline(){
@@ -269,12 +270,14 @@ function cifPaintResult(){
   const op=$('#cif-opts'), pv=$('#cif-prev'), sv=$('#cif-save'); if(!op||!pv) return;
   const s=cifSong(); const ka=CS.res&&CS.res.key, ks=parseKey(s.key); const ly=cifLyricItems(); const marked=ly.filter(l=>l.t!=null).length;
   const sameKey=ka&&ks&&cifRelMaj(ka)===cifRelMaj(ks);
-  op.innerHTML=!CS.res?'':`<div class="grid2">
+  const dupW=CS.fromTr&&window.findDuplicate?findDuplicate({title:s.title,body:cifResultText()},[...S.songs.values()].filter(x=>x.id!==s.id)):null;
+  op.innerHTML=!CS.res?'':`${s.titleAuto?`<label class="f" style="margin-bottom:8px">Título de la canción<input id="cif-title" value="${esc(CS.title||cifSuggestTitle())}"></label>`:''}${dupW?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>Atención:</b> parece que esta canción ya existe como ${esc(dupLabel(dupW))}. <button class="btn" data-act="open-song" data-id="${esc(dupW.song.id)}">Abrir la existente</button></div>`:''}<div class="grid2">
     ${ks&&!sameKey?`<label class="f">Tono del cifrado<select id="cif-keymode"><option value="song" ${CS.keyMode==='song'?'selected':''}>Tono de la canción (${esc(keyText(ks))})</option><option value="audio" ${CS.keyMode==='audio'?'selected':''}>Tono del audio (${esc(keyText(ka))}) — cambia el tono de la canción</option></select></label>`:''}
     <label class="f">Guardar en<select id="cif-target"><option value="bodyPro" ${CS.target==='bodyPro'?'selected':''}>Versión original (recomendado)</option><option value="body" ${CS.target==='body'?'selected':''}>Acordes básicos (reemplaza los actuales)</option></select></label></div>
     ${ly.length&&marked<ly.length?`<p class="muted" style="margin:6px 0 0;font-size:13px">Faltan ${ly.length-marked} líneas por marcar: quedarán sin acordes.</p>`:''}`;
   const km=$('#cif-keymode'); if(km) km.addEventListener('change',e=>{ CS.keyMode=e.target.value; cifPaintTimeline(); cifPaintResult(); });
   const tg=$('#cif-target'); if(tg) tg.addEventListener('change',e=>{ CS.target=e.target.value; });
+  const ti=$('#cif-title'); if(ti) ti.addEventListener('input',e=>{ CS.title=e.target.value; });
   const txt=cifResultText(); pv.innerHTML=CS.res?renderSheet(txt,{chords:true,key:cifOpts().key}):'<p class="muted">El resultado aparecerá aquí cuando termine el análisis.</p>';
   if(sv) sv.disabled=!CS.res||(ly.length&&!marked);
 }
@@ -297,6 +300,7 @@ async function cifSave(){
   if(CS.keyMode==='audio'||!s.key) data.key=keyCanon(CS.res.key.idx,CS.res.key.minor);
   if(CS.fromTr){ data.lyricsAuto=true; if(CS.target==='bodyPro'&&!(data.body||'').trim()) data.body=txt.replace(/\[[^\]]*\]/g,''); }
   data.sync={audio:CS.audioId,times:cifLyricItems().map(l=>l.t==null?null:Math.round(l.t*100)/100),at:Date.now()};
+  if(s.titleAuto){ const t=(CS.title||cifSuggestTitle()||'').trim(); if(t) data.title=t; delete data.titleAuto; }
   delete data.updatedBy; delete data.updatedAt;
   if(await writeDoc('songs',data)){ cifStop(); toast('Cifrado guardado como borrador. Revísalo y corrígelo con “Poner acordes tocando”.'); if(CS.target==='bodyPro'){ V.ver='original'; lsSet('vdn-ver','original'); } go('song',{songId:s.id,shift:0}); }
 }
@@ -313,6 +317,39 @@ document.addEventListener('click',ev=>{
   else if(a==='cif-save') cifSave();
   else if(a==='cif-tr') cifTranscribe();
 });
+function cifSuggestTitle(){ const l=cifLyricItems()[0]; if(!l) return ''; const w=l.text.replace(/[,.;:!?¡¿"]/g,'').split(/\s+/).slice(0,6).join(' '); return w.charAt(0).toUpperCase()+w.slice(1); }
+/* ---------- Crear una canción nueva a partir de un audio ---------- */
+window.cifNewFromAudio=function(){
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><form class="modal" id="cifnew" role="dialog" aria-label="Crear desde un audio" data-stop style="width:min(480px,100%)">
+    <header><h3>Crear canción desde un audio</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:12px">
+      <p class="muted" style="margin:0;font-size:13.5px">Sube la grabación: la app saca los acordes y, si quieres, escribe la letra. Después revisas y guardas.</p>
+      <label class="f">Título (opcional)<input id="cn-title" placeholder="Si lo dejas vacío, se toma de la primera línea cantada"></label>
+      <label class="drop" style="cursor:pointer"><input id="cn-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,.3gp,.amr" hidden required><b id="cn-fname">Elegir el audio</b><span>MP3, M4A (notas de voz), WAV… hasta 100 MB</span></label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="cn-tr" checked> Escribir la letra automáticamente (servicio externo, unos centavos por canción)</label>
+      <div id="cn-prog" class="muted" style="font-size:13.5px" hidden></div>
+      <button class="btn pri" type="submit" id="cn-go" style="justify-content:center">Crear y sacar letra y acordes</button>
+    </div></form></div>`;
+  const fi=$('#cn-file'); fi.addEventListener('change',()=>{ $('#cn-fname').textContent=fi.files[0]?fi.files[0].name:'Elegir el audio'; });
+  $('#cifnew').addEventListener('submit',async ev=>{ ev.preventDefault(); const file=fi.files[0]; if(!file){ toast('Elige un audio primero.'); return; }
+    const AUD={mp3:'audio/mpeg',m4a:'audio/mp4',aac:'audio/aac',wav:'audio/wav',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac','3gp':'audio/3gpp',amr:'audio/amr'};
+    const ext=(file.name.split('.').pop()||'').toLowerCase(); const type=(file.type&&file.type.startsWith('audio/'))?file.type:AUD[ext];
+    if(!type){ toast('Ese archivo no parece un audio.'); return; } if(file.size>100*1024*1024){ toast('El archivo es muy grande. El máximo es 100 MB.'); return; }
+    const prog=$('#cn-prog'), go=$('#cn-go'); prog.hidden=false; go.disabled=true;
+    const title=$('#cn-title').value.trim(); const wantTr=$('#cn-tr').checked;
+    const song={id:newId('c'),title:title||'Nueva canción desde audio',author:'',key:'',category:'',body:'',notes:''}; if(!title) song.titleAuto=true;
+    prog.textContent='Creando la canción…';
+    if(!(await writeDoc('songs',song))){ go.disabled=false; prog.hidden=true; return; }
+    const ok=await new Promise(res=>{ const xhr=new XMLHttpRequest(); xhr.open('POST',`/api/audio/${encodeURIComponent(song.id)}?name=${encodeURIComponent(file.name.replace(/\.[^.]+$/,'').slice(0,80))}`);
+      xhr.setRequestHeader('Authorization','Bearer '+S.token); xhr.setRequestHeader('Content-Type',type);
+      xhr.upload.onprogress=e=>{ if(e.lengthComputable){ const pc=Math.round(e.loaded/e.total*100); prog.textContent=pc<100?`Subiendo el audio… ${pc}%`:'Comprimiendo el audio…'; } };
+      xhr.onload=()=>res(xhr.status===200); xhr.onerror=()=>res(false); xhr.send(file); });
+    if(!ok){ prog.textContent='No se pudo subir el audio. La canción quedó creada sin audio; puedes subirlo desde la canción.'; go.disabled=false; return; }
+    lastSig=''; await loadData(); closeModal(); CS.autoTr=wantTr; CS.title=title; cifOpen(song.id);
+    toast(wantTr?'Analizando el audio y escribiendo la letra…':'Analizando el audio…');
+  });
+};
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(el&&el.dataset.act==='cif-new') cifNewFromAudio(); });
 document.addEventListener('keydown',e=>{ if(V.view!=='cifrar') return; const tag=(e.target.tagName||'').toLowerCase(); if(['input','textarea','select'].includes(tag)) return;
   if(e.code==='Space'||e.key===' '){ e.preventDefault(); cifMark(); } });
 }
