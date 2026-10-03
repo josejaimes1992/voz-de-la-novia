@@ -320,6 +320,49 @@ const SERVER = Bun.serve({
         return json({ history: rows });
       }
 
+      /* ---- Transcripción de la letra cantada (servicio externo) ---- */
+      const tm = p.match(/^\/api\/transcribe\/([A-Za-z0-9_.:-]{1,80})\/([a-f0-9]{24}\.[a-z0-9]+)$/);
+      if (tm && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const [, songId, audioId] = tm;
+        const cached = await db`SELECT data FROM docs WHERE col = 'transcripts' AND id = ${audioId}`;
+        if (cached[0]) return json({ ...parseJ(cached[0].data), cached: true });
+        const key = Bun.env.OPENAI_API_KEY ?? "";
+        if (!key) return json({ error: "no_key" }, 503);
+        const rows = await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${songId}`;
+        if (!rows[0]) return json({ error: "not_found" }, 404);
+        const song = parseJ(rows[0].data);
+        const entry = (song.audio ?? []).find((a: any) => a.id === audioId);
+        if (!entry || !AUDIO_RE.test(audioId) || !existsSync(`${AUDIO_DIR}/${audioId}`)) return json({ error: "no_audio" }, 404);
+        if (statSync(`${AUDIO_DIR}/${audioId}`).size > 24_000_000) return json({ error: "too_large" }, 413);
+        const lyricsHint = String(song.body || song.bodyPro || "").replace(/\[[^\]]*\]/g, "").replace(/^#.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, 600);
+        const fd = new FormData();
+        fd.append("file", Bun.file(`${AUDIO_DIR}/${audioId}`), audioId);
+        fd.append("model", "whisper-1");
+        fd.append("language", "es");
+        fd.append("response_format", "verbose_json");
+        fd.append("timestamp_granularities[]", "word");
+        fd.append("timestamp_granularities[]", "segment");
+        fd.append("prompt", `Alabanza cristiana en español: "${song.title ?? ""}". ${lyricsHint}`.slice(0, 800));
+        const r = await fetch(`${Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com"}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+        if (!r.ok) {
+          const errText = await r.text(); console.error("Transcripción falló", r.status, errText.slice(0, 300));
+          return json({ error: r.status === 401 ? "bad_key" : r.status === 429 ? "quota" : "service" }, 502);
+        }
+        const out: any = await r.json();
+        const data = {
+          text: out.text ?? "", duration: out.duration ?? entry.duration ?? 0,
+          words: (out.words ?? []).map((w: any) => ({ w: w.word, s: Math.round(w.start * 100) / 100, e: Math.round(w.end * 100) / 100 })),
+          segments: (out.segments ?? []).map((g: any) => ({ t: String(g.text ?? "").trim(), s: Math.round(g.start * 100) / 100, e: Math.round(g.end * 100) / 100 })),
+          songId, by: user.name, at: Date.now(),
+        };
+        await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('transcripts', ${audioId}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
+                 ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+        console.log("Transcripción hecha", songId, audioId, Math.round(data.duration), "s por", user.name);
+        return json(data);
+      }
+      if (p === "/api/transcribe/status") return json({ enabled: !!Bun.env.OPENAI_API_KEY });
+
       /* ---- Audios de canciones ---- */
       const au = p.match(/^\/api\/audio\/([A-Za-z0-9_.:-]{1,80})(?:\/([a-f0-9]{24}\.[a-z0-9]+))?$/);
       if (au) {
@@ -366,6 +409,7 @@ const SERVER = Bun.serve({
             await logChange(tx, user, "audio-delete", "songs", songId, song, after);
           });
           try { unlinkSync(`${AUDIO_DIR}/${au[2]}`); } catch {}
+          await db`DELETE FROM docs WHERE col = 'transcripts' AND id = ${au[2]}`;
           return json({ ok: true });
         }
         return json({ error: "method" }, 405);

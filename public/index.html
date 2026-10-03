@@ -245,6 +245,7 @@ mark{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inherit;b
 .cif-tx{text-align:left;border:0;background:none;font-family:var(--f-display);font-size:15.5px;color:var(--ink);padding:4px 2px}
 .auto-note{margin:-8px 0 14px;font-size:13px;color:#9A6B00;font-style:italic}
 .auto-note b{font-style:normal}
+.cif-tr{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;background:var(--bg)}
 .notes{margin-top:24px;padding:12px 14px;border-left:3px solid var(--line);color:var(--muted);font-size:14px;max-width:68ch}
 
 /* Editor */
@@ -646,7 +647,8 @@ function instBar(song,capo,inLive){
   </div>`;
 }
 function fmtWhen(t){ if(!t) return ''; const d=new Date(t); return d.toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
-function chordsByLine(s){ const isPro=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim(); const auto=isPro?s.chordsProAuto:s.chordsAuto; if(auto) return `<p class="auto-note">Acordes por: detección automática desde el audio${(isPro?s.chordsProBy:s.chordsBy)?` · sincronizó ${esc(isPro?s.chordsProBy:s.chordsBy)}`:''} · <b>falta revisar</b></p>`; const by=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim()?(s.chordsProBy||s.updatedBy):(s.chordsBy||s.createdBy); return by?`<p class="muted" style="margin:-8px 0 14px;font-size:13px;font-style:italic">Acordes por: ${esc(by)}</p>`:''; }
+function chordsByLine(s){ const lyr=s.lyricsAuto?`<p class="auto-note">Letra: transcrita automáticamente del audio · <b>falta revisar</b></p>`:''; return lyr+chordsByLine0(s); }
+function chordsByLine0(s){ const isPro=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim(); const auto=isPro?s.chordsProAuto:s.chordsAuto; if(auto) return `<p class="auto-note">Acordes por: detección automática desde el audio${(isPro?s.chordsProBy:s.chordsBy)?` · sincronizó ${esc(isPro?s.chordsProBy:s.chordsBy)}`:''} · <b>falta revisar</b></p>`; const by=V.ver==='original'&&s.bodyPro&&s.bodyPro.trim()?(s.chordsProBy||s.updatedBy):(s.chordsBy||s.createdBy); return by?`<p class="muted" style="margin:-8px 0 14px;font-size:13px;font-style:italic">Acordes por: ${esc(by)}</p>`:''; }
 function verBar(s){
   const has=!!(s.bodyPro&&s.bodyPro.trim());
   return `<div class="inst-bar"><div class="seg" role="group" aria-label="Versión de acordes"><button data-act="ver" data-v="basica" aria-pressed="${V.ver!=='original'||!has}">Acordes básicos</button><button data-act="ver" data-v="original" aria-pressed="${V.ver==='original'&&has}" ${has?'':'disabled title="Aún no tiene versión original"'}>Versión original</button></div>
@@ -1015,7 +1017,7 @@ document.addEventListener('click',async ev=>{
     case 'edit-song': V.placer=false; V.etab=(V.ver==='original'?'original':'basica'); V.draft={...S.songs.get(V.songId)}; go('edit'); break;
     case 'cancel-edit': V.draft=null; S.songs.has(V.songId)?go('song'):go('list'); break;
     case 'convert': { const ta=edTA(); ta.value=convertChordsOverLyrics(ta.value); ta.dispatchEvent(new Event('input')); toast('Acordes convertidos. Revisa la vista previa.'); break; }
-    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } if(!S.songs.has(d.id)&&V.confirm!=='dup-save'){ const dup=findDuplicate(d,[...S.songs.values()],d.id); if(dup){ V.confirm='dup-save'; V.dupInfo=dup; render(); toast('Esta canción parece que ya existe. Revisa el aviso.'); break; } } if(V.confirm==='dup-save') V.confirm=null; delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; { const o=S.songs.get(d.id); if(o&&window.cifChordSig){ if(cifChordSig(o.body)!==cifChordSig(d.body)) delete d.chordsAuto; if(cifChordSig(o.bodyPro)!==cifChordSig(d.bodyPro)) delete d.chordsProAuto; } } if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
+    case 'save-song': { const d=readDraft(); if(!d.title){ toast('Ponle un título a la canción.'); $('#e-title').focus(); break; } if(!S.songs.has(d.id)&&V.confirm!=='dup-save'){ const dup=findDuplicate(d,[...S.songs.values()],d.id); if(dup){ V.confirm='dup-save'; V.dupInfo=dup; render(); toast('Esta canción parece que ya existe. Revisa el aviso.'); break; } } if(V.confirm==='dup-save') V.confirm=null; delete d.ejemplo; delete d.updatedBy; delete d.updatedAt; { const o=S.songs.get(d.id); if(o&&window.cifChordSig){ if(cifChordSig(o.body)!==cifChordSig(d.body)) delete d.chordsAuto; if(cifChordSig(o.bodyPro)!==cifChordSig(d.bodyPro)) delete d.chordsProAuto; const lyr=t=>String(t||'').replace(/\[[^\]]*\]/g,'').replace(/\s+/g,' ').trim(); if(lyr(o.body)!==lyr(d.body)) delete d.lyricsAuto; } } if(await writeDoc('songs',d)){ V.draft=null; V.songId=d.id; V.shift=0; go('song'); toast('Canción guardada.'); } break; }
     case 'del-song': readDraft(); V.confirm='del-song'; render(); break;
     case 'del-song-yes': await removeDoc('songs',V.draft.id); V.draft=null; go('list'); toast('Canción enviada a la papelera. Puedes rescatarla durante 60 días.'); break;
     case 'confirm-no': if(V.view==='edit') readDraft(); V.confirm=null; render(); break;
@@ -1060,5 +1062,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
-<script src="/cifrador.js?v=2"></script>
+<script src="/cifrador.js?v=3"></script>
 </body></html>
