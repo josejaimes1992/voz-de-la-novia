@@ -1,6 +1,6 @@
 /* Voz de la Novia — Biblia: buscar citas y proyectarlas (estilo Holyrics) */
 "use strict";
-const BB={pick:false,data:null,loading:false,err:'',b:42,c:2,v:null,live:false,q:'',hits:null,remote:null};
+const BB={pick:false,versions:null,ver:null,data:null,loading:false,err:'',b:42,c:2,v:null,live:false,q:'',hits:null,remote:null};
 const BB_GROUPS=[[0,5,'#7a4a22'],[5,17,'#d9821e'],[17,22,'#c0392b'],[22,39,'#8e3a9d'],[39,43,'#3f51b5'],[43,44,'#0e8fa3'],[44,57,'#1a9a58'],[57,65,'#14806a'],[65,66,'#7cb342']];
 const BB_ALIAS={salmo:'Salmos',sl:'Salmos',ps:'Salmos',apoc:'Apocalipsis',rev:'Apocalipsis',revelacion:'Apocalipsis',hch:'Hechos',hech:'Hechos',stgo:'Santiago',sant:'Santiago',cant:'Cantares',cantar:'Cantares',mc:'Marcos',mr:'Marcos',mrc:'Marcos',jn:'Juan',lc:'Lucas',mt:'Mateo',ro:'Romanos',rom:'Romanos',gal:'Gálatas',ga:'Gálatas',fil:'Filipenses',flp:'Filipenses',flm:'Filemón',heb:'Hebreos',he:'Hebreos',jud:'Judas',ec:'Eclesiastés',ecl:'Eclesiastés',pr:'Proverbios',prov:'Proverbios',is:'Isaías',jr:'Jeremías',jer:'Jeremías',lm:'Lamentaciones',lam:'Lamentaciones',ez:'Ezequiel',dn:'Daniel',os:'Oseas',jl:'Joel',am:'Amós',abd:'Abdías',jon:'Jonás',mi:'Miqueas',nah:'Nahúm',hab:'Habacuc',sof:'Sofonías',hag:'Hageo',zac:'Zacarías',mal:'Malaquías',gn:'Génesis',gen:'Génesis',ex:'Éxodo',lv:'Levítico',lev:'Levítico',nm:'Números',num:'Números',dt:'Deuteronomio',deut:'Deuteronomio',jos:'Josué',jue:'Jueces',rt:'Rut',esd:'Esdras',ne:'Nehemías',neh:'Nehemías',est:'Ester',ef:'Efesios',col:'Colosenses',tit:'Tito'};
 
@@ -35,6 +35,7 @@ const BB_ALIAS={salmo:'Salmos',sl:'Salmos',ps:'Salmos',apoc:'Apocalipsis',rev:'A
 .bb-bar .ref small{display:block;font-weight:500;color:var(--muted);font-size:12px}
 .bb-bar .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .bb-note{color:var(--muted);font-size:12px}
+.bb-ver{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:8px;padding:4px 6px;font:600 13px var(--f-ui)}
 .bb-pickbtn{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:10px;padding:6px 12px;font:600 14px var(--f-ui);cursor:pointer}
 @media (max-width:979px){.bb-h .bb-note{display:none}.bb-h b{white-space:nowrap}.bb-right{display:none;order:-1}.bb-right.open{display:block}.bb-vlist{max-height:62vh}.bb-books{grid-template-columns:repeat(6,minmax(0,1fr))}.bb-bk b{font-size:16px}}
 @media (min-width:980px){.bb-pickbtn{display:none}}
@@ -52,7 +53,11 @@ function bbColor(i){ for(const [a,b,c] of BB_GROUPS) if(i>=a&&i<b) return c; ret
 function bbRef(b,c,v){ const bk=bbBooks()[b]; if(!bk) return ''; return `${bk[1]} ${c+1}${v!=null?':'+(v+1):''}`; }
 async function bbLoad(){
   if(BB.data||BB.loading) return; BB.loading=true; BB.err='';
-  try{ const r=await fetch('/biblia/rv1909.json'); if(!r.ok) throw new Error(r.status); BB.data=await r.json(); }
+  try{
+    if(!BB.versions){ try{ BB.versions=(await (await fetch('/biblia/versiones')).json()).versions; }catch{ BB.versions=[{id:'RV1909',name:'Reina-Valera 1909',url:'/biblia/rv1909.json'}]; } }
+    let pref=null; try{ pref=localStorage.getItem('vdn-biblia'); }catch{}
+    const v=BB.versions.find(x=>x.id===(BB.ver||pref))||BB.versions[0]; BB.ver=v.id;
+    const r=await fetch(v.url); if(!r.ok) throw new Error(r.status); BB.data=await r.json(); }
   catch(e){ BB.err='No se pudo cargar la Biblia. Revisa tu internet.'; }
   BB.loading=false; if(V.view==='bible') render();
 }
@@ -91,7 +96,7 @@ window.viewBible=function(){
     <div class="bb-sug" id="bb-sug">${bbSugHtml()}</div>
     <div class="bb-wrap">
       <div class="bb-left">
-        <div class="bb-h"><b>${esc(bk[1])} ${BB.c+1}</b><button class="bb-pickbtn" data-act="bb-pick">${BB.pick?'Cerrar':'📚 Libro y capítulo'}</button><span class="bb-note">${esc(BB.data.name)}</span></div>
+        <div class="bb-h"><b>${esc(bk[1])} ${BB.c+1}</b><button class="bb-pickbtn" data-act="bb-pick">${BB.pick?'Cerrar':'📚 Libro y capítulo'}</button>${BB.versions&&BB.versions.length>1?`<select id="bb-ver" class="bb-ver" aria-label="Versión">${BB.versions.map(v=>`<option value="${esc(v.id)}" ${v.id===BB.ver?'selected':''}>${esc(v.id)}</option>`).join('')}</select>`:`<span class="bb-note">${esc(BB.data.name)}</span>`}</div>
         <div class="bb-vlist" id="bb-vlist">${ch.map((t,i)=>`<button class="bb-v${onRef&&onRef.b===BB.b&&onRef.c===BB.c&&onRef.v===i?' onscr':''}" data-act="bb-v" data-v="${i}" aria-current="${BB.v===i}"><b>${i+1}</b>${esc(t||'—')}</button>`).join('')}</div>
       </div>
       <div class="bb-right${BB.pick?' open':''}">
@@ -122,6 +127,7 @@ function bbSugHtml(){
   return h;
 }
 function bbAfter(){
+  const vs=$('#bb-ver'); if(vs) vs.addEventListener('change',e=>{ BB.ver=e.target.value; try{ localStorage.setItem('vdn-biblia',BB.ver); }catch{} BB.data=null; render(); });
   const qi=$('#bb-q'); if(!qi) return;
   qi.addEventListener('input',e=>{ BB.q=e.target.value; clearTimeout(BB.t); BB.t=setTimeout(()=>{ const s=$('#bb-sug'); if(s) s.innerHTML=bbSugHtml(); },120); });
   qi.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const p=bbParse(BB.q); if(p){ bbGo(p.b,p.c,p.v); } else { const f=$('#bb-sug button'); if(f) f.click(); } } else if(e.key==='Escape'){ BB.q=''; qi.value=''; $('#bb-sug').innerHTML=''; qi.blur(); } });

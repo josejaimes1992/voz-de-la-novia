@@ -1,6 +1,6 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
 
 const db = new SQL(Bun.env.DATABASE_URL!);
@@ -150,6 +150,12 @@ const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charse
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
+/* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
+let RVR1960: Uint8Array | null = null;
+try {
+  const k = Bun.env.BIBLE_KEY ?? ""; const f = new URL("./data/rvr1960.enc", import.meta.url);
+  if (k && existsSync(f)) { const raw = Buffer.from(await Bun.file(f).arrayBuffer()); const d = createDecipheriv("aes-256-gcm", Buffer.from(k, "hex"), raw.subarray(0, 12)); d.setAuthTag(raw.subarray(12, 28)); RVR1960 = new Uint8Array(Buffer.concat([d.update(raw.subarray(28)), d.final()])); console.log("Biblia RVR1960 lista"); }
+} catch (e) { console.error("No se pudo abrir la RVR1960", e); }
 const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
@@ -306,6 +312,8 @@ const SERVER = Bun.serve({
     const url = new URL(req.url);
     const p = url.pathname;
     try {
+      if (p === "/biblia/versiones") return json({ versions: [...(RVR1960 ? [{ id: "RVR1960", name: "Reina-Valera 1960", url: "/biblia/rvr1960.json" }] : []), { id: "RV1909", name: "Reina-Valera 1909", url: "/biblia/rv1909.json" }] });
+      if (p === "/biblia/rvr1960.json") return RVR1960 ? new Response(RVR1960, { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } }) : json({ error: "not_found" }, 404);
       if (p === "/biblia/rv1909.json") return new Response(Bun.file(new URL("./public/biblia/rv1909.json.gz", import.meta.url)), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
       if (p === "/manifest.webmanifest") return new Response(Bun.file(new URL("./public/manifest.webmanifest", import.meta.url)), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
       if (p === "/sw.js") return new Response(Bun.file(new URL("./public/sw.js", import.meta.url)), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
