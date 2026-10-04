@@ -495,11 +495,13 @@ const ICON={
 };
 function songKey(s){ return parseKey(s.key); }
 function keyText(k,shift=0){ return k? keyLabel(k.idx+shift,k.minor,V.latin) : '—'; }
-function sortedSongs(){ return [...S.songs.values()].sort((a,b)=>a.title.localeCompare(b.title,'es')); }
+const COLL=new Intl.Collator('es',{sensitivity:'base'});
+function sortedSongs(){ return [...S.songs.values()].sort((a,b)=>COLL.compare(a.title||'',b.title||'')); }
 function norm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 
 /* ============ Render principal ============ */
-function onData(){ if(V.view==='edit'||V.view==='cifrar') return; render(); if(V.live) renderLive(); }
+function warmSearch(){ const all=[...S.songs.values()]; let i=0; const step=dl=>{ while(i<all.length&&(!dl||dl.timeRemaining()>2)){ songIdx(all[i++]); } if(i<all.length) (window.requestIdleCallback||(f=>setTimeout(()=>f(null),50)))(step); }; (window.requestIdleCallback||(f=>setTimeout(()=>f(null),300)))(step); }
+function onData(){ warmSearch(); if(V.view==='edit'||V.view==='cifrar') return; render(); if(V.live) renderLive(); }
 function render(){
   $('#tab-songs').setAttribute('aria-pressed',V.tab==='songs');
   $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs');
@@ -552,7 +554,8 @@ function viewSongsInner(){
   if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div>`;
   if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>${V.qmode==='title'?'Ningún nombre coincide. Prueba buscar en “Letra” o en “Todo”.':'Prueba con otra palabra, revisa la ortografía o quita el filtro de tono.'}</div>`;
   if(toks.length){
-    h+=`<p class="muted" style="margin:0 0 8px;font-size:13px">${filtered.length} ${filtered.length===1?'cántico encontrado':'cánticos encontrados'}</p><div class="list">`+filtered.map(s=>{ const m=hits.get(s.id); const k=songKey(s);
+    const MAXR=120, shown=filtered.length>MAXR?filtered.slice(0,MAXR):filtered;
+    h+=`<p class="muted" style="margin:0 0 8px;font-size:13px">${filtered.length} ${filtered.length===1?'cántico encontrado':'cánticos encontrados'}${filtered.length>MAXR?` · se muestran los ${MAXR} más parecidos; escribe más para afinar`:''}</p><div class="list">`+shown.map(s=>{ const m=hits.get(s.id); const k=songKey(s);
       return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div>';
     return h;
   }
@@ -568,16 +571,22 @@ function viewSongsInner(){
 function searchTokens(q){ return norm(q).replace(/[^\p{L}\p{N}\s]/gu,' ').split(/\s+/).filter(t=>t.length>0); }
 function plainNorm(t){ return norm(t).replace(/[^\p{L}\p{N}]+/gu,' '); }
 function lyricLines(s){ const out=[]; let sec=''; for(const v of [s.body,s.bodyPro]){ if(!v) continue; for(const raw of v.split('\n')){ if(/^\s*#/.test(raw)){ sec=raw.replace(/^\s*#+\s*/,''); continue; } const t=raw.replace(/\[[^\]]*\]/g,'').replace(/\s+/g,' ').trim(); if(t) out.push({t,sec}); } } return out; }
+/* Índice de búsqueda por canción (se calcula una vez, no en cada letra que escribes) */
+const _sIdx=new WeakMap();
+function songIdx(s){ let x=_sIdx.get(s); if(x&&x.k===(s.title||'')+'|'+(s.body||'').length+'|'+(s.bodyPro||'').length) return x;
+  x={k:(s.title||'')+'|'+(s.body||'').length+'|'+(s.bodyPro||'').length, title:' '+plainNorm(s.title+' '+(s.author||'')+' '+(s.category||''))+' ', tnorm:plainNorm(s.title).trim(), lines:null, lyr:null}; _sIdx.set(s,x); return x; }
+function songIdxLyr(x,s){ if(!x.lines){ x.lines=lyricLines(s).map(l=>({...l,n:' '+plainNorm(l.t)+' '})); x.lyr=' '+x.lines.map(l=>l.n.trim()).join(' ')+' '; } return x; }
 function matchSong(s,toks,mode){
-  const title=' '+plainNorm(s.title+' '+(s.author||'')+' '+(s.category||''))+' ';
-  const lines=lyricLines(s); const lyr=' '+lines.map(l=>plainNorm(l.t)).join(' ')+' ';
+  const X=songIdx(s); const title=X.title;
   const inTitle=mode!=='lyrics'&&toks.every(t=>title.includes(t));
+  if(mode==='title'&&!inTitle) return null;
+  songIdxLyr(X,s); const lines=X.lines, lyr=X.lyr;
   const inLyrics=mode!=='title'&&toks.every(t=>lyr.includes(t));
   if(!inTitle&&!inLyrics) return null;
-  let score=inTitle?100:0; if(inTitle&&plainNorm(s.title).trim().startsWith(toks.join(' '))) score+=50;
+  let score=inTitle?100:0; if(inTitle&&X.tnorm.startsWith(toks.join(' '))) score+=50;
   let line=null, sec='';
   if(inLyrics){ const phrase=toks.join(' ');
-    let best=null; for(const l of lines){ const n=' '+plainNorm(l.t)+' '; const c=toks.filter(t=>n.includes(t)).length+(n.includes(phrase)?toks.length:0)+(toks.some(t=>n.includes(' '+t+' '))?0.5:0); if(c>0&&(!best||c>best.c)) best={c,l}; }
+    let best=null; for(const l of lines){ const n=l.n; const c=toks.filter(t=>n.includes(t)).length+(n.includes(phrase)?toks.length:0)+(toks.some(t=>n.includes(' '+t+' '))?0.5:0); if(c>0&&(!best||c>best.c)) best={c,l}; }
     if(best){ line=snipAround(best.l.t,toks); sec=best.l.sec; score+=10+best.c*5; if(lyr.includes(' '+phrase+' ')) score+=20; }
   }
   return {score,inTitle,line:inTitle&&mode!=='lyrics'&&!inLyrics?null:line,sec};
@@ -670,7 +679,7 @@ function viewSong(){
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
-    ${S.canWrite?`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`:''}
+    ${S.canWrite?(typeof PJ!=="undefined"&&PJ.open?`<button class="btn pri" data-act="proj-song" title="Mientras proyectas: pásala a la pantalla ya (o doble toque en la lista)">${ICON.screen}Proyectar ahora</button>`:`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`):''}
     ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎙 Sacar la letra del audio</button>`:''}`:''}
   </div>
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
@@ -1047,7 +1056,9 @@ document.addEventListener('click',async ev=>{
     case 'close-modal': closeModal(); break;
   }
 });
-document.addEventListener('input',ev=>{ const el=ev.target; if(el.dataset.in==='q'){ V.q=el.value; const pos=el.selectionStart; render(); const n=$('#q'); n.focus(); try{ n.setSelectionRange(pos,pos);}catch{} } });
+let _qT=null;
+document.addEventListener('input',ev=>{ const el=ev.target; if(el.dataset.in==='q'){ V.q=el.value; clearTimeout(_qT);
+  _qT=setTimeout(()=>{ const cur=$('#q'); const pos=cur?cur.selectionStart:V.q.length; const had=document.activeElement===cur; render(); const n=$('#q'); if(n){ if(n.value!==V.q) n.value=V.q; if(had){ n.focus(); try{ n.setSelectionRange(pos,pos);}catch{} } } },V.q.length<=1?160:90); } });
 document.addEventListener('change',async ev=>{
   const el=ev.target;
   if(el.dataset.capo){ const n=Number(el.value)||0; if(V.live){ V.live.capo=n; renderLive(); } else { V.capo=n; render(); } return; }
@@ -1063,7 +1074,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/afinador.js?v=1"></script>
 <script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
-<script src="/proyeccion.js?v=1"></script>
+<script src="/proyeccion.js?v=2"></script>
 <script src="/excel.js?v=1"></script>
 <script src="/cifrador.js?v=8"></script>
 </body></html>
