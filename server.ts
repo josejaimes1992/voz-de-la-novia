@@ -1,5 +1,6 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
+import { librosRoute, initLibros } from "./libros.ts";
 import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex } from "./sermones.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
@@ -146,7 +147,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -158,6 +159,7 @@ try {
   if (k && existsSync(f)) { const raw = Buffer.from(await Bun.file(f).arrayBuffer()); const d = createDecipheriv("aes-256-gcm", Buffer.from(k, "hex"), raw.subarray(0, 12)); d.setAuthTag(raw.subarray(12, 28)); RVR1960 = new Uint8Array(Buffer.concat([d.update(raw.subarray(28)), d.final()])); console.log("Biblia RVR1960 lista"); }
 } catch (e) { console.error("No se pudo abrir la RVR1960", e); }
 /* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
+initLibros(AUDIO_DIR);
 const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
@@ -329,6 +331,7 @@ const SERVER = Bun.serve({
     const p = url.pathname;
     try {
       if (p === "/api/proyector/estilo" && req.method === "GET") return json(STYLE);
+      if (p.startsWith("/libro/")) { const lr = await librosRoute(req, url, p, null, db); if (lr) return lr; }
       const fm = p.match(/^\/fondo\/([a-f0-9]{24})\.jpg$/);
       if (fm) { const f = `${FONDOS_DIR}/${fm[1]}.jpg`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       if (p === "/biblia/versiones") return json({ versions: [...(RVR1960 ? [{ id: "RVR1960", name: "Reina-Valera 1960", url: "/biblia/rvr1960.json" }] : []), { id: "RV1909", name: "Reina-Valera 1909", url: "/biblia/rv1909.json" }] });
@@ -390,6 +393,7 @@ const SERVER = Bun.serve({
         return json({ token, user: publicUser(rows[0]) });
       }
       const user = p.startsWith("/api/") ? await currentUser(req) : null;
+      if (p.startsWith("/api/libros")) { const lr = await librosRoute(req, url, p, user, db); if (lr) return lr; }
       /* ---- Mensajes del hermano Branham (solo equipo con sesión) ---- */
       if (p.startsWith("/api/sermons")) {
         if (!user) return json({ error: "unauthorized" }, 401);

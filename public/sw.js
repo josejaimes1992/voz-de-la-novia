@@ -18,7 +18,7 @@ async function staleWhileRevalidate(req){
 self.addEventListener('fetch',e=>{
   const req=e.request; if(req.method!=='GET') return;
   const u=new URL(req.url); if(u.origin!==location.origin) return;
-  if(u.pathname.startsWith('/audio/')) return; /* los audios van directo */
+  if(u.pathname.startsWith('/audio/')||u.pathname.startsWith('/libro/')) return; /* audios y libros van directo (sin ocupar espacio extra) */
   if(req.mode==='navigate'){ e.respondWith(networkFirst(req,u.pathname==='/'?'/':undefined).catch(()=>caches.match('/'))); return; }
   if(u.pathname==='/api/data'||u.pathname==='/api/me'){ const key=new Request(u.pathname); e.respondWith(networkFirst(req,key)); return; }
   if(u.pathname.startsWith('/api/')) return;
