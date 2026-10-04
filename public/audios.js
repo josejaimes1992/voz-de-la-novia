@@ -7,7 +7,7 @@ function audioSection(s,compact){
   const list=s.audio||[];
   if(!list.length&&!S.canWrite) return '';
   return `<section class="aud" aria-label="Audios de la canción">
-    <div class="aud-h"><b>Audios</b>${S.canWrite?`<label class="btn" style="cursor:pointer">＋ Subir audio<input type="file" accept="${AUD_ACCEPT}" data-aud-up="${esc(s.id)}" hidden></label><button class="btn" data-act="aud-rec" data-id="${esc(s.id)}" title="Grabar con el micrófono (por ejemplo, mientras suena el video)">🎙 Grabar</button>`:''}</div>
+    <div class="aud-h"><b>Audios</b>${S.canWrite?`<label class="btn" style="cursor:pointer">＋ Subir audio<input type="file" accept="${AUD_ACCEPT}" data-aud-up="${esc(s.id)}" hidden></label>`:''}</div>
     <div id="aud-prog" class="muted" style="font-size:13px" hidden></div>
     ${list.length?list.map(a=>`<div class="aud-row">
       <div class="aud-meta"><b>${esc(a.name)}</b><small class="muted">${esc(a.by||'')} · ${esc(fmtWhen(a.at))}${a.duration?' · '+Math.floor(a.duration/60)+':'+String(a.duration%60).padStart(2,'0'):''} · ${audSize(a.size||0)}${a.original&&a.original>a.size*1.2?` (comprimido de ${audSize(a.original)})`:''}</small></div>
@@ -42,33 +42,3 @@ document.addEventListener('click',async ev=>{
 });
 /* Solo un audio suena a la vez */
 document.addEventListener('play',e=>{ if(e.target.tagName==='AUDIO') document.querySelectorAll('audio').forEach(x=>{ if(x!==e.target) x.pause(); }); },true);
-
-/* ---------- Grabar con el micrófono (por ejemplo, mientras suena la canción en otro equipo o en YouTube) ---------- */
-window.recordAudio=function(){
-  return new Promise(async resolve=>{
-    if(!navigator.mediaDevices||!window.MediaRecorder){ toast('Este navegador no permite grabar audio.'); return resolve(null); }
-    let stream; try{ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}}); }catch{ toast('Permite el micrófono para grabar.'); return resolve(null); }
-    const type=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
-    const rec=new MediaRecorder(stream,type?{mimeType:type,audioBitsPerSecond:96000}:undefined); const chunks=[]; let t0=0, tick=null, done=false;
-    const root=document.createElement('div'); root.className='scrim'; root.style.zIndex='60';
-    root.innerHTML=`<div class="modal" role="dialog" aria-label="Grabar audio" style="width:min(420px,100%)"><header><h3>🎙 Grabar audio</h3></header><div class="body" style="display:grid;gap:12px;text-align:center">
-      <p class="muted" style="margin:0;font-size:13.5px">Pon a sonar la canción (en YouTube, otro teléfono o el parlante) cerca del micrófono. Mientras más clara se escuche la voz, mejor saldrá la letra.</p>
-      <div id="rec-t" style="font:700 40px var(--f-mono)">0:00</div><canvas id="rec-v" width="320" height="50" style="width:100%;height:50px"></canvas>
-      <div class="actions" style="justify-content:center"><button class="btn pri" id="rec-stop" style="background:#d93a2f;border-color:#d93a2f">■ Terminar y usar</button><button class="btn" id="rec-cancel">Cancelar</button></div>
-      <p class="muted" style="margin:0;font-size:12px">Máximo 10 minutos.</p></div></div>`;
-    document.body.appendChild(root);
-    const AC=window.AudioContext||window.webkitAudioContext; let ac=null, an=null; try{ ac=new AC(); an=ac.createAnalyser(); an.fftSize=512; ac.createMediaStreamSource(stream).connect(an); }catch{}
-    const cv=root.querySelector('#rec-v'), g=cv.getContext('2d'); const buf=new Uint8Array(512);
-    const draw=()=>{ if(done) return; if(an){ an.getByteTimeDomainData(buf); g.clearRect(0,0,320,50); g.strokeStyle='#d93a2f'; g.lineWidth=2; g.beginPath(); for(let i=0;i<buf.length;i+=2){ const x=i/buf.length*320, y=buf[i]/255*50; i?g.lineTo(x,y):g.moveTo(x,y); } g.stroke(); } requestAnimationFrame(draw); };
-    const finish=(use)=>{ if(done) return; done=true; clearInterval(tick); rec.onstop=()=>{ stream.getTracks().forEach(t=>t.stop()); try{ ac&&ac.close(); }catch{} root.remove();
-        if(!use) return resolve(null); const blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'}); if(blob.size<4000){ toast('La grabación quedó vacía.'); return resolve(null); }
-        const ext=/mp4/.test(blob.type)?'m4a':/ogg/.test(blob.type)?'ogg':'webm'; const d=new Date();
-        resolve(new File([blob],`Grabación ${d.toLocaleDateString('es')} ${d.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}.${ext}`.replace(/[\/:]/g,'-'),{type:blob.type.split(';')[0]})); };
-      try{ rec.stop(); }catch{ rec.onstop(); } };
-    rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
-    root.querySelector('#rec-stop').onclick=()=>finish(true); root.querySelector('#rec-cancel').onclick=()=>finish(false);
-    rec.start(1000); t0=Date.now(); draw();
-    tick=setInterval(()=>{ const s=Math.floor((Date.now()-t0)/1000); const el=root.querySelector('#rec-t'); if(el) el.textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; if(s>=600) finish(true); },250);
-  });
-};
-document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-act="aud-rec"]'); if(!el) return; const f=await recordAudio(); if(f) audUpload(el.dataset.id,f); });

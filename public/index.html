@@ -124,12 +124,6 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .sg .l{display:block;white-space:pre-wrap}
 .ln.co .sg .c{padding-right:1.1em}
 .ln.txc{white-space:pre-wrap}
-.yt{display:flex;gap:12px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px;margin:0 0 12px}
-.yt-th{position:relative;flex:none;width:160px;aspect-ratio:16/9;border:0;padding:0;border-radius:8px;overflow:hidden;cursor:pointer;background:#000}
-.yt-th img{width:100%;height:100%;object-fit:cover;display:block}
-.yt-th span{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:30px;background:rgba(0,0,0,.25)}
-.yt-t small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
-.yt.playing{display:block;padding:0;overflow:hidden}.yt iframe{width:100%;aspect-ratio:16/9;border:0;display:block}
 .list .row{content-visibility:auto;contain-intrinsic-size:auto 60px}.ln.txc .c{display:inline;font:inherit;font-family:var(--f-ui);font-weight:700;color:var(--chord);font-size:.82em;background:none;border:0;padding:0;margin:0;cursor:pointer}
 .sg .c{font:inherit;font-family:var(--f-ui);font-weight:700;color:var(--chord);font-size:.82em;line-height:1.2;background:none;border:0;padding:0 .45em 0 0;margin:0;text-align:left;cursor:pointer;border-radius:4px}
 .sg button.c:hover{background:var(--accent-soft)}
@@ -662,7 +656,6 @@ function renderSheet(body,{shift=0,chords=true,key=null,capo=0}={}){
   }
   return `<div class="sheet${chords?' ch':''}">${out}</div>`;
 }
-function ytId(u){ const m=String(u||'').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/); return m?m[1]:''; }
 function sb(s){ return V.ver==='original'&&s&&s.bodyPro&&s.bodyPro.trim()?s.bodyPro:(s?s.body||'':''); }
 function chordAttrs(raw,shift){ const c=parseChord(raw); if(!c) return null; return {r:((c.root+shift)%12+12)%12,s:c.suf,b:c.bass==null?'':((c.bass+shift)%12+12)%12}; }
 function chordBtn(raw,shift,flat){ const a=chordAttrs(raw,shift); const label=esc(fmtChord(raw,shift,flat,V.latin));
@@ -711,7 +704,6 @@ function viewSong(){
     ${S.canWrite?(typeof PJ!=="undefined"&&PJ.open?`<button class="btn pri" data-act="proj-song" title="Mientras proyectas: pásala a la pantalla ya (o doble toque en la lista)">${ICON.screen}Proyectar ahora</button>`:`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`):''}
     ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎙 Sacar la letra del audio</button>`:''}`:''}
   </div>
-  ${ytId(s.youtube)?`<div class="yt" id="yt-box"><button type="button" class="yt-th" data-act="yt-play" data-id="${ytId(s.youtube)}" aria-label="Escuchar en YouTube"><img loading="lazy" src="https://i.ytimg.com/vi/${ytId(s.youtube)}/mqdefault.jpg" alt=""><span>▶</span></button><div class="yt-t"><b>Escuchar en YouTube</b><small>Se reproduce aquí mismo. Para sacar la letra, ponlo a sonar y usa “🎙 Grabar” en Audios.</small></div></div>`:''}
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
   ${V.chords?verBar(s):''}
   ${V.chords?instBar(s,V.capo,false):''}
@@ -733,7 +725,6 @@ function viewEdit(){
       <label class="f">Autor / compositor<input id="e-author" value="${esc(d.author||'')}"></label>
       <label class="f">Tono original<select id="e-key"><option value="">Sin tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${keyMatch(d.key,k)?'selected':''}>${esc(keyText(parseKey(k)))} — ${esc(keyLong(parseKey(k).idx,parseKey(k).minor))}</option>`).join('')}</select></label>
       <label class="f">Tempo (BPM)<input id="e-bpm" type="number" min="30" max="240" inputmode="numeric" value="${esc(d.bpm||'')}" placeholder="Ej. 72"></label>
-      <label class="f">Enlace de YouTube (para escuchar)<input id="e-yt" type="url" inputmode="url" value="${esc(d.youtube||'')}" placeholder="https://youtu.be/…"></label>
       <label class="f">Capo sugerido (guitarra)<select id="e-capo">${[0,1,2,3,4,5,6,7].map(n=>`<option value="${n}" ${Number(d.capo||0)===n?'selected':''}>${n?n:'Sin capo'}</option>`).join('')}</select></label>
       <label class="f">Categoría<input id="e-cat" list="cats" value="${esc(d.category||'')}" placeholder="Alabanza, Adoración, Himno…"><datalist id="cats">${['Adoración','Júbilo','Alabanza','Himno','Ofrenda','Santa Cena','Bautismo','Infantil','Navidad','Semana Santa'].map(c=>`<option value="${c}">`).join('')}</datalist></label>
     </div>
@@ -763,7 +754,7 @@ function bindEditor(){
   ks.addEventListener('change',upd); upd();
 }
 function readDraft(){
-  const d=V.draft; d.title=$('#e-title').value.trim(); d.author=$('#e-author').value.trim(); d.key=$('#e-key').value; d.category=$('#e-cat').value.trim(); d.body=$('#e-body').value; d.bodyPro=$('#e-pro').value; d.notes=$('#e-notes').value.trim(); d.bpm=Number($('#e-bpm').value)||''; d.capo=Number($('#e-capo').value)||0; d.youtube=($('#e-yt')&&$('#e-yt').value.trim())||''; return d;
+  const d=V.draft; d.title=$('#e-title').value.trim(); d.author=$('#e-author').value.trim(); d.key=$('#e-key').value; d.category=$('#e-cat').value.trim(); d.body=$('#e-body').value; d.bodyPro=$('#e-pro').value; d.notes=$('#e-notes').value.trim(); d.bpm=Number($('#e-bpm').value)||''; d.capo=Number($('#e-capo').value)||0; return d;
 }
 
 function fmtDate(iso){ if(!iso) return {d:'—',m:'',full:'Sin fecha'}; const [y,mo,da]=iso.split('-').map(Number); const dt=new Date(y,mo-1,da); return {d:da,m:dt.toLocaleDateString('es',{month:'short'}).replace('.',''),full:dt.toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}; }
@@ -1053,7 +1044,6 @@ document.addEventListener('click',async ev=>{
     case 'strip': V.strip=!V.strip; lsSet('vdn-strip',V.strip); if(V.live) renderLive(); else render(); break;
     case 'metro': if(V.metro){ stopMetro(); } else if(window.Acordes&&Acordes.metroStart(Number(ds.bpm),b=>{ document.querySelectorAll('#beats .beat').forEach((el,i)=>{ el.className='beat'+(i===b?(b===0?' acc':' on'):''); }); })){ V.metro=true; } if(V.live) renderLive(); else render(); break;
     case 'scroll': V.live.speed=Math.max(0,Math.min(12,(V.live.speed||0)+Number(ds.d))); renderLive(); startAutoScroll(); break;
-    case 'yt-play': { const b=$('#yt-box'); if(b){ b.classList.add('playing'); b.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(ds.id)}?autoplay=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="YouTube"></iframe>`; } break; }
     case 'chords': V.chords=ds.v==='1'; lsSet('vdn-chords',V.chords); if(V.live) renderLive(); else render(); break;
     case 'shift': if(V.live){ V.live.extra=(V.live.extra||0)+Number(ds.d); renderLive(); } else { V.shift=normShift(V.shift+Number(ds.d)); render(); } break;
     case 'size': V.size=Math.min(2,Math.max(.7,Math.round((V.size+Number(ds.d)*.1)*10)/10)); lsSet('cancionero-size',V.size); document.documentElement.style.setProperty('--lyric',V.size); break;
@@ -1104,7 +1094,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>
-<script src="/audios.js?v=3"></script>
+<script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=4"></script>
 <script src="/biblia.js?v=4"></script>
@@ -1112,5 +1102,5 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/libros.js?v=1"></script>
 <script src="/voz.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
-<script src="/cifrador.js?v=9"></script>
+<script src="/cifrador.js?v=8"></script>
 </body></html>
