@@ -428,13 +428,15 @@ window.cifNewFromAudio=function(){
     <div class="body" style="display:grid;gap:12px">
       <p class="muted" style="margin:0;font-size:13.5px">Sube la grabación: la app escribe la letra que se canta. Después la revisas, la guardas y, si quieres, le pones los acordes con “Poner acordes tocando”.</p>
       <label class="f">Título (opcional)<input id="cn-title" placeholder="Si lo dejas vacío, se toma de la primera línea cantada"></label>
-      <label class="drop" style="cursor:pointer"><input id="cn-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,.3gp,.amr" hidden required><b id="cn-fname">Elegir el audio</b><span>MP3, M4A (notas de voz), WAV… hasta 100 MB</span></label>
+      <label class="drop" style="cursor:pointer"><input id="cn-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,.3gp,.amr" hidden><b id="cn-fname">Elegir el audio</b><span>MP3, M4A (notas de voz), WAV… hasta 100 MB</span></label>
+      <button type="button" class="btn" id="cn-rec" style="justify-content:center">🎙 O grabar ahora con el micrófono (mientras suena en YouTube u otro equipo)</button>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="cn-tr" checked> Escribir la letra automáticamente (servicio externo, unos centavos por canción)</label>
       <div id="cn-prog" class="muted" style="font-size:13.5px" hidden></div>
       <button class="btn pri" type="submit" id="cn-go" style="justify-content:center">Crear y sacar la letra</button>
     </div></form></div>`;
   const fi=$('#cn-file'); fi.addEventListener('change',()=>{ $('#cn-fname').textContent=fi.files[0]?fi.files[0].name:'Elegir el audio'; });
-  $('#cifnew').addEventListener('submit',async ev=>{ ev.preventDefault(); const file=fi.files[0]; if(!file){ toast('Elige un audio primero.'); return; }
+  $('#cn-rec').addEventListener('click',async()=>{ if(!window.recordAudio) return; const f=await recordAudio(); if(!f) return; try{ const dt=new DataTransfer(); dt.items.add(f); fi.files=dt.files; }catch{ fi._file=f; } $('#cn-fname').textContent='✓ '+f.name; });
+  $('#cifnew').addEventListener('submit',async ev=>{ ev.preventDefault(); const file=fi.files[0]||fi._file; if(!file){ toast('Elige o graba un audio primero.'); return; }
     const AUD={mp3:'audio/mpeg',m4a:'audio/mp4',aac:'audio/aac',wav:'audio/wav',ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac','3gp':'audio/3gpp',amr:'audio/amr'};
     const ext=(file.name.split('.').pop()||'').toLowerCase(); const type=(file.type&&file.type.startsWith('audio/'))?file.type:AUD[ext];
     if(!type){ toast('Ese archivo no parece un audio.'); return; } if(file.size>100*1024*1024){ toast('El archivo es muy grande. El máximo es 100 MB.'); return; }
