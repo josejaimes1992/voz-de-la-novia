@@ -147,7 +147,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -163,6 +163,7 @@ initLibros(AUDIO_DIR);
 const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
+const VOZ_LIMIT = new Map<string, { n: number; t: number }>();
 const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, size: 1, margin: 4, shadow: true };
 let STYLE: any = { ...STYLE_DEFAULT };
 try { const r = await db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) STYLE = { ...STYLE_DEFAULT, ...parseJ(r[0].data) }; } catch {}
@@ -393,6 +394,19 @@ const SERVER = Bun.serve({
         return json({ token, user: publicUser(rows[0]) });
       }
       const user = p.startsWith("/api/") ? await currentUser(req) : null;
+      if (p === "/api/voz" && req.method === "POST") {
+        const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "x"; const now = Date.now();
+        const lim = VOZ_LIMIT.get(ip); if (lim && now - lim.t < 3600_000 && lim.n >= (user ? 120 : 30)) return json({ error: "limit" }, 429);
+        VOZ_LIMIT.set(ip, lim && now - lim.t < 3600_000 ? { n: lim.n + 1, t: lim.t } : { n: 1, t: now });
+        const key = Bun.env.OPENAI_API_KEY ?? ""; if (!key) return json({ error: "no_key" }, 503);
+        const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 3_000_000) return json({ error: "too_large" }, 413); if (buf.length < 500) return json({ error: "empty" }, 400);
+        const ct = req.headers.get("content-type") ?? "audio/webm"; const ext = ct.includes("mp4") ? "m4a" : ct.includes("ogg") ? "ogg" : ct.includes("wav") ? "wav" : "webm";
+        const fd = new FormData(); fd.append("file", new Blob([buf], { type: ct }), "voz." + ext); fd.append("model", "whisper-1"); fd.append("language", "es");
+        fd.append("prompt", "Búsqueda de un cántico, un versículo o una frase. Ejemplos: Cuán grande es Él. Juan 3 16. Salmo 23.");
+        const r = await fetch(`${Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com"}/v1/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd });
+        if (!r.ok) { console.error("Voz", r.status, (await r.text()).slice(0, 200)); return json({ error: "service" }, 502); }
+        const d: any = await r.json(); return json({ text: String(d.text ?? "").trim().slice(0, 200) });
+      }
       if (p.startsWith("/api/libros")) { const lr = await librosRoute(req, url, p, user, db); if (lr) return lr; }
       /* ---- Mensajes del hermano Branham (solo equipo con sesión) ---- */
       if (p.startsWith("/api/sermons")) {

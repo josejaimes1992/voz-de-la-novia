@@ -123,6 +123,8 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .sg .c{display:block;font-family:var(--f-ui);font-weight:700;color:var(--chord);font-size:.82em;line-height:1.2;padding-right:.45em;white-space:pre}
 .sg .l{display:block;white-space:pre-wrap}
 .ln.co .sg .c{padding-right:1.1em}
+.ln.txc{white-space:pre-wrap}
+.list .row{content-visibility:auto;contain-intrinsic-size:auto 60px}.ln.txc .c{display:inline;font:inherit;font-family:var(--f-ui);font-weight:700;color:var(--chord);font-size:.82em;background:none;border:0;padding:0;margin:0;cursor:pointer}
 .sg .c{font:inherit;font-family:var(--f-ui);font-weight:700;color:var(--chord);font-size:.82em;line-height:1.2;background:none;border:0;padding:0 .45em 0 0;margin:0;text-align:left;cursor:pointer;border-radius:4px}
 .sg button.c:hover{background:var(--accent-soft)}
 .strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin-bottom:16px;border-bottom:1px solid var(--line);scrollbar-width:thin}
@@ -398,6 +400,8 @@ function parseLine(line){
   for(let i=1;i<parts.length;i+=2) segs.push({c:parts[i],t:parts[i+1]||''});
   const lyric=segs.map(s=>s.t).join('');
   const has=segs.some(s=>s.c);
+  /* Acordes escritos como texto encima de la letra (G  D  Em): cuentan como línea de acordes */
+  if(!has && isChordLine(t)) return {type:'ln',segs,lyric,has:false,chordOnly:true,txt:true};
   return {type:'ln',segs,lyric,has,chordOnly:has && !lyric.trim()};
 }
 function parseSong(body){ return (body||'').split(/\r?\n/).map(parseLine); }
@@ -482,7 +486,7 @@ function openLogin(){
 function authButton(){ const b=$('#auth'); if(!b) return; b.innerHTML=S.user?`${window.avatar?`<span style="display:inline-flex;margin:-4px 6px -4px -6px">${avatar(S.user,22)}</span>`:''}${esc(S.user.name)}${S.isAdmin&&S.unread?` <span class="badge">${S.unread>99?'99+':S.unread}</span>`:''}`:'Ingresar'; b.title=S.user?'Mi cuenta':'Ingresar para editar'; }
 
 /* ============ Estado de vista ============ */
-const V={ver:lsGet('vdn-ver','basica'),missingOnly:false,inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:true,size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
+const V={ver:lsGet('vdn-ver','basica'),missingOnly:false,inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:lsGet('vdn-chords',true),size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ICON={
@@ -554,20 +558,20 @@ function viewSongsInner(){
   V._visible=filtered.map(s=>s.id);
   if(toks.length) filtered.sort((a,b)=>hits.get(b.id).score-hits.get(a.id).score||a.title.localeCompare(b.title,'es'));
   const disp=c=>{ if(c==='?') return 'Sin tono'; const k=parseKey(c); return keyText(k); };
-  let h=banner()+(V.q||V.key!=='all'||V.missingOnly?'':`<div class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
+  let h=banner()+(V.q||V.key!=='all'||V.missingOnly?'<div id="song-hero"></div>':`<div id="song-hero" class="hero"><img class="sq" src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><p>Unidos en una misma alabanza</p></div>`)+`<div class="toolbar">
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
     ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-excel">Excel</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button><button class="btn" data-act="cif-new">🎙 Desde audio</button>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
-  ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div>`;
-  if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div>`;
-  if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>${V.qmode==='title'?'Ningún nombre coincide. Prueba buscar en “Letra” o en “Todo”.':'Prueba con otra palabra, revisa la ortografía o quita el filtro de tono.'}</div>`;
+  ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div><div id="song-res">`;
+  if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div></div>`;
+  if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>${V.qmode==='title'?'Ningún nombre coincide. Prueba buscar en “Letra” o en “Todo”.':'Prueba con otra palabra, revisa la ortografía o quita el filtro de tono.'}</div></div>`;
   if(toks.length){
     const MAXR=120, shown=filtered.length>MAXR?filtered.slice(0,MAXR):filtered;
     h+=`<p class="muted" style="margin:0 0 8px;font-size:13px">${filtered.length} ${filtered.length===1?'cántico encontrado':'cánticos encontrados'}${filtered.length>MAXR?` · se muestran los ${MAXR} más parecidos; escribe más para afinar`:''}</p><div class="list">`+shown.map(s=>{ const m=hits.get(s.id); const k=songKey(s);
-      return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div>';
+      return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
     return h;
   }
   const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
@@ -575,7 +579,13 @@ function viewSongsInner(){
     const groups=new Map(); filtered.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; if(!groups.has(c)) groups.set(c,[]); groups.get(c).push(s); });
     h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'canción':'canciones'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
   } else h+=`<div class="list">${filtered.map(row).join('')}</div>`;
-  return h;
+  return h+'</div>';
+}
+/* Al escribir en el buscador solo se cambian los resultados (el cuadro de texto no se toca: escribir va fluido) */
+function updateSongResults(){
+  const cur=$('#song-res'); if(V.view!=='list'||!cur){ render(); return; }
+  const t=document.createElement('template'); t.innerHTML=viewSongs(); const nr=t.content.querySelector('#song-res'); if(!nr){ render(); return; }
+  cur.replaceWith(nr); const oh=$('#song-hero'), nh=t.content.querySelector('#song-hero'); if(oh&&nh) oh.replaceWith(nh);
 }
 
 /* ---------- Búsqueda por nombre y por letra ---------- */
@@ -639,6 +649,7 @@ function renderSheet(body,{shift=0,chords=true,key=null,capo=0}={}){
     if(L.type==='sec'){ out+=`<div class="sec">${esc(L.text)}</div>`; lastGap=true; continue; }
     if(L.type==='gap'){ if(!lastGap) out+='<div class="gap"></div>'; lastGap=true; continue; }
     if(!chords){ if(L.chordOnly) continue; out+=`<div class="ln">${esc(L.lyric.trim()?L.lyric:'')}</div>`; lastGap=false; continue; }
+    if(L.txt){ out+=`<div class="ln txc">${L.lyric.split(/(\s+)/).map(tk=>/^\s+$/.test(tk)||!tk?tk:(parseChord(tk.replace(/^\(|\)$/g,''))?chordBtn(tk.replace(/^\(|\)$/g,''),shift,flat):esc(tk))).join('')}</div>`; lastGap=false; continue; }
     if(!L.has){ out+=`<div class="ln">${esc(L.lyric)}</div>`; lastGap=false; continue; }
     out+=`<div class="ln wc${L.chordOnly?' co':''}">`+L.segs.map(s=>`<span class="sg">${s.c?chordBtn(s.c,shift,flat):'<span class="c">&nbsp;</span>'}<span class="l">${s.t?esc(s.t):(L.chordOnly?'':'&nbsp;')}</span></span>`).join('')+'</div>';
     lastGap=false;
@@ -1033,7 +1044,7 @@ document.addEventListener('click',async ev=>{
     case 'strip': V.strip=!V.strip; lsSet('vdn-strip',V.strip); if(V.live) renderLive(); else render(); break;
     case 'metro': if(V.metro){ stopMetro(); } else if(window.Acordes&&Acordes.metroStart(Number(ds.bpm),b=>{ document.querySelectorAll('#beats .beat').forEach((el,i)=>{ el.className='beat'+(i===b?(b===0?' acc':' on'):''); }); })){ V.metro=true; } if(V.live) renderLive(); else render(); break;
     case 'scroll': V.live.speed=Math.max(0,Math.min(12,(V.live.speed||0)+Number(ds.d))); renderLive(); startAutoScroll(); break;
-    case 'chords': V.chords=ds.v==='1'; if(V.live) renderLive(); else render(); break;
+    case 'chords': V.chords=ds.v==='1'; lsSet('vdn-chords',V.chords); if(V.live) renderLive(); else render(); break;
     case 'shift': if(V.live){ V.live.extra=(V.live.extra||0)+Number(ds.d); renderLive(); } else { V.shift=normShift(V.shift+Number(ds.d)); render(); } break;
     case 'size': V.size=Math.min(2,Math.max(.7,Math.round((V.size+Number(ds.d)*.1)*10)/10)); lsSet('cancionero-size',V.size); document.documentElement.style.setProperty('--lyric',V.size); break;
     case 'new-song': V.placer=false; V.etab='basica'; V.draft={id:newId('c'),title:'',author:'',key:'',category:'',body:'',notes:''}; go('edit'); break;
@@ -1069,7 +1080,7 @@ document.addEventListener('click',async ev=>{
 });
 let _qT=null;
 document.addEventListener('input',ev=>{ const el=ev.target; if(el.dataset.in==='q'){ V.q=el.value; clearTimeout(_qT);
-  _qT=setTimeout(()=>{ const cur=$('#q'); const pos=cur?cur.selectionStart:V.q.length; const had=document.activeElement===cur; render(); const n=$('#q'); if(n){ if(n.value!==V.q) n.value=V.q; if(had){ n.focus(); try{ n.setSelectionRange(pos,pos);}catch{} } } },V.q.length<=1?160:90); } });
+  _qT=setTimeout(updateSongResults,V.q.length<=1?140:70); } });
 document.addEventListener('change',async ev=>{
   const el=ev.target;
   if(el.dataset.capo){ const n=Number(el.value)||0; if(V.live){ V.live.capo=n; renderLive(); } else { V.capo=n; render(); } return; }
@@ -1089,6 +1100,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/biblia.js?v=4"></script>
 <script src="/mensaje.js?v=4"></script>
 <script src="/libros.js?v=1"></script>
+<script src="/voz.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
 <script src="/cifrador.js?v=8"></script>
 </body></html>
