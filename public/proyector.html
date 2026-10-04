@@ -6,13 +6,17 @@
 <title>Proyector · Voz de la Novia</title>
 <link rel="icon" href="/vdn-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@600;700&family=Montserrat:wght@600;700&family=Poppins:wght@600;700&family=Merriweather:wght@700&family=Oswald:wght@500;600&family=Lora:wght@600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden}
 body{font-family:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;cursor:none;user-select:none;-webkit-user-select:none}
 body.cur{cursor:default}
 .stage{position:fixed;inset:0;display:grid;place-items:center}
+#bg{position:fixed;inset:0;background:#000;background-size:cover;background-position:center;transition:background .5s}
+#dim{position:fixed;inset:0;background:#000;opacity:0;transition:opacity .4s}
+body.noshadow .txt p,body.noshadow .ref{text-shadow:none}
+body.upper .txt p{text-transform:uppercase}
 .layer{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transition:opacity .35s ease}
 .layer.on{opacity:1}
 .txt{width:92vw;height:86vh;display:flex;align-items:center;justify-content:center;text-align:center}
@@ -43,6 +47,7 @@ body.cur .gear{opacity:1}
 .dot::before{content:"";width:8px;height:8px;border-radius:50%;background:#c9a640}
 .dot.show{opacity:1}
 </style></head><body>
+<div id="bg"></div><div id="dim"></div>
 <div class="stage" id="stage">
   <div class="layer" id="L-logo"><div class="logos"><img src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><img src="/shalom-logo.jpg?v=1" alt="Tabernáculo Shalom Adonai"></div></div>
   <div class="layer" id="L-a"><div class="txt"><p></p></div><div class="ref"></div></div>
@@ -56,6 +61,7 @@ body.cur .gear{opacity:1}
   <div class="map" id="map"></div>
   <div class="row"><button class="pri" id="go">Proyectar en pantalla completa</button><button id="ident">Identificar</button><button id="later">Ahora no</button></div>
   <div class="lg">★ principal · franja verde: donde está esta ventana ahora. Se recuerda para la próxima vez.</div>
+  <div class="row" style="margin-top:12px;border-top:1px solid #2a2a2e;padding-top:12px"><button id="kiosk" style="flex:1">⬇ Acceso directo para Windows: abre la pantalla completa sola en esta pantalla</button></div>
 </div>
 <div class="dot" id="dot">Reconectando…</div>
 <script>
@@ -63,9 +69,10 @@ body.cur .gear{opacity:1}
 const $=s=>document.querySelector(s);
 let cur=null, front='a', ws=null, retry=0, lastKey='';
 
+let ST={size:1};
 function fitMode(p,W,H,wrap){
   p.style.whiteSpace=wrap?'pre-line':'pre';
-  let lo=14, hi=Math.min(H*0.2, W*0.11);
+  let lo=14, hi=Math.min(H*0.2, W*0.11)*(ST.size||1);
   const ok=()=>p.scrollWidth<=W+1 && p.offsetHeight<=H;
   p.style.fontSize=hi+'px'; if(ok()) return hi;
   for(let i=0;i<14;i++){ const mid=(lo+hi)/2; p.style.fontSize=mid+'px'; if(ok()) lo=mid; else hi=mid; }
@@ -77,6 +84,16 @@ function fit(p){
   let s=fitMode(p,W,H,false);
   if(s<H*0.075){ s=fitMode(p,W,H,true); } else p.style.whiteSpace='pre';
   p.style.fontSize=s+'px';
+}
+function applyStyle(x){
+  ST=x||ST; const bg=$('#bg');
+  bg.style.background=ST.img?`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#000'}`:(ST.bg||'#000');
+  $('#dim').style.opacity=ST.img?String(ST.dim??0.35):'0';
+  document.querySelectorAll('.txt p').forEach(p=>{ p.style.color=ST.color||'#fff'; p.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; });
+  document.querySelectorAll('.ref').forEach(r=>{ r.style.color=ST.ref||'#e9c45a'; r.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; });
+  const m=ST.margin??4; document.querySelectorAll('.txt').forEach(t=>{ t.style.width=(100-2*m)+'vw'; });
+  document.body.classList.toggle('noshadow',ST.shadow===false); document.body.classList.toggle('upper',!!ST.upper);
+  const go=()=>document.querySelectorAll('.txt p').forEach(p=>{ if(p.textContent) fit(p); }); if(document.fonts&&document.fonts.load) document.fonts.load(`700 40px "${ST.font||'Figtree'}"`).then(go,go); else go();
 }
 function show(st){
   cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text+'|'+(st.ref||''):'');
@@ -94,7 +111,7 @@ function connect(){
   const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector';
   try{ ws=new WebSocket(url); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; $('#dot').classList.remove('show'); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ show(JSON.parse(ev.data)); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._style) applyStyle(d._style); else show(d); }catch{} };
   ws.onclose=()=>{ $('#dot').classList.add('show'); later(); };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
@@ -141,6 +158,16 @@ async function showSetup(){
   const ok=await loadScreens(true); if(!ok||!SD||SD.screens.length<2){ if(ok&&SD&&SD.screens.length<2) alertOne(); return; }
   $('#setup').hidden=false; $('#hint').classList.add('off'); drawMap();
 }
+function kiosk(){
+  const s=SD&&SD.screens[selIdx]; const x=s?s.left:(screen.width||1920), y=s?s.top:0; const url=location.origin+'/proyector';
+  const cmd=['@echo off','REM Voz de la Novia - abre la pantalla del proyector a pantalla completa en el monitor elegido','REM Para cerrarla: Alt + F4',
+    `set URL=${url}`,`set OPC=--kiosk --window-position=${x},${y} --user-data-dir="%LOCALAPPDATA%\\VozNoviaProyector" --no-first-run --disable-features=Translate --autoplay-policy=no-user-gesture-required`,
+    'if exist "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe" ( start "" "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe" %OPC% "%URL%" & exit /b )',
+    'if exist "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe" ( start "" "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe" %OPC% "%URL%" & exit /b )',
+    'if exist "%LOCALAPPDATA%\\Google\\Chrome\\Application\\chrome.exe" ( start "" "%LOCALAPPDATA%\\Google\\Chrome\\Application\\chrome.exe" %OPC% "%URL%" & exit /b )',
+    'start "" msedge %OPC% --edge-kiosk-type=fullscreen "%URL%"',''].join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([cmd],{type:'application/octet-stream'})); a.download='Proyector Voz de la Novia.cmd'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
 function alertOne(){ const h=$('#hint'); h.textContent='Solo se detecta una pantalla. Conecta el proyector y elige “Extender” (tecla Windows + P).'; h.classList.remove('off'); setTimeout(()=>h.classList.add('off'),7000); }
 function ident(){ if(!SD) return; /* número grande en esta ventana y en ventanas pequeñas sobre cada pantalla */
   const o=document.createElement('div'); o.className='ident'; o.textContent=String(SD.screens.indexOf(SD.currentScreen)+1); document.body.appendChild(o); setTimeout(()=>o.remove(),2500);
@@ -152,6 +179,7 @@ setTimeout(()=>{
   $('#ident').onclick=e=>{ e.stopPropagation(); ident(); };
   $('#later').onclick=e=>{ e.stopPropagation(); $('#setup').hidden=true; };
   $('#setup').addEventListener('click',e=>e.stopPropagation());
+  $('#kiosk').onclick=e=>{ e.stopPropagation(); kiosk(); };
   $('#gear').onclick=e=>{ e.stopPropagation(); showSetup(); };
 },0);
 document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wake();
@@ -163,6 +191,7 @@ setTimeout(()=>$('#hint').classList.add('off'),6000);
 
 document.fonts&&document.fonts.ready.then(()=>document.querySelectorAll('.txt p').forEach(fit));
 show({mode:'logo',text:''});
+fetch('/api/proyector/estilo').then(r=>r.json()).then(applyStyle).catch(()=>{});
 fetch('/api/proyector').then(r=>r.json()).then(show).catch(()=>{});
 connect(); wake();
 loadScreens(false).then(ok=>{ if(ok&&SD.screens.length>1){ const h=$('#hint'); h.textContent=`Toca para proyectar en la pantalla ${selIdx+1} · tecla P para cambiar de pantalla`; h.classList.remove('off'); } else if('getScreenDetails' in window){ const h=$('#hint'); h.textContent='Toca para elegir la pantalla del proyector'; } });

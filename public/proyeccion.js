@@ -101,7 +101,7 @@ function pjConnect(){
   let ws; try{ ws=new WebSocket(url); }catch{ return pjLater(); }
   PJ.ws=ws;
   ws.onopen=()=>{ PJ.retry=0; PJ.online=true; pjRender(); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ PJ.remote=JSON.parse(ev.data); pjRender(); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._style){ PJ.style=d._style; return; } PJ.remote=d; pjRender(); }catch{} };
   ws.onclose=()=>{ PJ.online=false; if(PJ.open){ pjRender(); pjLater(); } };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
@@ -149,7 +149,7 @@ function pjRender(scrollTop){
       <span class="ttl">${esc(s?s.title:'')}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
-      <button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pj-find"><input id="pj-q" type="search" placeholder="Buscar otra canción para proyectar…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar canción"><div class="pj-res" id="pj-res">${pjResHtml()}</div></div>
     ${PJ.songIds.length>1?`<div class="pj-songs">${PJ.songIds.map((id,i)=>`<button class="chip" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}">${i+1}. ${esc(S.songs.get(id)?.title||'')}</button>`).join('')}</div>`:''}
     <div class="pj-body" id="pj-body">
@@ -216,3 +216,59 @@ async function openProyector(){
   const w=window.open('/proyector','vdn-proyector',feat); if(!w) toast('El navegador bloqueó la ventana. Permite ventanas emergentes para esta página.'); else { try{ w.focus(); }catch{} }
 }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act="open-proj"]'); if(el){ ev.preventDefault(); openProyector(); } });
+
+/* ---------- Fondo y letra de la pantalla ---------- */
+const PJ_BG=[['Negro','#000000'],['Azul noche','linear-gradient(160deg,#0b1d3a 0%,#02060f 100%)'],['Azul real','linear-gradient(135deg,#1e3c72 0%,#2a5298 100%)'],['Morado','linear-gradient(135deg,#2b1055 0%,#7597de 140%)'],['Vino','linear-gradient(160deg,#3a0a12 0%,#120206 100%)'],['Dorado','radial-gradient(circle at 50% 30%,#5a4416 0%,#1a1206 70%)'],['Verde','linear-gradient(160deg,#0f2e1f 0%,#030b07 100%)'],['Amanecer','linear-gradient(180deg,#2c1a4a 0%,#c0574a 120%)'],['Gris','linear-gradient(160deg,#2b2f36 0%,#0d0f12 100%)'],['Celeste','linear-gradient(135deg,#0f4c75 0%,#3282b8 100%)']];
+const PJ_FONTS=['Figtree','Montserrat','Poppins','Oswald','Merriweather','Lora'];
+const PJ_COLORS=['#ffffff','#fff6d8','#e9c45a','#9fd3ff','#000000'];
+let PJS=null, PJF=[];
+async function styleOpen(){
+  try{ PJS=await (await fetch('/api/proyector/estilo')).json(); }catch{ PJS={bg:'#000000',img:'',dim:.35,color:'#ffffff',ref:'#e9c45a',font:'Figtree',upper:false,size:1,margin:4,shadow:true}; }
+  try{ PJF=(await api('/api/fondos')).fondos||[]; }catch{ PJF=[]; }
+  styleDraw();
+}
+function stylePrev(){ const x=PJS; return `<div style="aspect-ratio:16/9;border-radius:10px;overflow:hidden;position:relative;border:1px solid var(--line);background:${x.img?`url('${x.img}') center/cover,`:''}${x.bg}"><div style="position:absolute;inset:0;background:#000;opacity:${x.img?x.dim:0}"></div><div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 ${x.margin}%;font-family:'${x.font}',sans-serif;font-weight:700;color:${x.color};font-size:${Math.round(22*x.size)}px;line-height:1.2;${x.upper?'text-transform:uppercase;':''}${x.shadow?'text-shadow:0 2px 8px rgba(0,0,0,.7);':''}"><span>Cuán grande es Él<br>Santo, santo es el Señor</span></div><div style="position:absolute;left:0;right:0;bottom:6%;text-align:center;font-family:'${x.font}',sans-serif;font-weight:700;font-size:12px;color:${x.ref}">Juan 3:16 · RVR1960</div></div>`; }
+function styleDraw(){
+  const x=PJS; if(!document.getElementById('pjs-font-css')){ const l=document.createElement('link'); l.id='pjs-font-css'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Figtree:wght@700&family=Montserrat:wght@700&family=Poppins:wght@700&family=Merriweather:wght@700&family=Oswald:wght@600&family=Lora:wght@700&display=swap'; document.head.appendChild(l); }
+  const sw=(bg,on,act,extra='')=>`<button type="button" data-act="${act}" ${extra} aria-pressed="${on}" style="width:56px;height:36px;border-radius:8px;border:${on?'3px solid var(--accent)':'1px solid var(--line)'};background:${bg};background-size:cover;background-position:center;cursor:pointer"></button>`;
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Fondo y letra" data-stop style="width:min(640px,100%)">
+    <header><h3>🎨 Fondo y letra de la pantalla</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:14px">
+      <div id="pjs-prev">${stylePrev()}</div>
+      <div><b style="font-size:14px">Fondo de color</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${PJ_BG.map(([n,v],i)=>`<span title="${n}">${sw(v,!x.img&&x.bg===v,'pjs-bg',`data-i="${i}"`)}</span>`).join('')}</div></div>
+      <div><b style="font-size:14px">Fondo con imagen</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">${PJF.map(f=>sw(`url('${f.url}')`,x.img===f.url,'pjs-img',`data-u="${f.url}"`)).join('')}
+        <label class="btn" style="cursor:pointer">＋ Subir imagen<input type="file" id="pjs-up" accept="image/*" hidden></label>${x.img?`<button type="button" class="btn ghost" data-act="pjs-noimg">Quitar imagen</button><button type="button" class="btn ghost danger" data-act="pjs-delimg" data-u="${x.img}">Borrar esta imagen</button>`:''}</div>
+        ${x.img?`<label class="f" style="margin-top:8px">Oscurecer la imagen (para que se lea mejor): ${Math.round(x.dim*100)}%<input type="range" min="0" max="0.85" step="0.05" value="${x.dim}" id="pjs-dim"></label>`:''}</div>
+      <div class="grid2">
+        <label class="f">Tipo de letra<select id="pjs-font">${PJ_FONTS.map(f=>`<option ${f===x.font?'selected':''} style="font-family:'${f}'">${f}</option>`).join('')}</select></label>
+        <label class="f">Tamaño de la letra: ${Math.round(x.size*100)}%<input type="range" min="0.6" max="1.3" step="0.05" value="${x.size}" id="pjs-size"></label>
+      </div>
+      <div><b style="font-size:14px">Color de la letra</b><div style="display:flex;gap:6px;margin-top:6px;align-items:center">${PJ_COLORS.map(c=>sw(c,x.color===c,'pjs-color',`data-c="${c}"`)).join('')}<span class="muted" style="font-size:13px;margin-left:8px">Cita:</span>${['#e9c45a','#ffffff','#9fd3ff'].map(c=>sw(c,x.ref===c,'pjs-ref',`data-c="${c}"`)).join('')}</div></div>
+      <div class="grid2">
+        <label class="f">Margen a los lados: ${x.margin}% <small class="muted">(súbelo si la TV corta los bordes)</small><input type="range" min="0" max="12" step="1" value="${x.margin}" id="pjs-margin"></label>
+        <div style="display:grid;gap:6px;align-content:end"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pjs-upper" ${x.upper?'checked':''}> TODO EN MAYÚSCULAS</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pjs-shadow" ${x.shadow?'checked':''}> Sombra en la letra</label></div>
+      </div>
+      <p class="muted" style="margin:0;font-size:12.5px">Los cambios se ven al instante en la pantalla del proyector.</p>
+    </div></div></div>`;
+  const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
+  on('#pjs-font','change',e=>styleSet({font:e.target.value}));
+  on('#pjs-size','input',e=>styleSet({size:+e.target.value},true));
+  on('#pjs-margin','input',e=>styleSet({margin:+e.target.value},true));
+  on('#pjs-dim','input',e=>styleSet({dim:+e.target.value},true));
+  on('#pjs-upper','change',e=>styleSet({upper:e.target.checked}));
+  on('#pjs-shadow','change',e=>styleSet({shadow:e.target.checked}));
+  on('#pjs-up','change',async e=>{ const f=e.target.files[0]; if(!f) return; toast('Subiendo imagen…');
+    try{ const r=await fetch('/api/fondos',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJF.unshift({url:d.url}); styleSet({img:d.url}); }catch{ toast('No se pudo subir esa imagen.'); } });
+}
+let PJS_T=null;
+function styleSet(ch,soft){ Object.assign(PJS,ch); if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
+  clearTimeout(PJS_T); PJS_T=setTimeout(async()=>{ try{ PJS=await api('/api/proyector/estilo',{method:'POST',body:JSON.stringify(PJS)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar el estilo.'); } },soft?250:0); }
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
+  if(a==='proj-style') styleOpen();
+  else if(a==='pjs-bg') styleSet({bg:PJ_BG[+d.i][1],img:''});
+  else if(a==='pjs-img') styleSet({img:d.u});
+  else if(a==='pjs-noimg') styleSet({img:''});
+  else if(a==='pjs-delimg'){ (async()=>{ try{ await api('/api/fondos/'+d.u.split('/').pop(),{method:'DELETE'}); PJF=PJF.filter(f=>f.url!==d.u); styleSet({img:''}); }catch{ toast('No se pudo borrar.'); } })(); }
+  else if(a==='pjs-color') styleSet({color:d.c});
+  else if(a==='pjs-ref') styleSet({ref:d.c});
+});

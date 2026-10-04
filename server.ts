@@ -157,6 +157,21 @@ try {
   const k = Bun.env.BIBLE_KEY ?? ""; const f = new URL("./data/rvr1960.enc", import.meta.url);
   if (k && existsSync(f)) { const raw = Buffer.from(await Bun.file(f).arrayBuffer()); const d = createDecipheriv("aes-256-gcm", Buffer.from(k, "hex"), raw.subarray(0, 12)); d.setAuthTag(raw.subarray(12, 28)); RVR1960 = new Uint8Array(Buffer.concat([d.update(raw.subarray(28)), d.final()])); console.log("Biblia RVR1960 lista"); }
 } catch (e) { console.error("No se pudo abrir la RVR1960", e); }
+/* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
+const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
+try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
+const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
+const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, size: 1, margin: 4, shadow: true };
+let STYLE: any = { ...STYLE_DEFAULT };
+try { const r = await db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) STYLE = { ...STYLE_DEFAULT, ...parseJ(r[0].data) }; } catch {}
+function cleanStyle(b: any) {
+  const col = (v: any, d: string) => typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v) ? v : d;
+  const bg = typeof b.bg === "string" && (/^#[0-9a-f]{3,8}$/i.test(b.bg) || /^(linear|radial)-gradient\([#0-9a-z%,.()\s-]{4,300}\)$/i.test(b.bg)) ? b.bg : STYLE.bg;
+  const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
+  const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
+  return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, size: num(b.size, 0.6, 1.3, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
+}
 const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
@@ -313,6 +328,9 @@ const SERVER = Bun.serve({
     const url = new URL(req.url);
     const p = url.pathname;
     try {
+      if (p === "/api/proyector/estilo" && req.method === "GET") return json(STYLE);
+      const fm = p.match(/^\/fondo\/([a-f0-9]{24})\.jpg$/);
+      if (fm) { const f = `${FONDOS_DIR}/${fm[1]}.jpg`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       if (p === "/biblia/versiones") return json({ versions: [...(RVR1960 ? [{ id: "RVR1960", name: "Reina-Valera 1960", url: "/biblia/rvr1960.json" }] : []), { id: "RV1909", name: "Reina-Valera 1909", url: "/biblia/rv1909.json" }] });
       if (p === "/biblia/rvr1960.json") return RVR1960 ? new Response(RVR1960, { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } }) : json({ error: "not_found" }, 404);
       if (p === "/biblia/rv1909.json") return new Response(Bun.file(new URL("./public/biblia/rv1909.json.gz", import.meta.url)), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
@@ -408,6 +426,30 @@ const SERVER = Bun.serve({
         if (sm && req.method === "DELETE") { if (user.role !== "admin") return json({ error: "forbidden" }, 403); await db`DELETE FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; resetIndex(); return json({ ok: true }); }
         return json({ error: "not_found" }, 404);
       }
+      if (p === "/api/proyector/estilo" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        STYLE = cleanStyle(await req.json().catch(() => ({})));
+        await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+        SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
+        return json(STYLE);
+      }
+      if (p === "/api/fondos" && req.method === "GET") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const files = [...new Bun.Glob("*.jpg").scanSync(FONDOS_DIR)].map(f => ({ url: "/fondo/" + f, at: statSync(`${FONDOS_DIR}/${f}`).mtimeMs })).sort((a, b) => b.at - a.at);
+        return json({ fondos: files });
+      }
+      if (p === "/api/fondos" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 15_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
+        const id = randomBytes(12).toString("hex"); const tmp = `/tmp/fondo-${id}`; await Bun.write(tmp, buf);
+        try {
+          const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(1920,iw)':-2", "-q:v", "3", `${FONDOS_DIR}/${id}.jpg`], { stdout: "ignore", stderr: "pipe" });
+          if ((await proc.exited) !== 0 || !existsSync(`${FONDOS_DIR}/${id}.jpg`)) return json({ error: "not_image" }, 415);
+        } finally { try { unlinkSync(tmp); } catch {} }
+        return json({ url: `/fondo/${id}.jpg` });
+      }
+      const fdm = p.match(/^\/api\/fondos\/([a-f0-9]{24})\.jpg$/);
+      if (fdm && req.method === "DELETE") { if (!user) return json({ error: "unauthorized" }, 401); try { unlinkSync(`${FONDOS_DIR}/${fdm[1]}.jpg`); } catch {} return json({ ok: true }); }
       if (p === "/api/proyector" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({}));
@@ -713,7 +755,7 @@ const SERVER = Bun.serve({
   websocket: {
     idleTimeout: 60,
     sendPings: true,
-    open(ws) { ws.subscribe("proj"); ws.send(JSON.stringify(PROJ)); },
+    open(ws) { ws.subscribe("proj"); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
     message(ws, msg) { if (msg === "ping") ws.send("pong"); },
     close(ws) { ws.unsubscribe("proj"); },
   },
