@@ -68,7 +68,7 @@ window.viewMensaje=function(){
         <button class="btn" data-act="ms-step" data-d="1" aria-label="Siguiente">▶</button>
         <button class="btn" data-act="ms-mode" data-m="black" aria-pressed="${r&&r.mode==='black'}">Negro</button>
         <button class="btn" data-act="ms-mode" data-m="logo" aria-pressed="${r&&r.mode==='logo'}">Logo</button>
-        <a class="btn" href="/proyector" target="_blank" rel="noopener">Abrir pantalla</a></div>`; }
+        <button class="btn" data-act="open-proj">Abrir pantalla</button></div>`; }
     return h+'</div>';
   }
   if(can) h+=`<div class="ms-imp"><div class="ms-head"><b style="flex:1">Biblioteca: ${MS.list?MS.list.length:'…'} mensajes</b><label class="btn" style="cursor:pointer">＋ Importar mensajes<input type="file" id="ms-file" accept=".pdf,.txt,.zip,application/pdf,text/plain,application/zip" multiple hidden></label></div>

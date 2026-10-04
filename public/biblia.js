@@ -114,7 +114,7 @@ window.viewBible=function(){
       <button class="btn" data-act="bb-step" data-d="1" aria-label="Versículo siguiente">▶</button>
       <button class="btn" data-act="bb-mode" data-m="black" aria-pressed="${r&&r.mode==='black'}">Negro</button>
       <button class="btn" data-act="bb-mode" data-m="logo" aria-pressed="${r&&r.mode==='logo'}">Logo</button>
-      <a class="btn" href="/proyector" target="_blank" rel="noopener">Abrir pantalla</a>
+      <button class="btn" data-act="open-proj">Abrir pantalla</button>
     </div>`:''}
     <p class="bb-note">${esc(BB.data.name)} · ${esc(BB.data.note||'')}</p>
   </div>`;

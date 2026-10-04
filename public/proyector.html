@@ -23,6 +23,22 @@ body.cur{cursor:default}
 .layer.has-ref .txt{height:76vh;margin-bottom:8vh}
 .hint{position:fixed;left:50%;bottom:5vh;transform:translateX(-50%);background:rgba(255,255,255,.1);color:#ddd;font-size:15px;padding:10px 18px;border-radius:999px;transition:opacity .5s;pointer-events:none;font-weight:600}
 .hint.off{opacity:0}
+.setup{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;background:#141416;border:1px solid #333;border-radius:16px;padding:18px 20px;width:min(560px,92vw);color:#eee;cursor:default;box-shadow:0 20px 60px rgba(0,0,0,.6);font-size:15px}
+.setup h2{margin:0 0 4px;font-size:20px;color:#e9c45a}
+.setup p{margin:4px 0 10px;color:#aaa;font-size:13.5px;line-height:1.4}
+.setup .map{position:relative;height:150px;margin:10px 0;background:#0b0b0c;border-radius:10px;border:1px solid #2a2a2e}
+.setup .scr{position:absolute;border:2px solid #555;border-radius:6px;background:#1d1d22;display:grid;place-items:center;font-weight:700;color:#ddd;cursor:pointer;text-align:center;line-height:1.1;font-size:12px;padding:2px}
+.setup .scr b{font-size:28px;display:block}
+.setup .scr.sel{border-color:#e9c45a;background:#3a3014;color:#fff}
+.setup .scr.here{box-shadow:inset 0 -4px 0 #6bcb97}
+.setup .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.setup button{font-family:inherit;font-weight:600;font-size:15px;border-radius:10px;border:1px solid #444;background:#222;color:#eee;padding:10px 14px;cursor:pointer}
+.setup button.pri{background:#e9c45a;color:#14110a;border-color:#e9c45a;flex:1}
+.setup .lg{font-size:12px;color:#888;margin-top:8px}
+.ident{position:fixed;inset:0;z-index:30;display:grid;place-items:center;font-size:40vh;font-weight:800;color:#e9c45a;background:rgba(0,0,0,.85);pointer-events:none}
+body.fs .setup{display:none}
+.gear{position:fixed;left:14px;bottom:12px;z-index:15;font:600 13px system-ui;border-radius:999px;border:1px solid #444;background:#1b1b1f;color:#ccc;padding:6px 12px;opacity:0;transition:opacity .3s;cursor:pointer}
+body.cur .gear{opacity:1}
 .dot{position:fixed;right:14px;bottom:12px;font-size:12px;color:#888;display:flex;gap:6px;align-items:center;opacity:0;transition:opacity .4s;font-weight:600}
 .dot::before{content:"";width:8px;height:8px;border-radius:50%;background:#c9a640}
 .dot.show{opacity:1}
@@ -33,6 +49,14 @@ body.cur{cursor:default}
   <div class="layer" id="L-b"><div class="txt"><p></p></div><div class="ref"></div></div>
 </div>
 <div class="hint" id="hint">Toca la pantalla para verla completa</div>
+<button id="gear" class="gear" title="Elegir pantalla (tecla P)">⚙ Pantalla</button>
+<div class="setup" id="setup" hidden>
+  <h2>📺 Elegir la pantalla del proyector</h2>
+  <p>Elige la pantalla externa (proyector o TV). Al pulsar el botón dorado, esta pantalla se pone completa <b>allí</b>, aunque esta ventana esté en tu monitor.</p>
+  <div class="map" id="map"></div>
+  <div class="row"><button class="pri" id="go">Proyectar en pantalla completa</button><button id="ident">Identificar</button><button id="later">Ahora no</button></div>
+  <div class="lg">★ principal · franja verde: donde está esta ventana ahora. Se recuerda para la próxima vez.</div>
+</div>
 <div class="dot" id="dot">Reconectando…</div>
 <script>
 "use strict";
@@ -79,9 +103,61 @@ setInterval(()=>{ if(ws&&ws.readyState===1) ws.send('ping'); },25000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ wake(); if(!ws||ws.readyState>1) connect(); } });
 
 let lock=null; async function wake(){ try{ if(navigator.wakeLock) lock=await navigator.wakeLock.request('screen'); }catch{} }
-function full(){ const d=document.documentElement; if(!document.fullscreenElement){ (d.requestFullscreen||d.webkitRequestFullscreen||function(){}).call(d); } }
-document.addEventListener('click',()=>{ full(); wake(); $('#hint').classList.add('off'); });
-document.addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') full(); });
+/* ---- Pantalla: elegir el monitor externo (Chrome/Edge, API de gestión de ventanas) ---- */
+let SD=null, selIdx=-1;
+const scrKey=s=>`${s.label||''}|${s.left},${s.top}|${s.width}x${s.height}`;
+function lsGet(k){ try{ return localStorage.getItem(k); }catch{ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch{} }
+async function loadScreens(ask){
+  if(!('getScreenDetails' in window)) return false;
+  try{
+    if(!ask){ const st=await navigator.permissions.query({name:'window-management'}).catch(()=>null); if(!st||st.state!=='granted') return false; }
+    SD=await window.getScreenDetails(); SD.addEventListener('screenschange',()=>{ pickDefault(); drawMap(); });
+    pickDefault(); return true;
+  }catch{ return false; }
+}
+function pickDefault(){
+  if(!SD) return; const saved=lsGet('vdn-screen'); const L=SD.screens;
+  selIdx=L.findIndex(s=>scrKey(s)===saved);
+  if(selIdx<0&&saved){ const lab=saved.split('|')[0]; selIdx=L.findIndex(s=>(s.label||'')===lab&&lab); }
+  if(selIdx<0) selIdx=L.findIndex(s=>!s.isPrimary); if(selIdx<0) selIdx=0;
+}
+function drawMap(){
+  const m=$('#map'); if(!m||!SD) return; const L=SD.screens;
+  const minX=Math.min(...L.map(s=>s.left)), minY=Math.min(...L.map(s=>s.top)), maxX=Math.max(...L.map(s=>s.left+s.width)), maxY=Math.max(...L.map(s=>s.top+s.height));
+  const W=m.clientWidth-20, H=m.clientHeight-20, k=Math.min(W/(maxX-minX), H/(maxY-minY)); const ox=10+(W-(maxX-minX)*k)/2, oy=10+(H-(maxY-minY)*k)/2;
+  m.innerHTML=L.map((s,i)=>`<div class="scr${i===selIdx?' sel':''}${s===SD.currentScreen?' here':''}" data-i="${i}" style="left:${ox+(s.left-minX)*k}px;top:${oy+(s.top-minY)*k}px;width:${s.width*k-4}px;height:${s.height*k-4}px"><span><b>${i+1}</b>${s.isPrimary?'★ ':''}${s.width}×${s.height}${s.isInternal?'<br>integrada':''}${s.label?`<br><small style="font-weight:500;opacity:.75">${String(s.label).replace(/[<>&]/g,'').slice(0,28)}</small>`:''}</span></div>`).join('');
+  m.querySelectorAll('.scr').forEach(el=>el.onclick=e=>{ e.stopPropagation(); selIdx=+el.dataset.i; lsSet('vdn-screen',scrKey(SD.screens[selIdx])); drawMap(); updGo(); });
+  updGo();
+}
+function updGo(){ const b=$('#go'); if(b&&SD&&SD.screens[selIdx]) b.textContent=`Proyectar en pantalla ${selIdx+1}${SD.screens[selIdx].isPrimary?' (principal)':''}`; }
+function full(){
+  const d=document.documentElement; if(document.fullscreenElement) return;
+  const scr=SD&&SD.screens[selIdx];
+  try{ const p=scr?d.requestFullscreen({screen:scr}):(d.requestFullscreen||d.webkitRequestFullscreen).call(d); if(p&&p.catch) p.catch(()=>{}); }catch{}
+}
+document.addEventListener('fullscreenchange',()=>{ document.body.classList.toggle('fs',!!document.fullscreenElement); });
+async function showSetup(){
+  const ok=await loadScreens(true); if(!ok||!SD||SD.screens.length<2){ if(ok&&SD&&SD.screens.length<2) alertOne(); return; }
+  $('#setup').hidden=false; $('#hint').classList.add('off'); drawMap();
+}
+function alertOne(){ const h=$('#hint'); h.textContent='Solo se detecta una pantalla. Conecta el proyector y elige “Extender” (tecla Windows + P).'; h.classList.remove('off'); setTimeout(()=>h.classList.add('off'),7000); }
+function ident(){ if(!SD) return; /* número grande en esta ventana y en ventanas pequeñas sobre cada pantalla */
+  const o=document.createElement('div'); o.className='ident'; o.textContent=String(SD.screens.indexOf(SD.currentScreen)+1); document.body.appendChild(o); setTimeout(()=>o.remove(),2500);
+  SD.screens.forEach((s,i)=>{ if(s===SD.currentScreen) return; const w=window.open('','vdn-id'+i,`popup,left=${s.availLeft+s.availWidth/2-160},top=${s.availTop+s.availHeight/2-120},width=320,height=240`); if(w){ w.document.write(`<body style="margin:0;background:#000;color:#e9c45a;font:800 180px system-ui;display:grid;place-items:center;height:100vh">${i+1}</body>`); setTimeout(()=>{ try{ w.close(); }catch{} },2500); } });
+}
+document.addEventListener('DOMContentLoaded',()=>{});
+setTimeout(()=>{
+  $('#go').onclick=e=>{ e.stopPropagation(); if(SD&&SD.screens[selIdx]) lsSet('vdn-screen',scrKey(SD.screens[selIdx])); $('#setup').hidden=true; full(); wake(); };
+  $('#ident').onclick=e=>{ e.stopPropagation(); ident(); };
+  $('#later').onclick=e=>{ e.stopPropagation(); $('#setup').hidden=true; };
+  $('#setup').addEventListener('click',e=>e.stopPropagation());
+  $('#gear').onclick=e=>{ e.stopPropagation(); showSetup(); };
+},0);
+document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wake();
+  if(!SD&&'getScreenDetails' in window&&!lsGet('vdn-screen-asked')){ lsSet('vdn-screen-asked','1'); await showSetup(); if(!$('#setup').hidden) return; }
+  full(); });
+document.addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
 let mt; document.addEventListener('mousemove',()=>{ document.body.classList.add('cur'); clearTimeout(mt); mt=setTimeout(()=>document.body.classList.remove('cur'),2000); });
 setTimeout(()=>$('#hint').classList.add('off'),6000);
 
@@ -89,5 +165,6 @@ document.fonts&&document.fonts.ready.then(()=>document.querySelectorAll('.txt p'
 show({mode:'logo',text:''});
 fetch('/api/proyector').then(r=>r.json()).then(show).catch(()=>{});
 connect(); wake();
+loadScreens(false).then(ok=>{ if(ok&&SD.screens.length>1){ const h=$('#hint'); h.textContent=`Toca para proyectar en la pantalla ${selIdx+1} · tecla P para cambiar de pantalla`; h.classList.remove('off'); } else if('getScreenDetails' in window){ const h=$('#hint'); h.textContent='Toca para elegir la pantalla del proyector'; } });
 </script>
 </body></html>

@@ -149,7 +149,7 @@ function pjRender(scrollTop){
       <span class="ttl">${esc(s?s.title:'')}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
-      <a class="btn" href="/proyector" target="_blank" rel="noopener">${ICON.screen}Abrir pantalla</a></div>
+      <button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pj-find"><input id="pj-q" type="search" placeholder="Buscar otra canción para proyectar…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar canción"><div class="pj-res" id="pj-res">${pjResHtml()}</div></div>
     ${PJ.songIds.length>1?`<div class="pj-songs">${PJ.songIds.map((id,i)=>`<button class="chip" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}">${i+1}. ${esc(S.songs.get(id)?.title||'')}</button>`).join('')}</div>`:''}
     <div class="pj-body" id="pj-body">
@@ -205,3 +205,14 @@ document.addEventListener('pointerdown',ev=>{
   if(Date.now()-last.t<450&&V.view==='song'&&V.songId===last.id&&!ev.target.closest('.pj-mini')){
     ev.preventDefault(); PJ.lastRow=null; PJ.swallow=Date.now()+700; pjAdd(last.id,true); pjRender(); toast('En pantalla: '+(S.songs.get(last.id)?.title||'')); }
 },true);
+
+/* Abre la pantalla del proyector; si ya se eligió el monitor externo, la abre directamente allí */
+async function openProyector(){
+  let feat='';
+  try{ if('getScreenDetails' in window){ const st=await navigator.permissions.query({name:'window-management'}).catch(()=>null);
+    if(st&&st.state==='granted'){ const sd=await window.getScreenDetails(); let saved=null; try{ saved=localStorage.getItem('vdn-screen'); }catch{}
+      const key=x=>`${x.label||''}|${x.left},${x.top}|${x.width}x${x.height}`; let s=sd.screens.find(x=>key(x)===saved)||sd.screens.find(x=>!x.isPrimary&&x!==sd.currentScreen);
+      if(s) feat=`popup,left=${s.availLeft},top=${s.availTop},width=${s.availWidth},height=${s.availHeight}`; } } }catch{}
+  const w=window.open('/proyector','vdn-proyector',feat); if(!w) toast('El navegador bloqueó la ventana. Permite ventanas emergentes para esta página.'); else { try{ w.focus(); }catch{} }
+}
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act="open-proj"]'); if(el){ ev.preventDefault(); openProyector(); } });
