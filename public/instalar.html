@@ -1,0 +1,103 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Instalar Voz de la Novia</title>
+<meta name="description" content="Instala la app Voz de la Novia en tu teléfono: letras, acordes y programas de alabanza.">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Voz de la Novia"><meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta property="og:title" content="Voz de la Novia — instala la app"><meta property="og:description" content="Unidos en una misma alabanza. Letras, acordes y programas en tu teléfono.">
+<meta property="og:image" content="/icon-512.png"><meta property="og:type" content="website">
+<style>
+:root{--bg:#000;--card:#141416;--line:#2a2a2e;--ink:#efece4;--muted:#a7a395;--gold:#e9c45a;--gold-ink:#14110a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 16px env(safe-area-inset-bottom,0)}
+main{max-width:560px;margin:0 auto;padding:28px 0 40px}
+.hero{text-align:center}
+.hero img{width:132px;height:132px;border-radius:28px;box-shadow:0 0 0 1px var(--line)}
+h1{font-family:Georgia,"Times New Roman",serif;color:var(--gold);font-size:30px;margin:14px 0 2px}
+.tag{font-family:Georgia,serif;font-style:italic;color:var(--muted);margin:0 0 18px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-weight:600;font-size:17px;line-height:1.2;text-decoration:none;cursor:pointer;margin:10px 0}
+.btn.pri{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:14px 0}
+.card h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+ol{margin:0;padding-left:22px}li{margin:6px 0}
+.ic{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;background:#2a2a2e;vertical-align:-7px;margin:0 2px}
+.ic svg{width:16px;height:16px}
+.muted{color:var(--muted);font-size:14px}
+.ok{color:#6bcb97;font-weight:600;text-align:center}
+.qr{display:flex;gap:16px;align-items:center}
+.qr canvas,.qr img{background:#fff;padding:8px;border-radius:10px;width:150px;height:150px;flex:none}
+.link{word-break:break-all;color:var(--gold);font-size:14px}
+[hidden]{display:none!important}
+@media (max-width:420px){.qr{flex-direction:column;text-align:center}}
+</style></head><body><main>
+<div class="hero">
+  <img src="/icon-512.png" alt="Logo Voz de la Novia" width="132" height="132">
+  <h1>Voz de la Novia</h1>
+  <p class="tag">Unidos en una misma alabanza</p>
+</div>
+
+<p id="installed" class="ok" hidden>✓ Ya tienes la app instalada en este equipo.</p>
+<button id="install" class="btn pri" hidden>📲 Instalar la app</button>
+<a class="btn" href="/">Abrir en el navegador</a>
+
+<div id="ios" class="card" hidden>
+  <h2>📱 iPhone o iPad</h2>
+  <p id="ios-safari" class="muted" style="margin:0 0 8px" hidden>Primero ábrelo en <b>Safari</b>: toca <b>⋯</b> o el ícono de brújula y elige <b>Abrir en Safari</b>.</p>
+  <ol>
+    <li>Toca <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e9c45a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span> <b>Compartir</b> (abajo o arriba en la barra).</li>
+    <li>Baja y elige <b>Agregar a inicio</b> <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e9c45a" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span>.</li>
+    <li>Toca <b>Agregar</b>. El ícono aparece en tu pantalla de inicio.</li>
+  </ol>
+</div>
+
+<div id="android" class="card" hidden>
+  <h2>🤖 Android</h2>
+  <ol>
+    <li>Ábrelo en <b>Chrome</b>.</li>
+    <li>Toca el botón <b>Instalar la app</b> de arriba. Si no aparece, toca el menú <b>⋮</b> y elige <b>Instalar app</b> o <b>Agregar a la pantalla principal</b>.</li>
+    <li>Confirma con <b>Instalar</b>.</li>
+  </ol>
+</div>
+
+<div id="pc" class="card" hidden>
+  <h2>💻 Computadora</h2>
+  <p style="margin:0">Úsala directamente en el navegador con <b>Abrir en el navegador</b>. En Chrome o Edge también puedes instalarla con el ícono <b>Instalar</b> de la barra de direcciones.</p>
+</div>
+
+<div class="card">
+  <h2>🔗 Compartir con el equipo</h2>
+  <div class="qr"><canvas id="qr" width="150" height="150" aria-label="Código QR para instalar"></canvas>
+    <div><p class="muted" style="margin:0 0 6px">Escanea el código con la cámara del teléfono o comparte este enlace:</p><div class="link" id="link"></div></div></div>
+  <button id="share" class="btn">Compartir enlace</button>
+</div>
+<p class="muted" style="text-align:center">Tabernáculo Shalom Adonai · Voz de la Novia</p>
+</main>
+<script src="/qrcode.js"></script>
+<script>
+"use strict";
+const LINK=location.origin+'/instalar';
+document.getElementById('link').textContent=LINK;
+const ua=navigator.userAgent;
+const isIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isAndroid=/Android/i.test(ua);
+const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const inApp=/FBAN|FBAV|Instagram|Line\/|WhatsApp|GSA\//i.test(ua)||(isIOS&&!/Safari/i.test(ua));
+if(standalone) document.getElementById('installed').hidden=false;
+document.getElementById(isIOS?'ios':isAndroid?'android':'pc').hidden=false;
+if(isIOS&&inApp) document.getElementById('ios-safari').hidden=false;
+if(!isIOS&&!isAndroid){ document.getElementById('ios').hidden=false; document.getElementById('android').hidden=false; }
+let deferred=null; const ib=document.getElementById('install');
+addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferred=e; if(!standalone) ib.hidden=false; });
+ib.addEventListener('click',async()=>{ if(!deferred) return; deferred.prompt(); const r=await deferred.userChoice.catch(()=>null); deferred=null; ib.hidden=true; if(r&&r.outcome==='accepted') document.getElementById('installed').hidden=false; });
+addEventListener('appinstalled',()=>{ ib.hidden=true; document.getElementById('installed').hidden=false; });
+try{ const q=qrcode(0,'M'); q.addData(LINK); q.make(); const c=document.getElementById('qr'); const n=q.getModuleCount(), sc=Math.floor(300/(n+2)); c.width=c.height=sc*(n+2); const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.fillStyle='#000'; for(let r=0;r<n;r++) for(let k=0;k<n;k++) if(q.isDark(r,k)) x.fillRect((k+1)*sc,(r+1)*sc,sc,sc); }catch(e){ document.getElementById('qr').hidden=true; }
+document.getElementById('share').addEventListener('click',async()=>{
+  const data={title:'Voz de la Novia',text:'Instala la app Voz de la Novia (letras y acordes de alabanza):',url:LINK};
+  if(navigator.share){ try{ await navigator.share(data); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+  try{ await navigator.clipboard.writeText(LINK); document.getElementById('share').textContent='✓ Enlace copiado'; }catch{ prompt('Copia este enlace:',LINK); }
+});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script></body></html>

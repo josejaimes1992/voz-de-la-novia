@@ -145,7 +145,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -306,6 +306,9 @@ const SERVER = Bun.serve({
     const url = new URL(req.url);
     const p = url.pathname;
     try {
+      if (p === "/manifest.webmanifest") return new Response(Bun.file(new URL("./public/manifest.webmanifest", import.meta.url)), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
+      if (p === "/sw.js") return new Response(Bun.file(new URL("./public/sw.js", import.meta.url)), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+      if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(Bun.file(new URL("./public/instalar.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
       if (p === "/proyector") return new Response(PROJ_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
