@@ -395,6 +395,16 @@ const SERVER = Bun.serve({
         }
         const sm = p.match(/^\/api\/sermons\/([A-Za-z0-9_-]{1,80})$/);
         if (sm && req.method === "GET") { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; return r[0] ? json(parseJ(r[0].data)) : json({ error: "not_found" }, 404); }
+        if (sm && req.method === "PUT") {
+          const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; if (!r[0]) return json({ error: "not_found" }, 404);
+          const old = parseJ(r[0].data); const b = await req.json().catch(() => ({}));
+          const paras = Array.isArray(b.paras) ? b.paras.slice(0, 3000).map((x: any) => ({ n: String(x.n ?? "").slice(0, 8), t: String(x.t ?? "").replace(/\s+/g, " ").trim().slice(0, 20000) })).filter((x: any) => x.t) : old.paras;
+          if (!paras.length) return json({ error: "empty" }, 400);
+          const code = typeof b.code === "string" ? b.code.trim().slice(0, 20) : old.code;
+          const data = { ...old, title: typeof b.title === "string" && b.title.trim() ? b.title.trim().slice(0, 160) : old.title, code, date: /^\d{2}-\d{4}/.test(code) ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : old.date, paras, editedBy: user.name, editedAt: Date.now() };
+          await db`UPDATE docs SET data = ${JSON.stringify(data)}::jsonb, updated_at = ${Date.now()} WHERE col = 'sermons' AND id = ${sm[1]}`;
+          resetIndex(); return json(data);
+        }
         if (sm && req.method === "DELETE") { if (user.role !== "admin") return json({ error: "forbidden" }, 403); await db`DELETE FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; resetIndex(); return json({ ok: true }); }
         return json({ error: "not_found" }, 404);
       }

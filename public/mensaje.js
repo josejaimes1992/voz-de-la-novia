@@ -1,6 +1,6 @@
 /* Voz de la Novia — Mensaje: buscar citas de los sermones y proyectarlas (como la Biblia) */
 "use strict";
-const MS={list:null,loading:false,err:'',cur:null,curId:null,p:null,part:0,live:false,q:'',res:null,remote:null,imp:null};
+const MS={edit:false,list:null,loading:false,err:'',cur:null,curId:null,p:null,part:0,live:false,q:'',res:null,remote:null,imp:null};
 const MS_WORDS=55;
 
 (function(){ const st=document.createElement('style'); st.textContent=`
@@ -27,7 +27,7 @@ async function msLoadList(force){
   MS.loading=false; if(V.view==='mensaje') render();
 }
 async function msOpen(id,p){
-  MS.curId=id; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
+  MS.curId=id; MS.edit=false; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
     try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(id)); }catch{ toast('No se pudo abrir el mensaje.'); MS.curId=null; } }
   MS.q=''; MS.res=null; render(); if(MS.p!=null) setTimeout(msScroll,30);
 }
@@ -50,7 +50,15 @@ window.viewMensaje=function(){
   if(MS.curId){
     const s=MS.cur;
     if(!s) return h+'<div class="loading">Abriendo el mensaje…</div></div>';
-    h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code></div>
+    if(MS.edit&&can){
+      const txt=s.paras.map(p=>`${p.n} ${p.t}`).join('\n\n');
+      return h+`<div class="ms-head"><button class="btn ghost" data-act="ms-edit-cancel">${ICON.back}Cancelar</button><h2>Editar mensaje</h2></div>
+        <div class="grid2"><label class="f">Título<input id="ms-e-title" value="${esc(s.title)}"></label><label class="f">Código<input id="ms-e-code" value="${esc(s.code||'')}" placeholder="65-1125"></label></div>
+        <p class="muted" style="margin:0;font-size:13px">Cada párrafo empieza con su número y se separa del siguiente con una línea en blanco. Puedes corregir el texto, unir o separar párrafos.</p>
+        <textarea id="ms-e-text" spellcheck="true" style="width:100%;min-height:60vh;font:inherit;font-size:16px;line-height:1.5;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:inherit;resize:vertical">${esc(txt)}</textarea>
+        <div class="actions"><button class="btn pri" data-act="ms-edit-save">Guardar cambios</button><button class="btn" data-act="ms-edit-cancel">Cancelar</button>${S.isAdmin?`<span style="flex:1"></span>${V.confirm==='ms-del'?`<span class="confirm">¿Borrar este mensaje? <button class="btn danger" data-act="ms-del-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="ms-del">Borrar mensaje</button>`}`:''}</div></div>`;
+    }
+    h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
       <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${esc(p.t)}</button>`).join('')}</div>`;
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const parts=P?msParts(P.t):[];
       h+=`<div class="bb-bar">
@@ -113,6 +121,16 @@ async function msImport(files){
   MS.imp=`Listo: ${ok} ${ok===1?'mensaje importado':'mensajes importados'}.${bad.length?` No se pudieron leer ${bad.length}: ${bad.slice(0,5).join(', ')}${bad.length>5?'…':''}`:''}`;
   await msLoadList(true); render();
 }
+async function msSaveEdit(){
+  const s=MS.cur; if(!s) return; const raw=($('#ms-e-text').value||'').replace(/\r/g,'');
+  const paras=[]; let last=0;
+  for(const blk of raw.split(/\n\s*\n/)){ const b=blk.replace(/\s+/g,' ').trim(); if(!b) continue;
+    const m=b.match(/^(?:¶\s*)?(\d{1,4}[a-z]?)[.)]?\s+(.+)$/i);
+    if(m){ paras.push({n:m[1],t:m[2]}); last=parseInt(m[1],10)||last; } else { last++; paras.push({n:String(last),t:b}); } }
+  if(!paras.length){ toast('El texto está vacío.'); return; }
+  try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(s.id),{method:'PUT',body:JSON.stringify({title:$('#ms-e-title').value,code:$('#ms-e-code').value,paras})}); MS.edit=false; MS.p=null; toast('Mensaje guardado.'); msLoadList(true); render(); }
+  catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar.'); }
+}
 function msAfter(){
   const qi=$('#ms-q'); if(qi){ qi.addEventListener('input',e=>{ MS.q=e.target.value; clearTimeout(MS.t); MS.res=null; const b=$('#ms-res'); if(b&&!MS.q.trim()) b.innerHTML=''; MS.t=setTimeout(msSearch,220); });
     qi.addEventListener('keydown',e=>{ if(e.key==='Escape'){ MS.q=''; qi.value=''; MS.res=null; $('#ms-res').innerHTML=''; qi.blur(); } });
@@ -123,7 +141,12 @@ document.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='ms-open') msOpen(d.id,null);
   else if(a==='ms-go'){ (async()=>{ await msOpen(d.id,null); const s=MS.cur; if(!s) return; const i=s.paras.findIndex(p=>p.n===d.n); MS.p=i>=0?i:null; MS.part=0; render(); setTimeout(msScroll,30); if(MS.live&&MS.p!=null) msProject(); })(); }
-  else if(a==='ms-back'){ MS.curId=null; MS.p=null; render(); }
+  else if(a==='ms-back'){ MS.curId=null; MS.p=null; MS.edit=false; render(); }
+  else if(a==='ms-edit'){ MS.edit=true; V.confirm=null; render(); window.scrollTo(0,0); }
+  else if(a==='ms-edit-cancel'){ MS.edit=false; V.confirm=null; render(); }
+  else if(a==='ms-edit-save') msSaveEdit();
+  else if(a==='ms-del'){ V.confirm='ms-del'; render(); }
+  else if(a==='ms-del-yes'){ (async()=>{ try{ await api('/api/sermons/'+encodeURIComponent(MS.curId),{method:'DELETE'}); toast('Mensaje borrado.'); MS.curId=null; MS.cur=null; MS.edit=false; V.confirm=null; await msLoadList(true); render(); }catch{ toast('No se pudo borrar.'); } })(); }
   else if(a==='ms-p'){ const i=+d.i; const again=MS.p===i; if(!again){ MS.p=i; MS.part=0; } render(); if(MS.live||again) msProject(); }
   else if(a==='ms-proj'){ if(MS.p==null) toast('Primero elige un párrafo.'); else if(MS.live&&MS.remote&&MS.remote.sermon&&MS.remote.mode==='text'&&MS.remote.sermon.p===MS.p){ MS.live=false; render(); toast('Modo en vivo apagado.'); } else msProject(); }
   else if(a==='ms-step') msStep(+d.d);
