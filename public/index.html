@@ -312,6 +312,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
   <div class="tabs" role="tablist">
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
+    <button id="tab-bible" data-act="tab" data-tab="bible" aria-pressed="false">Biblia</button>
   </div>
   <button class="nota" data-act="tuner" style="font-family:var(--f-ui);font-weight:600" title="Afinador de guitarra">Afinador</button>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
@@ -504,7 +505,7 @@ function warmSearch(){ const all=[...S.songs.values()]; let i=0; const step=dl=>
 function onData(){ warmSearch(); if(V.view==='edit'||V.view==='cifrar') return; render(); if(V.live) renderLive(); }
 function render(){
   $('#tab-songs').setAttribute('aria-pressed',V.tab==='songs');
-  $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs');
+  $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs'); $('#tab-bible').setAttribute('aria-pressed',V.tab==='bible');
   $('#nota').textContent=V.latin?'Do–Si':'A–G'; authButton();
   document.documentElement.style.setProperty('--lyric',V.size);
   const m=$('#view');
@@ -517,9 +518,11 @@ function render(){
   else if(V.view==='program') html=viewProgram();
   else if(V.view==='trash') html=window.viewTrash?viewTrash():'';
   else if(V.view==='cifrar') html=window.viewCifrar?viewCifrar():'';
+  else if(V.view==='bible') html=window.viewBible?viewBible():'';
   m.innerHTML=html;
   if(V.view==='edit') bindEditor();
   if(V.view==='cifrar'&&window.cifAfterRender) cifAfterRender();
+  if(V.view==='bible'&&window.bibleAfterRender) bibleAfterRender();
 }
 function banner(){
   if(S.error) return '<div class="banner">No se pudo conectar con el servidor. Revisa tu internet; la página lo volverá a intentar sola.</div>';
@@ -997,7 +1000,7 @@ document.addEventListener('click',async ev=>{
   const a=el.dataset.act, ds=el.dataset;
   switch(a){
     case 'auth': if(S.user) openUserMenu(); else openLogin(); break;
-    case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':'programs'); break;
+    case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':ds.tab==='bible'?'bible':'programs'); break;
     case 'nota': V.latin=!V.latin; lsSet('cancionero-latin',V.latin); render(); if(V.live) renderLive(); break;
     case 'group': V.group=ds.v==='1'; render(); break;
     case 'key': V.key=ds.k; render(); break;
@@ -1075,6 +1078,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=2"></script>
+<script src="/biblia.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
 <script src="/cifrador.js?v=8"></script>
 </body></html>

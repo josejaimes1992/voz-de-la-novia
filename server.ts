@@ -145,10 +145,10 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
-type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
+type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
 const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
@@ -306,6 +306,7 @@ const SERVER = Bun.serve({
     const url = new URL(req.url);
     const p = url.pathname;
     try {
+      if (p === "/biblia/rv1909.json") return new Response(Bun.file(new URL("./public/biblia/rv1909.json.gz", import.meta.url)), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
       if (p === "/manifest.webmanifest") return new Response(Bun.file(new URL("./public/manifest.webmanifest", import.meta.url)), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
       if (p === "/sw.js") return new Response(Bun.file(new URL("./public/sw.js", import.meta.url)), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
       if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(Bun.file(new URL("./public/instalar.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
@@ -366,7 +367,8 @@ const SERVER = Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({}));
         const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
-        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60),
+        const bib = b.bible && Number.isInteger(b.bible.b) && Number.isInteger(b.bible.c) && Number.isInteger(b.bible.v) ? { b: b.bible.b, c: b.bible.c, v: b.bible.v } : undefined;
+        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 120), bible: bib,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, by: user.name, at: Date.now() };
         SERVER.publish("proj", JSON.stringify(PROJ));

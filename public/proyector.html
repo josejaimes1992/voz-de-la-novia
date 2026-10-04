@@ -19,6 +19,8 @@ body.cur{cursor:default}
 .txt p{margin:0;font-weight:700;line-height:1.22;white-space:pre-line;text-wrap:balance;text-shadow:0 2px 12px rgba(0,0,0,.6);letter-spacing:.005em}
 .logos{display:flex;align-items:center;justify-content:center;gap:6vw;height:100%}
 .logos img{height:min(52vh,40vw);width:auto;display:block}
+.ref{position:absolute;left:0;right:0;bottom:4.5vh;text-align:center;color:#e9c45a;font-weight:700;font-size:min(5vh,4vw);letter-spacing:.02em;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.layer.has-ref .txt{height:76vh;margin-bottom:8vh}
 .hint{position:fixed;left:50%;bottom:5vh;transform:translateX(-50%);background:rgba(255,255,255,.1);color:#ddd;font-size:15px;padding:10px 18px;border-radius:999px;transition:opacity .5s;pointer-events:none;font-weight:600}
 .hint.off{opacity:0}
 .dot{position:fixed;right:14px;bottom:12px;font-size:12px;color:#888;display:flex;gap:6px;align-items:center;opacity:0;transition:opacity .4s;font-weight:600}
@@ -27,8 +29,8 @@ body.cur{cursor:default}
 </style></head><body>
 <div class="stage" id="stage">
   <div class="layer" id="L-logo"><div class="logos"><img src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><img src="/shalom-logo.jpg?v=1" alt="Tabernáculo Shalom Adonai"></div></div>
-  <div class="layer" id="L-a"><div class="txt"><p></p></div></div>
-  <div class="layer" id="L-b"><div class="txt"><p></p></div></div>
+  <div class="layer" id="L-a"><div class="txt"><p></p></div><div class="ref"></div></div>
+  <div class="layer" id="L-b"><div class="txt"><p></p></div><div class="ref"></div></div>
 </div>
 <div class="hint" id="hint">Toca la pantalla para verla completa</div>
 <div class="dot" id="dot">Reconectando…</div>
@@ -53,13 +55,13 @@ function fit(p){
   p.style.fontSize=s+'px';
 }
 function show(st){
-  cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text:'');
+  cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text+'|'+(st.ref||''):'');
   if(key===lastKey) return; lastKey=key;
   $('#L-logo').classList.toggle('on', st.mode==='logo');
   const A=$('#L-a'), B=$('#L-b');
   if(st.mode!=='text'){ A.classList.remove('on'); B.classList.remove('on'); return; }
   const next=front==='a'?B:A, prev=front==='a'?A:B;
-  const p=next.querySelector('p'); p.textContent=st.text; fit(p);
+  next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); p.textContent=st.text; fit(p);
   next.classList.add('on'); prev.classList.remove('on'); front=front==='a'?'b':'a';
 }
 addEventListener('resize',()=>{ document.querySelectorAll('.txt p').forEach(fit); });
