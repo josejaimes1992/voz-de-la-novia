@@ -51,6 +51,8 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .tabs{display:flex;gap:4px;background:#1B1A17;padding:3px;border-radius:999px}
 .tabs button{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;color:#B9B09A}
 .tabs button[aria-pressed="true"]{background:var(--gold);color:#14110A}
+.tabs{max-width:100%;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tabs button{white-space:nowrap;flex:none}
+@media (max-width:480px){.tabs button{padding:6px 8px;font-size:13.5px}}
 .nota{border:1px solid #3A3426;background:transparent;border-radius:999px;padding:5px 10px;font-family:var(--f-mono);font-size:12px;color:#B9B09A}
 .foot{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:0 28px;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;text-align:center}
 @media (max-width:520px){.brand .mark{width:74px;height:42px}.brand b{font-size:18px}}
@@ -313,6 +315,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true">Canciones</button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false">Programas</button>
     <button id="tab-bible" data-act="tab" data-tab="bible" aria-pressed="false">Biblia</button>
+    <button id="tab-msg" data-act="tab" data-tab="mensaje" aria-pressed="false">Mensaje</button>
   </div>
   <button class="nota" data-act="tuner" style="font-family:var(--f-ui);font-weight:600" title="Afinador de guitarra">Afinador</button>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
@@ -505,7 +508,7 @@ function warmSearch(){ const all=[...S.songs.values()]; let i=0; const step=dl=>
 function onData(){ warmSearch(); if(V.view==='edit'||V.view==='cifrar') return; render(); if(V.live) renderLive(); }
 function render(){
   $('#tab-songs').setAttribute('aria-pressed',V.tab==='songs');
-  $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs'); $('#tab-bible').setAttribute('aria-pressed',V.tab==='bible');
+  $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs'); $('#tab-bible').setAttribute('aria-pressed',V.tab==='bible'); $('#tab-msg').setAttribute('aria-pressed',V.tab==='mensaje');
   $('#nota').textContent=V.latin?'Do–Si':'A–G'; authButton();
   document.documentElement.style.setProperty('--lyric',V.size);
   const m=$('#view');
@@ -519,10 +522,12 @@ function render(){
   else if(V.view==='trash') html=window.viewTrash?viewTrash():'';
   else if(V.view==='cifrar') html=window.viewCifrar?viewCifrar():'';
   else if(V.view==='bible') html=window.viewBible?viewBible():'';
+  else if(V.view==='mensaje') html=window.viewMensaje?viewMensaje():'';
   m.innerHTML=html;
   if(V.view==='edit') bindEditor();
   if(V.view==='cifrar'&&window.cifAfterRender) cifAfterRender();
   if(V.view==='bible'&&window.bibleAfterRender) bibleAfterRender();
+  if(V.view==='mensaje'&&window.mensajeAfterRender) mensajeAfterRender();
 }
 function banner(){
   if(S.error) return '<div class="banner">No se pudo conectar con el servidor. Revisa tu internet; la página lo volverá a intentar sola.</div>';
@@ -1000,7 +1005,7 @@ document.addEventListener('click',async ev=>{
   const a=el.dataset.act, ds=el.dataset;
   switch(a){
     case 'auth': if(S.user) openUserMenu(); else openLogin(); break;
-    case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':ds.tab==='bible'?'bible':'programs'); break;
+    case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':ds.tab==='bible'?'bible':ds.tab==='mensaje'?'mensaje':'programs'); break;
     case 'nota': V.latin=!V.latin; lsSet('cancionero-latin',V.latin); render(); if(V.live) renderLive(); break;
     case 'group': V.group=ds.v==='1'; render(); break;
     case 'key': V.key=ds.k; render(); break;
@@ -1079,6 +1084,7 @@ render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view===
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=2"></script>
 <script src="/biblia.js?v=2"></script>
+<script src="/mensaje.js?v=1"></script>
 <script src="/excel.js?v=1"></script>
 <script src="/cifrador.js?v=8"></script>
 </body></html>

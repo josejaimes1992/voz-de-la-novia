@@ -1,5 +1,6 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
+import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex } from "./sermones.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
 
@@ -145,10 +146,10 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
-type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
+type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
 /* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
 let RVR1960: Uint8Array | null = null;
@@ -371,12 +372,38 @@ const SERVER = Bun.serve({
         return json({ token, user: publicUser(rows[0]) });
       }
       const user = p.startsWith("/api/") ? await currentUser(req) : null;
+      /* ---- Mensajes del hermano Branham (solo equipo con sesión) ---- */
+      if (p.startsWith("/api/sermons")) {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        if (p === "/api/sermons" && req.method === "GET") return json({ sermons: await sermonList(db) });
+        if (p === "/api/sermons/search" && req.method === "GET") return json(await sermonSearch(db, url.searchParams.get("q") ?? ""));
+        if (p === "/api/sermons/import" && req.method === "POST") {
+          const name = decodeURIComponent(req.headers.get("x-file-name") ?? "mensaje").slice(0, 200);
+          const buf = new Uint8Array(await req.arrayBuffer());
+          if (buf.length > 30_000_000) return json({ error: "too_large" }, 413);
+          const isPdf = buf.length > 5 && String.fromCharCode(...buf.slice(0, 5)) === "%PDF-";
+          const text = isPdf ? await pdfText(buf) : new TextDecoder("utf-8").decode(buf);
+          if (!text || text.trim().length < 200) return json({ error: "no_text", file: name }, 422);
+          const ser = parseSermon(text, name);
+          if (!ser) return json({ error: "no_paras", file: name }, 422);
+          const prev = await db`SELECT id FROM docs WHERE col = 'sermons' AND id = ${ser.id}`;
+          const data = { ...ser, file: name, by: user.name, at: Date.now() };
+          await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('sermons', ${ser.id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
+                   ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+          resetIndex();
+          return json({ ok: true, id: ser.id, code: ser.code, title: ser.title, paras: ser.paras.length, replaced: !!prev[0] });
+        }
+        const sm = p.match(/^\/api\/sermons\/([A-Za-z0-9_-]{1,80})$/);
+        if (sm && req.method === "GET") { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; return r[0] ? json(parseJ(r[0].data)) : json({ error: "not_found" }, 404); }
+        if (sm && req.method === "DELETE") { if (user.role !== "admin") return json({ error: "forbidden" }, 403); await db`DELETE FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; resetIndex(); return json({ ok: true }); }
+        return json({ error: "not_found" }, 404);
+      }
       if (p === "/api/proyector" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({}));
         const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
         const bib = b.bible && Number.isInteger(b.bible.b) && Number.isInteger(b.bible.c) && Number.isInteger(b.bible.v) ? { b: b.bible.b, c: b.bible.c, v: b.bible.v } : undefined;
-        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 120), bible: bib,
+        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0 } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, by: user.name, at: Date.now() };
         SERVER.publish("proj", JSON.stringify(PROJ));
