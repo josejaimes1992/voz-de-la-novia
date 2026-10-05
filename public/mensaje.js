@@ -27,7 +27,7 @@ async function msLoadList(force){
   MS.loading=false; if(V.view==='mensaje') render();
 }
 async function msOpen(id,p){
-  if(MS.curId!==id) MS.listScroll=0; MS.curId=id; MS.edit=false; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
+  if(MS.curId!==id){ MS.listScroll=0; MS.qIn=''; } MS.curId=id; MS.edit=false; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
     try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(id)); }catch{ toast('No se pudo abrir el mensaje.'); MS.curId=null; } }
   MS.q=''; MS.res=null; render(); if(MS.p!=null) setTimeout(msScroll,30);
 }
@@ -45,8 +45,9 @@ window.viewMensaje=function(){
   msLoadList();
   const can=S.canWrite; const r=MS.remote||(typeof PJ!=='undefined'&&PJ.remote)||null; const onP=r&&r.mode==='text'&&r.sermon?r.sermon:null;
   let h=`<div class="bb">
-    <div class="bb-find"><div class="search">${ICON.search}<input id="ms-q" type="search" autocomplete="off" placeholder="Busca una frase del Mensaje, un título o un código (65-1125)" value="${esc(MS.q)}" aria-label="Buscar en el Mensaje"></div></div>
-    <div id="ms-res" class="bb-sug">${msResHtml()}</div>`;
+    ${MS.curId&&MS.cur?`<div class="bb-find"><div class="search">${ICON.search}<input id="ms-qin" type="search" autocomplete="off" placeholder="Buscar en este mensaje…" value="${esc(MS.qIn||'')}" aria-label="Buscar en este mensaje"></div><button class="btn ghost" data-act="ms-back" title="Volver a la lista y buscar en todos los mensajes">Buscar en todos</button></div>
+    <div id="ms-resin" class="bb-sug" style="max-height:26vh">${msInHtml()}</div>`:`<div class="bb-find"><div class="search">${ICON.search}<input id="ms-q" type="search" autocomplete="off" placeholder="Busca una frase en todos los mensajes, un título o un código (65-1125)" value="${esc(MS.q)}" aria-label="Buscar en el Mensaje"></div></div>
+    <div id="ms-res" class="bb-sug">${msResHtml()}</div>`}`;
   if(MS.curId){
     const s=MS.cur;
     if(!s) return h+'<div class="loading">Abriendo el mensaje…</div></div>';
@@ -59,7 +60,7 @@ window.viewMensaje=function(){
         <div class="actions"><button class="btn pri" data-act="ms-edit-save">Guardar cambios</button><button class="btn" data-act="ms-edit-cancel">Cancelar</button>${S.isAdmin?`<span style="flex:1"></span>${V.confirm==='ms-del'?`<span class="confirm">¿Borrar este mensaje? <button class="btn danger" data-act="ms-del-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="ms-del">Borrar mensaje</button>`}`:''}</div></div>`;
     }
     h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}${s.place?`<small style="display:block;font-family:var(--f-ui);font-size:13.5px;color:var(--muted);font-weight:500;margin-top:2px">${esc(s.place)}</small>`:''}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
-      <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${esc(p.t)}</button>`).join('')}</div>`;
+      <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${MS.qIn&&MS.qIn.trim().length>1?msMark(p.t,MS.qIn):esc(p.t)}</button>`).join('')}</div>`;
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const steps=P?msSteps(P.t):0; const onThis=onP&&onP.id===s.id&&onP.p===MS.p;
       h+=`<div class="bb-bar">
         ${window.bbLiveBox?bbLiveBox(r):''}
@@ -84,6 +85,12 @@ window.viewMensaje=function(){
   return h+'</div>';
 };
 function msMark(text,q){ const toks=msNorm(q).split(/[^a-z0-9ñ]+/).filter(t=>t.length>1); let out=esc(text); for(const t of toks){ const re=new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').split('').map(c=>({a:'[aáà]',e:'[eéè]',i:'[iíì]',o:'[oóò]',u:'[uúùü]',n:'[nñ]'}[c]||c)).join('')+')','gi'); out=out.replace(re,'<mark>$1</mark>'); } return out; }
+/* Buscar dentro del mensaje abierto */
+function msInHits(){ const s=MS.cur, q=(MS.qIn||'').trim(); if(!s||q.length<2) return null; const toks=msNorm(q).split(/[^a-z0-9ñ]+/).filter(t=>t.length>1); if(!toks.length) return null; const phrase=toks.join(' ');
+  const out=[]; s.paras.forEach((p,i)=>{ const n=msNorm(p.t); if(toks.every(t=>n.includes(t))){ const at=Math.max(0,n.indexOf(n.includes(phrase)?phrase:toks[0])-60); out.push({i,n:p.n,exact:n.includes(phrase),snip:(at?'…':'')+p.t.slice(at,at+200)+(p.t.length>at+200?'…':'')}); } });
+  return out.sort((a,b)=>(b.exact?1:0)-(a.exact?1:0)||a.i-b.i); }
+function msInHtml(){ const H=msInHits(); if(!H) return ''; if(!H.length) return '<p class="bb-note">No aparece en este mensaje. Prueba con otra palabra o “Buscar en todos”.</p>';
+  return `<p class="bb-note" style="margin:0 2px">${H.length} ${H.length===1?'párrafo':'párrafos'} · Enter va al siguiente</p>`+H.slice(0,40).map(h=>`<button data-act="ms-inhit" data-i="${h.i}"><b>¶${esc(h.n)}</b><small class="ms-snip">${msMark(h.snip,MS.qIn)}</small></button>`).join(''); }
 function msResHtml(){
   if(!MS.q.trim()) return ''; const R=MS.res; if(!R) return '<p class="bb-note">Buscando…</p>';
   let h=''; for(const t of R.titles||[]) h+=`<button data-act="ms-open" data-id="${esc(t.id)}"><b>${esc(t.code)} · ${esc(t.title)}</b>${t.place?`<small>${esc(t.place)}</small>`:''}</button>`;
@@ -99,6 +106,7 @@ async function msSearch(){
 }
 function msScroll(){ const cur=document.querySelector('#ms-plist [aria-current="true"]'); const L=$('#ms-plist'); if(cur&&L){ const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/4; } }
 function msSteps(t){ const x=(typeof BB!=='undefined'&&BB.style)||MS.style||{}; const z=+x.size||1; const per=Math.max(12,Math.round(40/(z*z)*(x.upper?0.82:1))); return Math.max(0,Math.ceil(t.split(/\s+/).length/per)-1); }
+function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true; render(); setTimeout(msScroll,20); }
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
   const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const steps=msSteps(P.t); MS.part=Math.max(0,Math.min(MS.part,steps));
@@ -144,6 +152,10 @@ async function msSaveEdit(){
   catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar.'); }
 }
 function msAfter(){
+  const qn=$('#ms-qin'); if(qn){ const upd=()=>{ const b=$('#ms-resin'); if(b) b.innerHTML=msInHtml(); const L=$('#ms-plist'); if(L){ const s=MS.cur; L.querySelectorAll('.ms-p').forEach(el=>{ const p=s.paras[+el.dataset.i]; el.innerHTML=`<b>${esc(p.n)}</b>${MS.qIn&&MS.qIn.trim().length>1?msMark(p.t,MS.qIn):esc(p.t)}`; }); } };
+    qn.addEventListener('input',e=>{ MS.qIn=e.target.value; MS.inIdx=-1; clearTimeout(MS.ti); MS.ti=setTimeout(upd,120); });
+    qn.addEventListener('keydown',e=>{ if(e.key==='Escape'){ MS.qIn=''; qn.value=''; upd(); qn.blur(); } else if(e.key==='Enter'){ e.preventDefault(); const H=msInHits(); if(H&&H.length){ MS.inIdx=((MS.inIdx??-1)+1)%H.length; msGoPara(H[MS.inIdx].i,true); } } });
+    if(MS.focusQ){ MS.focusQ=false; qn.focus(); const n=qn.value.length; try{ qn.setSelectionRange(n,n); }catch{} } }
   const qi=$('#ms-q'); if(qi){ qi.addEventListener('input',e=>{ MS.q=e.target.value; clearTimeout(MS.t); MS.res=null; const b=$('#ms-res'); if(b&&!MS.q.trim()) b.innerHTML=''; MS.t=setTimeout(msSearch,220); });
     qi.addEventListener('keydown',e=>{ if(e.key==='Escape'){ MS.q=''; qi.value=''; MS.res=null; $('#ms-res').innerHTML=''; qi.blur(); } });
     if(MS.focusQ){ MS.focusQ=false; qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch{} } }
@@ -154,7 +166,7 @@ function msAfter(){
 document.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='ms-open') msOpen(d.id,null);
-  else if(a==='ms-go'){ (async()=>{ await msOpen(d.id,null); const s=MS.cur; if(!s) return; const i=s.paras.findIndex(p=>p.n===d.n); MS.p=i>=0?i:null; MS.part=0; render(); setTimeout(msScroll,30); })(); }
+  else if(a==='ms-go'){ (async()=>{ const gq=MS.q; await msOpen(d.id,null); const s=MS.cur; if(!s) return; MS.qIn=gq; const i=s.paras.findIndex(p=>p.n===d.n); MS.p=i>=0?i:null; MS.part=0; render(); setTimeout(msScroll,30); })(); }
   else if(a==='ms-back'){ MS.curId=null; MS.p=null; MS.edit=false; render(); }
   else if(a==='ms-edit'){ MS.edit=true; V.confirm=null; render(); window.scrollTo(0,0); }
   else if(a==='ms-edit-cancel'){ MS.edit=false; V.confirm=null; render(); }
@@ -163,6 +175,7 @@ document.addEventListener('click',ev=>{
   else if(a==='ms-del-yes'){ (async()=>{ try{ await api('/api/sermons/'+encodeURIComponent(MS.curId),{method:'DELETE'}); toast('Mensaje borrado.'); MS.curId=null; MS.cur=null; MS.edit=false; V.confirm=null; await msLoadList(true); render(); }catch{ toast('No se pudo borrar.'); } })(); }
   else if(a==='ms-p'){ const i=+d.i; const now=Date.now(); const dbl=MS.lastTap&&MS.lastTap.i===i&&now-MS.lastTap.t<450; MS.lastTap={i,t:now}; if(MS.p!==i){ MS.p=i; MS.part=0; } render(); if(dbl&&S.canWrite){ MS.lastTap=null; MS.part=0; msProject(); } }
   else if(a==='ms-scroll') msScrollLive(+d.d);
+  else if(a==='ms-inhit') msGoPara(+d.i,false);
   else if(a==='ms-proj'){ if(MS.p==null) toast('Primero elige un párrafo.'); else if(MS.live&&MS.remote&&MS.remote.sermon&&MS.remote.mode==='text'&&MS.remote.sermon.p===MS.p){ MS.live=false; render(); toast('Modo en vivo apagado.'); } else msProject(); }
   else if(a==='ms-step') msStep(+d.d);
   else if(a==='ms-mode') msMode(d.m);
@@ -177,6 +190,6 @@ document.addEventListener('keydown',e=>{
   else if(MS.cur&&(e.key==='PageDown'||e.key===' ')){ e.preventDefault(); msScrollLive(1); }
   else if(MS.cur&&e.key==='PageUp'){ e.preventDefault(); msScrollLive(-1); }
   else if(e.key==='Enter'&&MS.p!=null&&S.canWrite){ e.preventDefault(); MS.part=0; msProject(); }
-  else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ MS.q=e.key; MS.focusQ=true; e.preventDefault(); render(); clearTimeout(MS.t); MS.t=setTimeout(msSearch,400); }
+  else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ e.preventDefault(); MS.focusQ=true; if(MS.curId&&MS.cur){ MS.qIn=e.key; MS.inIdx=-1; render(); } else { MS.q=e.key; render(); clearTimeout(MS.t); MS.t=setTimeout(msSearch,400); } }
 });
 window.mensajeAfterRender=msAfter;

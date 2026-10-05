@@ -12,7 +12,7 @@ const MIC_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 const VZ={on:null,rec:null,stream:null,timer:null};
 /* Pone un botón de micrófono dentro de cada buscador marcado */
 function vzDecorate(){
-  for(const id of ['q','bb-q','ms-q','lb-q','pj-q']){ const inp=document.getElementById(id); if(!inp||inp.dataset.mic) continue;
+  for(const id of ['q','bb-q','ms-q','ms-qin','lb-q','pj-q']){ const inp=document.getElementById(id); if(!inp||inp.dataset.mic) continue;
     const box=inp.closest('.search')||inp.parentElement; if(!box) continue; if(getComputedStyle(box).position==='static') box.style.position='relative';
     inp.dataset.mic='1'; inp.classList.add('has-mic'); if(!inp.closest('.search')) inp.style.paddingRight='46px';
     const b=document.createElement('button'); b.type='button'; b.className='mic'; b.title='Buscar hablando'; b.setAttribute('aria-label','Buscar hablando'); b.innerHTML=MIC_SVG; b.dataset.for=id;
