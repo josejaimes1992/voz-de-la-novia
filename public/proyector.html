@@ -205,6 +205,14 @@ setTimeout(()=>{
 document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wake();
   if(!SD&&'getScreenDetails' in window&&!lsGet('vdn-screen-asked')){ lsSet('vdn-screen-asked','1'); await showSetup(); if(!$('#setup').hidden) return; }
   full(); });
+function tok(){ try{ const t=localStorage.getItem('vdn-token'); return t&&JSON.parse(t); }catch{ return null; } }
+function nav(d,kind){ const t=tok(); if(!t){ const h=$('#hint'); h.textContent='Para navegar desde aquí, ingresa con tu usuario en la app en esta computadora.'; h.classList.remove('off'); setTimeout(()=>h.classList.add('off'),4000); return; }
+  fetch('/api/proyector/nav',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({d,kind})}).catch(()=>{}); }
+document.addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,select,textarea')) return;
+  if(e.key==='ArrowDown'||e.key==='PageDown'||e.key===' '){ e.preventDefault(); nav(1,'scroll'); return; }
+  if(e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); nav(-1,'scroll'); return; }
+  if(e.key==='ArrowRight'){ e.preventDefault(); nav(1,'item'); return; }
+  if(e.key==='ArrowLeft'){ e.preventDefault(); nav(-1,'item'); return; } });
 document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); let t=null; try{ t=localStorage.getItem('vdn-token'); t=t&&JSON.parse(t); }catch{} if(t) fetch('/api/proyector/negro',{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); return; } if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
 let mt; document.addEventListener('mousemove',()=>{ document.body.classList.add('cur'); clearTimeout(mt); mt=setTimeout(()=>document.body.classList.remove('cur'),2000); });
 setTimeout(()=>$('#hint').classList.add('off'),6000);

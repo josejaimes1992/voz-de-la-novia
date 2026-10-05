@@ -277,3 +277,20 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
 document.addEventListener('keydown',async e=>{ if(e.key!=='F9') return; e.preventDefault(); if(!S.token){ toast('Ingresa con tu usuario para controlar la pantalla.'); return; }
   try{ const r=await api('/api/proyector/negro',{method:'POST'}); PJ.remote=r; if(typeof BB!=='undefined') BB.remote=r; if(typeof MS!=='undefined') MS.remote=r; toast(r.mode==='black'?'■ Pantalla en negro (F9 para volver)':'Pantalla restaurada'); if(PJ.open) pjRender(); if(V.view==='bible'||V.view==='mensaje') render(); }
   catch(err){ if(err.message==='auth') lostAuth(); else toast('No se pudo cambiar la pantalla.'); } });
+
+/* Mantiene la Biblia y el Mensaje sincronizados con lo que está en pantalla (por ejemplo, si se navega desde la ventana del proyector) */
+const LW={ws:null,t:null};
+function lwConnect(){
+  if(!S.token||(LW.ws&&LW.ws.readyState<2)) return;
+  let ws; try{ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'); }catch{ return; }
+  LW.ws=ws;
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; let d; try{ d=JSON.parse(ev.data); }catch{ return; } if(d._style){ PJ.style=d._style; if(typeof BB!=='undefined') BB.style=d._style; if(typeof MS!=='undefined') MS.style=d._style; return; }
+    let changed=false;
+    if(typeof BB!=='undefined'){ BB.remote=d; if(d.mode==='text'&&d.bible&&BB.live&&BB.data&&(BB.b!==d.bible.b||BB.c!==d.bible.c||BB.v!==d.bible.v)){ BB.b=d.bible.b; BB.c=d.bible.c; BB.v=d.bible.v; } changed=V.view==='bible'; }
+    if(typeof MS!=='undefined'){ MS.remote=d; if(d.mode==='text'&&d.sermon&&MS.cur&&MS.cur.id===d.sermon.id&&MS.live){ MS.p=d.sermon.p; MS.part=d.sermon.part||0; } changed=changed||V.view==='mensaje'; }
+    const ae=document.activeElement; if(changed&&!(ae&&ae.closest&&ae.closest('input,textarea,select'))&&!document.getElementById('qk')){ render(); if(V.view==='mensaje'&&typeof msScroll==='function') setTimeout(msScroll,20); } };
+  ws.onclose=()=>{ LW.ws=null; clearTimeout(LW.t); LW.t=setTimeout(lwConnect,3000); };
+  ws.onerror=()=>{ try{ ws.close(); }catch{} };
+}
+setInterval(()=>{ if(LW.ws&&LW.ws.readyState===1) LW.ws.send('ping'); else if(S.token&&(V.view==='bible'||V.view==='mensaje')) lwConnect(); },20000);
+document.addEventListener('click',()=>{ if(S.token&&!LW.ws&&(V.view==='bible'||V.view==='mensaje')) setTimeout(lwConnect,300); });

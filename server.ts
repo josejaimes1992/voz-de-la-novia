@@ -176,6 +176,48 @@ function cleanStyle(b: any) {
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
     upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, size: num(b.size, 0.6, 1.3, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
 }
+/* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
+let BIBLES: Record<string, any> = {};
+function bibleData(id: string) {
+  if (BIBLES[id]) return BIBLES[id];
+  try { const gz = id === "RVR1960" ? RVR1960 : new Uint8Array(require("node:fs").readFileSync(new URL("./public/biblia/rv1909.json.gz", import.meta.url))); if (!gz) return null; BIBLES[id] = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(gz))); return BIBLES[id]; } catch { return null; }
+}
+function msStepsSrv(t: string) { const z = +STYLE.size || 1; const per = Math.max(12, Math.round(40 / (z * z) * (STYLE.upper ? 0.82 : 1))); return Math.max(0, Math.ceil(String(t).split(/\s+/).length / per) - 1); }
+const CHORD_TOK = /^\(?((?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b|♯|♭)?(?:m|maj|min|dim|aug|sus|add|M)?\d*(?:\([^)]*\))?(?:\/(?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b)?)?)\)?$/;
+function songSlides(song: any) {
+  const body = (song?.body && String(song.body).trim()) ? song.body : (song?.bodyPro || ""); const out: { label: string; text: string }[] = []; let label = "", block: string[] = [];
+  const flush = () => { if (!block.length) return; const n = Math.ceil(block.length / 4), size = Math.ceil(block.length / n); for (let i = 0; i < block.length; i += size) out.push({ label, text: block.slice(i, i + size).join("\n") }); block = []; };
+  for (const raw of String(body).split(/\r?\n/)) { const t = raw.replace(/\s+$/, "");
+    if (/^\s*#/.test(t)) { flush(); label = t.replace(/^\s*#+\s*/, ""); continue; } if (!t.trim()) { flush(); continue; }
+    const ly = t.replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim(); if (!ly) continue;
+    const toks = t.trim().split(/\s+/).filter(x => !/^(\||\/|-)$/.test(x)); if (!/\[/.test(t) && toks.length && toks.every(x => CHORD_TOK.test(x))) continue;
+    block.push(ly); }
+  flush(); return out;
+}
+async function projNav(d: number, kind: string): Promise<any | null> {
+  const P: any = PROJ; if (P.mode !== "text") return null;
+  if (P.sermon?.id) {
+    const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
+    let pi = P.sermon.p, part = P.sermon.part || 0;
+    if (kind === "scroll") { const steps = msStepsSrv(paras[pi]?.t || ""); if (part + d >= 0 && part + d <= steps) part += d; else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = d > 0 ? 0 : msStepsSrv(paras[pi].t); } }
+    else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = 0; }
+    const steps = msStepsSrv(paras[pi].t);
+    return { ...P, text: paras[pi].t, num: paras[pi].n, sc: steps ? part / steps : 0, auto: 0, idx: pi, sermon: { id: s.id || P.sermon.id, p: pi, part } };
+  }
+  if (P.bible && Number.isInteger(P.bible.b)) {
+    const B = bibleData(P.label === "RV1909" ? "RV1909" : "RVR1960") || bibleData("RV1909"); if (!B) return null; const books = B.books;
+    let { b, c, v } = P.bible; v += d;
+    if (v >= books[b][3][c].length) { if (c + 1 < books[b][3].length) { c++; v = 0; } else if (b + 1 < books.length) { b++; c = 0; v = 0; } else return null; }
+    if (v < 0) { if (c > 0) { c--; v = books[b][3][c].length - 1; } else if (b > 0) { b--; c = books[b][3].length - 1; v = books[b][3][c].length - 1; } else return null; }
+    const ref = `${books[b][1]} ${c + 1}:${v + 1}`;
+    return { ...P, title: ref, text: books[b][3][c][v] || "", ref: `${ref} · ${B.id}`, label: B.id, idx: v, total: books[b][3][c].length, bible: { b, c, v } };
+  }
+  if (P.songId) {
+    const r = await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${P.songId}`; if (!r[0]) return null; const sl = songSlides(parseJ(r[0].data)); const i = (P.idx || 0) + d;
+    if (i < 0 || i >= sl.length) return null; return { ...P, text: sl[i].text, label: sl[i].label, idx: i, total: sl.length };
+  }
+  return null;
+}
 const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
@@ -470,6 +512,12 @@ const SERVER = Bun.serve({
       }
       const fdm = p.match(/^\/api\/fondos\/([a-f0-9]{24})\.jpg$/);
       if (fdm && req.method === "DELETE") { if (!user) return json({ error: "unauthorized" }, 401); try { unlinkSync(`${FONDOS_DIR}/${fdm[1]}.jpg`); } catch {} return json({ ok: true }); }
+      if (p === "/api/proyector/nav" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : "scroll";
+        const next = await projNav(d, kind); if (!next) return json(PROJ);
+        PROJ = { ...next, by: user.name, at: Date.now() }; PROJ_PREV = null; SERVER.publish("proj", JSON.stringify(PROJ)); return json(PROJ);
+      }
       if (p === "/api/proyector/negro" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         if (PROJ.mode === "black") PROJ = { ...(PROJ_PREV ?? { ...PROJ, mode: "logo" }), by: user.name, at: Date.now() }, PROJ_PREV = null;
