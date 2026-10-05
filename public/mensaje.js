@@ -64,7 +64,7 @@ window.viewMensaje=function(){
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const steps=P?msSteps(P.t):0; const onThis=onP&&onP.id===s.id&&onP.p===MS.p;
       h+=`<div class="bb-bar">
         ${window.bbLiveBox?bbLiveBox(r):''}
-        <span class="ref">${P?`¶${esc(P.n)}${onThis&&steps?` · ${Math.round((MS.part/steps)*100)}% leído`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo · ↓↑ o ⏬⏫ bajan/suben el texto y pasan de párrafo · ▶◀ párrafo · F9 negro':'Enter, doble clic o “Proyectar” lo pone en pantalla'}</small></span>
+        <span class="ref">${P?`Párrafo ${esc(P.n)}${onThis&&steps?` · ${Math.round((MS.part/steps)*100)}% leído`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo · ↓↑ o ⏬⏫ bajan/suben el texto y pasan de párrafo · ▶◀ párrafo · F9 negro':'Enter, doble clic o “Proyectar” lo pone en pantalla'}</small></span>
         <button class="btn" data-act="ms-step" data-d="-1" aria-label="Párrafo anterior">◀</button>
         <button class="btn" data-act="ms-scroll" data-d="-1" title="Subir el texto en pantalla (Re Pág)">⏫</button>
         <button class="btn ${MS.live?'':'pri'}" data-act="ms-proj" aria-pressed="${MS.live}">${ICON.screen}${MS.live?'En vivo':'Proyectar'}</button>
@@ -90,11 +90,11 @@ function msInHits(){ const s=MS.cur, q=(MS.qIn||'').trim(); if(!s||q.length<2) r
   const out=[]; s.paras.forEach((p,i)=>{ const n=msNorm(p.t); if(toks.every(t=>n.includes(t))){ const at=Math.max(0,n.indexOf(n.includes(phrase)?phrase:toks[0])-60); out.push({i,n:p.n,exact:n.includes(phrase),snip:(at?'…':'')+p.t.slice(at,at+200)+(p.t.length>at+200?'…':'')}); } });
   return out.sort((a,b)=>(b.exact?1:0)-(a.exact?1:0)||a.i-b.i); }
 function msInHtml(){ const H=msInHits(); if(!H) return ''; if(!H.length) return '<p class="bb-note">No aparece en este mensaje. Prueba con otra palabra o “Buscar en todos”.</p>';
-  return `<p class="bb-note" style="margin:0 2px">${H.length} ${H.length===1?'párrafo':'párrafos'} · Enter va al siguiente</p>`+H.slice(0,40).map(h=>`<button data-act="ms-inhit" data-i="${h.i}"><b>¶${esc(h.n)}</b><small class="ms-snip">${msMark(h.snip,MS.qIn)}</small></button>`).join(''); }
+  return `<p class="bb-note" style="margin:0 2px">${H.length} ${H.length===1?'párrafo':'párrafos'} · Enter va al siguiente</p>`+H.slice(0,40).map(h=>`<button data-act="ms-inhit" data-i="${h.i}"><b>Párrafo ${esc(h.n)}</b><small class="ms-snip">${msMark(h.snip,MS.qIn)}</small></button>`).join(''); }
 function msResHtml(){
   if(!MS.q.trim()) return ''; const R=MS.res; if(!R) return '<p class="bb-note">Buscando…</p>';
   let h=''; for(const t of R.titles||[]) h+=`<button data-act="ms-open" data-id="${esc(t.id)}"><b>${esc(t.code)} · ${esc(t.title)}</b>${t.place?`<small>${esc(t.place)}</small>`:''}</button>`;
-  for(const x of R.paras||[]) h+=`<button data-act="ms-go" data-id="${esc(x.id)}" data-n="${esc(x.n)}"><b>${esc(x.code)} ¶${esc(x.n)}</b> <span class="bb-note">${esc(x.title)}</span><small class="ms-snip">${msMark(x.snip,MS.q)}</small></button>`;
+  for(const x of R.paras||[]) h+=`<button data-act="ms-go" data-id="${esc(x.id)}" data-n="${esc(x.n)}"><b>${esc(x.code)} · Párrafo ${esc(x.n)}</b> <span class="bb-note">${esc(x.title)}</span><small class="ms-snip">${msMark(x.snip,MS.q)}</small></button>`;
   if(!h) h='<p class="bb-note">Sin resultados.</p>'; if(R.more) h+='<p class="bb-note">Hay más resultados: agrega otra palabra para afinar.</p>';
   return h;
 }
