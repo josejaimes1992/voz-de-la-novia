@@ -93,7 +93,7 @@ window.viewBible=function(){
   const r=BB.remote||(typeof PJ!=='undefined'&&PJ.remote)||null;
   const onRef=r&&r.mode==='text'&&r.bible?r.bible:null;
   return `<div class="bb">
-    <div class="bb-find"><div class="search">${ICON.search}<input id="bb-q" type="search" autocomplete="off" placeholder="Escribe la cita (Jn 3 16) o palabras del versículo" value="${esc(BB.q)}" aria-label="Buscar en la Biblia"></div></div>
+    <div class="bb-find"><button class="btn pri" data-act="bb-quick" title="Cita rápida: escribe el libro, el capítulo y el versículo">⚡ Cita rápida</button><div class="search">${ICON.search}<input id="bb-q" type="search" autocomplete="off" placeholder="Buscar palabras del versículo o una cita" value="${esc(BB.q)}" aria-label="Buscar en la Biblia"></div></div>
     <div class="bb-sug" id="bb-sug">${bbSugHtml()}</div>
     <div class="bb-wrap">
       <div class="bb-left">
@@ -204,6 +204,9 @@ document.addEventListener('click',ev=>{
   else if(a==='bb-c'){ BB.c=+d.c; BB.v=null; BB.pick=false; render(); const L=$('#bb-vlist'); if(L) L.scrollTop=0; }
   else if(a==='bb-v'){ const v=+d.v; const again=BB.v===v; BB.v=v; BB.pick=false; render(); if(BB.live||again) bbProject(); }
   else if(a==='bb-pick'){ BB.pick=!BB.pick; render(); window.scrollTo({top:0}); }
+  else if(a==='bb-quick'){ qkOpen(''); }
+  else if(a==='qk-book'){ qkAccept(+d.b); qkDraw(); qkFocus(); }
+  else if(a==='qk-close'){ qkClose(); }
   else if(a==='bb-pickbook'){ bbPickBook(+d.b); }
   else if(a==='bb-go'){ bbGo(+d.b,+d.c,d.v===''?null:+d.v); }
   else if(a==='bb-proj'){ if(BB.live&&BB.remote&&BB.remote.bible&&BB.v!=null&&BB.remote.bible.v===BB.v&&BB.remote.mode==='text'){ BB.live=false; render(); toast('Modo en vivo apagado: tocar un versículo ya no lo proyecta.'); } else if(BB.v==null) toast('Primero elige un versículo.'); else bbProject(); }
@@ -217,6 +220,94 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key==='PageDown'){ e.preventDefault(); bbStep(1); }
   else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); bbStep(-1); }
   else if(e.key==='Enter'&&BB.v!=null&&S.canWrite){ e.preventDefault(); bbProject(); }
-  else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ BB.q=e.key; BB.focusQ=true; e.preventDefault(); render(); }
+  else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ e.preventDefault(); qkOpen(e.key); }
 });
 window.bibleAfterRender=bbAfter;
+
+/* ================= Cita rápida (como Holyrics): Libro → Capítulo → Versículo, sin Enter ================= */
+const QK={open:false,stage:'book',num:'',txt:'',b:null,ch:'',vs:''};
+(function(){ const st=document.createElement('style'); st.textContent=`
+.qk{position:fixed;inset:0;z-index:70;background:rgba(10,12,18,.55);display:grid;place-items:center;padding:16px}
+.qk-box{background:var(--surface);color:var(--ink);border-radius:16px;width:min(760px,100%);padding:18px 22px 26px;box-shadow:0 30px 80px rgba(0,0,0,.45);position:relative;text-align:center}
+.qk-esc{position:absolute;right:16px;top:12px;font-size:13px;color:var(--muted);background:none;border:0;cursor:pointer}
+.qk-f{margin:10px 0 4px}
+.qk-l{font-family:var(--f-display);font-size:30px;font-weight:700;color:var(--muted)}
+.qk-f.on .qk-l{color:var(--ink)}
+.qk-v{font-family:var(--f-ui);font-size:40px;font-weight:700;min-height:52px;line-height:1.25;color:var(--accent)}
+.qk-f.on .qk-v::after{content:"";display:inline-block;width:3px;height:38px;background:var(--accent);margin-left:3px;vertical-align:-6px;animation:qkb 1s steps(1) infinite}
+@keyframes qkb{50%{opacity:0}}
+.qk-c{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center;font-size:16px;color:var(--muted);min-height:24px}
+.qk-c button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:2px 4px;border-radius:6px}
+.qk-c button.top{color:var(--ink);font-weight:700;background:var(--accent-soft)}
+.qk-prev{margin-top:14px;font-size:15px;color:var(--muted);line-height:1.45;min-height:22px}
+.qk-in{position:absolute;opacity:0;left:0;top:0;width:1px;height:1px;border:0;padding:0}
+@media (max-width:560px){.qk{place-items:start center;padding-top:40px}.qk-l{font-size:22px}.qk-v{font-size:30px;min-height:40px}}
+`; document.head.appendChild(st); })();
+const QK_PAD='  ';
+function qkCands(){ return bbCands(QK.num,bbNorm(QK.txt)); }
+function qkOpen(first){
+  if(!BB.data) return; Object.assign(QK,{open:true,stage:'book',num:'',txt:'',b:null,ch:'',vs:''});
+  let root=$('#qk'); if(!root){ root=document.createElement('div'); root.id='qk'; root.className='qk'; document.body.appendChild(root);
+    root.addEventListener('click',e=>{ if(e.target===root) qkClose(); }); }
+  root.innerHTML=`<div class="qk-box" role="dialog" aria-label="Cita rápida"><button class="qk-esc" data-act="qk-close">Esc para cancelar</button>
+    <div class="qk-f" id="qk-fb"><div class="qk-l">Libro</div><div class="qk-v" id="qk-vb"></div><div class="qk-c" id="qk-c"></div></div>
+    <div class="qk-f" id="qk-fc"><div class="qk-l">Capítulo</div><div class="qk-v" id="qk-vc"></div></div>
+    <div class="qk-f" id="qk-fv"><div class="qk-l">Versículo</div><div class="qk-v" id="qk-vv"></div></div>
+    <div class="qk-prev" id="qk-prev"></div>
+    <input class="qk-in" id="qk-in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" value="${QK_PAD}" aria-label="Escribe la cita"></div>`;
+  const inp=$('#qk-in');
+  inp.addEventListener('input',()=>{ const v=inp.value; if(v.length<QK_PAD.length){ qkBack(); } else { for(const ch of v.slice(QK_PAD.length)) qkFeed(ch); } inp.value=QK_PAD; try{ inp.setSelectionRange(QK_PAD.length,QK_PAD.length); }catch{} qkDraw(); });
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ e.preventDefault(); qkClose(); }
+    else if(e.key==='Enter'){ e.preventDefault(); qkFeed('\n'); qkDraw(); }
+    else if(e.key==='Tab'){ e.preventDefault(); qkFeed(' '); qkDraw(); }
+    else if(e.key==='Backspace'&&inp.value===QK_PAD&&inp.selectionStart===QK_PAD.length){ /* lo maneja 'input' */ }
+  });
+  root.querySelector('.qk-box').addEventListener('click',()=>qkFocus());
+  if(first) qkFeed(first); qkDraw(); qkFocus();
+}
+function qkFocus(){ const i=$('#qk-in'); if(i){ i.focus(); try{ i.setSelectionRange(QK_PAD.length,QK_PAD.length); }catch{} } }
+function qkClose(){ QK.open=false; const r=$('#qk'); if(r) r.remove(); }
+function qkMaxCh(){ return QK.b!=null?bbBooks()[QK.b][3].length:0; }
+function qkMaxV(){ const c=+QK.ch; return QK.b!=null&&c?bbBooks()[QK.b][3][c-1].length:0; }
+function qkAccept(b){ QK.b=b; QK.stage='chapter'; QK.ch=''; QK.vs=''; if(qkMaxCh()===1){ QK.ch='1'; QK.stage='verse'; } }
+function qkFeed(ch){
+  const isD=/\d/.test(ch), isL=/[\p{L}]/u.test(ch), isSep=ch===' '||ch==='\n'||ch===':'||ch==='.'||ch===',';
+  if(QK.stage==='book'){
+    if(isD){ if(!QK.txt&&!QK.num&&/[123]/.test(ch)){ QK.num=ch; return; } if(QK.txt){ const c=qkCands(); if(c.length){ qkAccept(c[0]); return qkFeed(ch); } } return; }
+    if(isL){ const prev=QK.txt; QK.txt+=ch; const c=qkCands(); if(!c.length){ QK.txt=prev; return; } if(c.length===1) qkAccept(c[0]); return; }
+    if(isSep&&QK.txt){ const c=qkCands(); if(c.length) qkAccept(c[0]); } return;
+  }
+  if(QK.stage==='chapter'){
+    const max=qkMaxCh();
+    if(isD){ const n=QK.ch+ch; if(+n<1||+n>max) return; QK.ch=n; if(+n*10>max){ QK.stage='verse'; } return; }
+    if(isSep&&QK.ch){ if(ch==='\n'&&false) return; QK.stage='verse'; } return;
+  }
+  if(QK.stage==='verse'){
+    const max=qkMaxV();
+    if(isD){ const n=QK.vs+ch; if(+n<1||+n>max) return; QK.vs=n; if(+n*10>max) qkFinish(); return; }
+    if(ch==='\n'||ch===' '){ qkFinish(); } return;
+  }
+}
+function qkBack(){
+  if(QK.stage==='verse'){ if(QK.vs){ QK.vs=QK.vs.slice(0,-1); return; } QK.stage='chapter'; QK.ch=QK.ch.slice(0,-1); if(qkMaxCh()===1){ QK.stage='book'; QK.b=null; QK.txt=QK.txt.slice(0,-1); } return; }
+  if(QK.stage==='chapter'){ if(QK.ch){ QK.ch=QK.ch.slice(0,-1); return; } QK.stage='book'; QK.b=null; QK.txt=QK.txt.slice(0,-1); if(!QK.txt) QK.num=QK.num; return; }
+  if(QK.txt) QK.txt=QK.txt.slice(0,-1); else QK.num='';
+}
+function qkFinish(){
+  if(QK.b==null||!QK.ch) return; const c=+QK.ch-1, v=QK.vs?+QK.vs-1:null; qkClose();
+  BB.pick=false; BB.q=''; bbGo(QK.b,c,v); setTimeout(()=>{ const L=$('#bb-vlist'); if(L&&v==null) L.scrollTop=0; },20);
+}
+function qkDraw(){
+  if(!QK.open) return; const books=bbBooks();
+  const fb=$('#qk-fb'), fc=$('#qk-fc'), fv=$('#qk-fv'); if(!fb) return;
+  fb.classList.toggle('on',QK.stage==='book'); fc.classList.toggle('on',QK.stage==='chapter'); fv.classList.toggle('on',QK.stage==='verse');
+  $('#qk-vb').textContent=QK.b!=null?books[QK.b][1]:((QK.num?QK.num+' ':'')+QK.txt.toUpperCase().slice(0,1)+QK.txt.slice(1));
+  const c=QK.stage==='book'&&(QK.txt||QK.num)?qkCands():[];
+  $('#qk-c').innerHTML=QK.stage==='book'?c.slice(0,10).map((i,k)=>`<button data-act="qk-book" data-b="${i}" class="${k===0?'top':''}">${esc(books[i][1])}</button>`).join('<span>–</span>'):'';
+  $('#qk-vc').textContent=QK.ch; $('#qk-vv').textContent=QK.vs;
+  const pv=$('#qk-prev');
+  if(QK.b!=null&&QK.ch){ const cc=+QK.ch-1; pv.innerHTML=QK.vs?`<b>${esc(bbRef(QK.b,cc,+QK.vs-1))}</b> ${esc(books[QK.b][3][cc][+QK.vs-1]||'')}`:`${esc(books[QK.b][1])} ${QK.ch}: versículos 1 a ${books[QK.b][3][cc].length} · Enter abre el capítulo`; }
+  else if(QK.b!=null) pv.textContent=`Capítulos 1 a ${books[QK.b][3].length}`;
+  else pv.textContent=QK.stage==='book'&&!c.length&&!QK.txt?'Escribe las primeras letras del libro (para 1 Juan: 1 jua)':(c.length>1?'Sigue escribiendo, o Enter / espacio para el resaltado':'');
+}
