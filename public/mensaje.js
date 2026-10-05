@@ -22,7 +22,7 @@ const MS_WORDS=55;
 function msNorm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 async function msLoadList(force){
   if(MS.loading||(MS.list&&!force)) return; if(!S.token){ return; }
-  MS.loading=true; MS.err='';
+  MS.loading=true; MS.err=''; fetch('/api/proyector/estilo').then(x=>x.json()).then(x=>{ MS.style=x; if(typeof BB!=='undefined'&&!BB.style) BB.style=x; }).catch(()=>{});
   try{ MS.list=(await api('/api/sermons')).sermons; }catch(e){ if(e.message==='auth'){ lostAuth(); } MS.err='No se pudo cargar la lista de mensajes.'; }
   MS.loading=false; if(V.view==='mensaje') render();
 }
@@ -63,7 +63,7 @@ window.viewMensaje=function(){
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const steps=P?msSteps(P.t):0; const onThis=onP&&onP.id===s.id&&onP.p===MS.p;
       h+=`<div class="bb-bar">
         ${window.bbLiveBox?bbLiveBox(r):''}
-        <span class="ref">${P?`¶${esc(P.n)}${onThis&&steps?` · ${Math.round((MS.part/steps)*100)}% leído`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo · ▶◀ párrafo · ⏬⏫ texto · F9 negro':'Enter, doble clic o “Proyectar” lo pone en pantalla'}</small></span>
+        <span class="ref">${P?`¶${esc(P.n)}${onThis&&steps?` · ${Math.round((MS.part/steps)*100)}% leído`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo · ↓↑ o ⏬⏫ bajan/suben el texto y pasan de párrafo · ▶◀ párrafo · F9 negro':'Enter, doble clic o “Proyectar” lo pone en pantalla'}</small></span>
         <button class="btn" data-act="ms-step" data-d="-1" aria-label="Párrafo anterior">◀</button>
         <button class="btn" data-act="ms-scroll" data-d="-1" title="Subir el texto en pantalla (Re Pág)">⏫</button>
         <button class="btn ${MS.live?'':'pri'}" data-act="ms-proj" aria-pressed="${MS.live}">${ICON.screen}${MS.live?'En vivo':'Proyectar'}</button>
@@ -98,7 +98,8 @@ async function msSearch(){
   const b=$('#ms-res'); if(b) b.innerHTML=msResHtml();
 }
 function msScroll(){ const cur=document.querySelector('#ms-plist [aria-current="true"]'); const L=$('#ms-plist'); if(cur&&L){ const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/4; } }
-function msSteps(t){ return Math.max(0,Math.ceil(t.split(/\s+/).length/45)-1); }
+function msSteps(t){ const x=(typeof BB!=='undefined'&&BB.style)||MS.style||{}; const z=+x.size||1; const per=Math.max(12,Math.round(40/(z*z)*(x.upper?0.82:1))); return Math.max(0,Math.ceil(t.split(/\s+/).length/per)-1); }
+function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
   const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const steps=msSteps(P.t); MS.part=Math.max(0,Math.min(MS.part,steps));
   const st={mode:'text',read:true,title:s.title,text:P.t,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part}};
@@ -168,8 +169,9 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('keydown',e=>{
   if(V.view!=='mensaje'||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select')) return;
-  if(MS.cur&&e.key==='ArrowDown'){ e.preventDefault(); msStep(1,true); }
-  else if(MS.cur&&e.key==='ArrowUp'){ e.preventDefault(); msStep(-1,true); }
+  if(MS.cur&&(e.key==='ArrowDown'||e.key==='ArrowUp')){ e.preventDefault(); const d=e.key==='ArrowDown'?1:-1;
+    /* en vivo: baja/sube el texto dentro del párrafo y sigue con el siguiente; si no, solo marca */
+    if(msOnScreen()) msScrollLive(d); else msStep(d,true); }
   else if(MS.cur&&e.key==='ArrowRight'){ e.preventDefault(); msStep(1); }
   else if(MS.cur&&e.key==='ArrowLeft'){ e.preventDefault(); msStep(-1); }
   else if(MS.cur&&(e.key==='PageDown'||e.key===' ')){ e.preventDefault(); msScrollLive(1); }
