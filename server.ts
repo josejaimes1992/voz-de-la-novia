@@ -93,7 +93,8 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
       else if (!sig(data[field])) delete data[by];
     }
   }
-  else { if (before.createdBy) data.createdBy = before.createdBy; if (before.createdAt) data.createdAt = before.createdAt; }
+  if (before) { if (before.createdBy) data.createdBy = before.createdBy; if (before.createdAt) data.createdAt = before.createdAt; }
+  if (col === "programs") { data.ownerId = before?.ownerId ?? user.id; data.owner = before?.owner ?? user.name; }
   await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${col}, ${id}, ${JSON.stringify(data)}::jsonb, ${now})
            ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
   await logChange(tx, user, action ?? (before ? "update" : "create"), col, id, before, data);
@@ -147,7 +148,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -413,8 +414,10 @@ const SERVER = Bun.serve({
       }
       if (p === "/api/data" && req.method === "GET") {
         const rows = await db`SELECT col, id, data FROM docs WHERE col IN ('songs', 'programs')`;
+        const u = await currentUser(req);
         const out: Record<string, unknown[]> = { songs: [], programs: [] };
-        for (const r of rows) if (out[r.col]) out[r.col].push({ ...parseJ(r.data), id: r.id });
+        /* Los programas son privados: cada usuario ve solo los suyos (y los antiguos sin dueño) */
+        for (const r of rows) { const d = parseJ(r.data); if (r.col === "programs" && (!u || (d.ownerId != null && d.ownerId !== u.id))) continue; if (out[r.col]) out[r.col].push({ ...d, id: r.id }); }
         return json(out);
       }
 
@@ -453,7 +456,8 @@ const SERVER = Bun.serve({
       if (p.startsWith("/api/libros")) { const lr = await librosRoute(req, url, p, user, db); if (lr) return lr; }
       /* ---- Mensajes del hermano Branham (solo equipo con sesión) ---- */
       if (p.startsWith("/api/sermons")) {
-        if (!user) return json({ error: "unauthorized" }, 401);
+        /* Leer y buscar mensajes es público; importar, editar y borrar requiere usuario */
+        if (!user && req.method !== "GET") return json({ error: "unauthorized" }, 401);
         if (p === "/api/sermons" && req.method === "GET") return json({ sermons: await sermonList(db) });
         if (p === "/api/sermons/search" && req.method === "GET") return json(await sermonSearch(db, url.searchParams.get("q") ?? ""));
         if (p === "/api/sermons/import" && req.method === "POST") {
@@ -803,6 +807,7 @@ const SERVER = Bun.serve({
         const col = m[1], id = decodeURIComponent(m[2]);
         if (!COLS.has(col) || !ID_RE.test(id)) return json({ error: "bad_path" }, 400);
         if (!user) return json({ error: "unauthorized" }, 401);
+        if (col === "programs") { const pr = await db`SELECT data FROM docs WHERE col = 'programs' AND id = ${id}`; const od = pr[0] ? parseJ(pr[0].data) : null; if (od && od.ownerId != null && od.ownerId !== user.id) return json({ error: "forbidden" }, 403); }
         if (req.method === "PUT") {
           const text = await req.text();
           if (text.length > 400_000) return json({ error: "too_large" }, 413);

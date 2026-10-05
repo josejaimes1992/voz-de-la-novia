@@ -21,7 +21,7 @@ const MS_WORDS=55;
 
 function msNorm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 async function msLoadList(force){
-  if(MS.loading||(MS.list&&!force)) return; if(!S.token){ return; }
+  if(MS.loading||(MS.list&&!force)) return;
   MS.loading=true; MS.err=''; fetch('/api/proyector/estilo').then(x=>x.json()).then(x=>{ MS.style=x; if(typeof BB!=='undefined'&&!BB.style) BB.style=x; }).catch(()=>{});
   try{ MS.list=(await api('/api/sermons')).sermons; }catch(e){ if(e.message==='auth'){ lostAuth(); } MS.err='No se pudo cargar la lista de mensajes.'; }
   MS.loading=false; if(V.view==='mensaje') render();
@@ -41,7 +41,6 @@ function msParts(t){
   return out;
 }
 window.viewMensaje=function(){
-  if(!S.token) return `<div class="empty"><b>Mensaje</b>Ingresa con tu usuario para buscar y proyectar citas del Mensaje.</div>`;
   msLoadList();
   const can=S.canWrite; const r=MS.remote||(typeof PJ!=='undefined'&&PJ.remote)||null; const onP=r&&r.mode==='text'&&r.sermon?r.sermon:null;
   let h=`<div class="bb">
