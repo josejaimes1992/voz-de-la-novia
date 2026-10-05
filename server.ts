@@ -1,7 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
 import { librosRoute, initLibros } from "./libros.ts";
-import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex } from "./sermones.ts";
+import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, badTitle } from "./sermones.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
 
@@ -422,6 +422,7 @@ const SERVER = Bun.serve({
           if (!text || text.trim().length < 200) return json({ error: "no_text", file: name }, 422);
           const ser = parseSermon(text, name);
           if (!ser) return json({ error: "no_paras", file: name }, 422);
+          try { const m = await metaFor(ser.code); if (m) { (ser as any).place = m.place; if (m.title && badTitle(ser.title, ser.code)) ser.title = m.title; } } catch {}
           const prev = await db`SELECT id FROM docs WHERE col = 'sermons' AND id = ${ser.id}`;
           const data = { ...ser, file: name, by: user.name, at: Date.now() };
           await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('sermons', ${ser.id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
@@ -437,7 +438,7 @@ const SERVER = Bun.serve({
           const paras = Array.isArray(b.paras) ? b.paras.slice(0, 3000).map((x: any) => ({ n: String(x.n ?? "").slice(0, 8), t: String(x.t ?? "").replace(/\s+/g, " ").trim().slice(0, 20000) })).filter((x: any) => x.t) : old.paras;
           if (!paras.length) return json({ error: "empty" }, 400);
           const code = typeof b.code === "string" ? b.code.trim().slice(0, 20) : old.code;
-          const data = { ...old, title: typeof b.title === "string" && b.title.trim() ? b.title.trim().slice(0, 160) : old.title, code, date: /^\d{2}-\d{4}/.test(code) ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : old.date, paras, editedBy: user.name, editedAt: Date.now() };
+          const data = { ...old, title: typeof b.title === "string" && b.title.trim() ? b.title.trim().slice(0, 160) : old.title, code, place: typeof b.place === "string" ? b.place.trim().slice(0, 120) : old.place, date: /^\d{2}-\d{4}/.test(code) ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : old.date, paras, editedBy: user.name, editedAt: Date.now() };
           await db`UPDATE docs SET data = ${JSON.stringify(data)}::jsonb, updated_at = ${Date.now()} WHERE col = 'sermons' AND id = ${sm[1]}`;
           resetIndex(); return json(data);
         }
@@ -779,13 +780,5 @@ const SERVER = Bun.serve({
   },
 });
 console.log("Voz de la Novia escuchando en", Bun.env.PORT ?? 3000);
-/* TEMPORAL: inspección de la página de mensajes (se quitará) */
-(async () => { try {
-  for (const u of ["https://tabernaculozoe.org/dove/js/message.js"]) {
-    const r = await fetch(u, { headers: { "user-agent": "Mozilla/5.0" } }); const t = await r.text();
-    console.log("INSPECT", u, r.status, t.length);
-    const scripts = [...t.matchAll(/<script[^>]*src=["']([^"']+)["']/g)].map(m => m[1]); console.log("INSPECT scripts", JSON.stringify(scripts));
-    const urls = [...new Set([...t.matchAll(/["'`]([^"'`\s]*(?:\.json|\.php|ajax|api|\.do)[^"'`\s]*)["'`]/gi)].map(m => m[1]))].slice(0, 60); console.log("INSPECT urls", JSON.stringify(urls));
-    for (let i = 0; i < Math.min(t.length, 30000); i += 2500) console.log("INSPECT html", i, JSON.stringify(t.slice(i, i + 2500)));
-  }
-} catch (e) { console.log("INSPECT error", String(e)); } })();
+/* Completa ciudad y nombre de los mensajes con el catálogo público (al arrancar) */
+setTimeout(() => { syncSermonMeta(db).then(r => console.log("Mensajes: catálogo", JSON.stringify(r))).catch(e => console.error("Catálogo de mensajes", e)); }, 5000);

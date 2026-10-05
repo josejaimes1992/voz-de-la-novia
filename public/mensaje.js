@@ -8,7 +8,7 @@ const MS_WORDS=55;
 .ms-row{display:flex;gap:10px;align-items:baseline;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;color:inherit;font:inherit;cursor:pointer;width:100%}
 .ms-row code{font-family:var(--f-mono);font-size:12.5px;color:var(--accent);flex:none;min-width:72px}
 .ms-row span{flex:1;min-width:0}
-.ms-row small{color:var(--muted);font-size:12px;flex:none}
+.ms-row small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 .ms-p{display:block;width:100%;text-align:justify;border:0;border-bottom:1px solid var(--line);background:none;color:inherit;font:inherit;font-size:16px;line-height:1.5;padding:10px 12px;cursor:pointer}
 .ms-p b{color:var(--accent);margin-right:6px;font-family:var(--f-ui)}
 .ms-p[aria-current="true"]{background:#5b6b16;color:#fff}.ms-p[aria-current="true"] b{color:#fff}
@@ -53,12 +53,12 @@ window.viewMensaje=function(){
     if(MS.edit&&can){
       const txt=s.paras.map(p=>`${p.n} ${p.t}`).join('\n\n');
       return h+`<div class="ms-head"><button class="btn ghost" data-act="ms-edit-cancel">${ICON.back}Cancelar</button><h2>Editar mensaje</h2></div>
-        <div class="grid2"><label class="f">Título<input id="ms-e-title" value="${esc(s.title)}"></label><label class="f">Código<input id="ms-e-code" value="${esc(s.code||'')}" placeholder="65-1125"></label></div>
+        <div class="grid2"><label class="f">Título<input id="ms-e-title" value="${esc(s.title)}"></label><label class="f">Código<input id="ms-e-code" value="${esc(s.code||'')}" placeholder="65-1125"></label><label class="f">Ciudad<input id="ms-e-place" value="${esc(s.place||'')}" placeholder="Jeffersonville, Indiana, E.U.A."></label></div>
         <p class="muted" style="margin:0;font-size:13px">Cada párrafo empieza con su número y se separa del siguiente con una línea en blanco. Puedes corregir el texto, unir o separar párrafos.</p>
         <textarea id="ms-e-text" spellcheck="true" style="width:100%;min-height:60vh;font:inherit;font-size:16px;line-height:1.5;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:inherit;resize:vertical">${esc(txt)}</textarea>
         <div class="actions"><button class="btn pri" data-act="ms-edit-save">Guardar cambios</button><button class="btn" data-act="ms-edit-cancel">Cancelar</button>${S.isAdmin?`<span style="flex:1"></span>${V.confirm==='ms-del'?`<span class="confirm">¿Borrar este mensaje? <button class="btn danger" data-act="ms-del-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="ms-del">Borrar mensaje</button>`}`:''}</div></div>`;
     }
-    h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
+    h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}${s.place?`<small style="display:block;font-family:var(--f-ui);font-size:13.5px;color:var(--muted);font-weight:500;margin-top:2px">${esc(s.place)}</small>`:''}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
       <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${esc(p.t)}</button>`).join('')}</div>`;
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const parts=P?msParts(P.t):[];
       h+=`<div class="bb-bar">
@@ -76,13 +76,13 @@ window.viewMensaje=function(){
   if(MS.err) h+=`<div class="banner">${esc(MS.err)}</div>`;
   if(!MS.list) h+='<div class="loading">Cargando mensajes…</div>';
   else if(!MS.list.length) h+=`<div class="empty"><b>Aún no hay mensajes</b>${can?'Usa “Importar mensajes” para agregarlos.':'El equipo todavía no ha subido mensajes.'}</div>`;
-  else h+=`<div class="ms-list">${MS.list.map(s=>`<button class="ms-row" data-act="ms-open" data-id="${esc(s.id)}"><code>${esc(s.code||'—')}</code><span>${esc(s.title)}</span><small>${s.n} ¶</small></button>`).join('')}</div>`;
+  else h+=`<div class="ms-list">${MS.list.map(s=>`<button class="ms-row" data-act="ms-open" data-id="${esc(s.id)}"><code>${esc(s.code||'—')}</code><span>${esc(s.title)}${s.place?`<small>${esc(s.place)}</small>`:''}</span></button>`).join('')}</div>`;
   return h+'</div>';
 };
 function msMark(text,q){ const toks=msNorm(q).split(/[^a-z0-9ñ]+/).filter(t=>t.length>1); let out=esc(text); for(const t of toks){ const re=new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').split('').map(c=>({a:'[aáà]',e:'[eéè]',i:'[iíì]',o:'[oóò]',u:'[uúùü]',n:'[nñ]'}[c]||c)).join('')+')','gi'); out=out.replace(re,'<mark>$1</mark>'); } return out; }
 function msResHtml(){
   if(!MS.q.trim()) return ''; const R=MS.res; if(!R) return '<p class="bb-note">Buscando…</p>';
-  let h=''; for(const t of R.titles||[]) h+=`<button data-act="ms-open" data-id="${esc(t.id)}"><b>${esc(t.code)} · ${esc(t.title)}</b><small>${t.n} párrafos</small></button>`;
+  let h=''; for(const t of R.titles||[]) h+=`<button data-act="ms-open" data-id="${esc(t.id)}"><b>${esc(t.code)} · ${esc(t.title)}</b>${t.place?`<small>${esc(t.place)}</small>`:''}</button>`;
   for(const x of R.paras||[]) h+=`<button data-act="ms-go" data-id="${esc(x.id)}" data-n="${esc(x.n)}"><b>${esc(x.code)} ¶${esc(x.n)}</b> <span class="bb-note">${esc(x.title)}</span><small class="ms-snip">${msMark(x.snip,MS.q)}</small></button>`;
   if(!h) h='<p class="bb-note">Sin resultados.</p>'; if(R.more) h+='<p class="bb-note">Hay más resultados: agrega otra palabra para afinar.</p>';
   return h;
@@ -128,7 +128,7 @@ async function msSaveEdit(){
     const m=b.match(/^(?:¶\s*)?(\d{1,4}[a-z]?)[.)]?\s+(.+)$/i);
     if(m){ paras.push({n:m[1],t:m[2]}); last=parseInt(m[1],10)||last; } else { last++; paras.push({n:String(last),t:b}); } }
   if(!paras.length){ toast('El texto está vacío.'); return; }
-  try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(s.id),{method:'PUT',body:JSON.stringify({title:$('#ms-e-title').value,code:$('#ms-e-code').value,paras})}); MS.edit=false; MS.p=null; toast('Mensaje guardado.'); msLoadList(true); render(); }
+  try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(s.id),{method:'PUT',body:JSON.stringify({title:$('#ms-e-title').value,code:$('#ms-e-code').value,place:$('#ms-e-place').value,paras})}); MS.edit=false; MS.p=null; toast('Mensaje guardado.'); msLoadList(true); render(); }
   catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar.'); }
 }
 function msAfter(){

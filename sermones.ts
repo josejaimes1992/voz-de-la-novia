@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { unlinkSync } from "node:fs";
 
-export type Sermon = { id: string; code: string; title: string; date: string; paras: { n: string; t: string }[]; by?: string; at?: number; file?: string };
+export type Sermon = { id: string; code: string; title: string; date: string; place?: string; paras: { n: string; t: string }[]; by?: string; at?: number; file?: string };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const CODE_RE = /\b(\d{2})-(\d{4})([A-Za-z]{0,2})\b/;
@@ -74,22 +74,22 @@ export function parseSermon(raw: string, fileName: string): Sermon | null {
 }
 
 /* Índice en memoria para buscar rápido en todos los mensajes */
-type Idx = { id: string; code: string; title: string; tn: string; paras: { n: string; t: string; nt: string }[] };
+type Idx = { id: string; code: string; title: string; place: string; tn: string; paras: { n: string; t: string; nt: string }[] };
 let INDEX: Idx[] | null = null;
 export function resetIndex() { INDEX = null; }
 async function index(db: any): Promise<Idx[]> {
   if (INDEX) return INDEX;
   const rows = await db`SELECT id, data FROM docs WHERE col = 'sermons'`;
   INDEX = rows.map((r: any) => { const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
-    return { id: r.id, code: d.code || "", title: d.title || "", tn: norm(`${d.code} ${d.title}`), paras: (d.paras || []).map((p: any) => ({ n: p.n, t: p.t, nt: norm(p.t) })) }; });
+    return { id: r.id, code: d.code || "", title: d.title || "", place: d.place || "", tn: norm(`${d.code} ${d.title} ${d.place || ""}`), paras: (d.paras || []).map((p: any) => ({ n: p.n, t: p.t, nt: norm(p.t) })) }; });
   INDEX.sort((a, b) => a.code.localeCompare(b.code) || a.title.localeCompare(b.title, "es"));
   return INDEX;
 }
-export async function sermonList(db: any) { return (await index(db)).map(s => ({ id: s.id, code: s.code, title: s.title, n: s.paras.length })); }
+export async function sermonList(db: any) { return (await index(db)).map(s => ({ id: s.id, code: s.code, title: s.title, place: s.place, n: s.paras.length })); }
 export async function sermonSearch(db: any, q: string) {
   const toks = norm(q).split(/[^a-z0-9ñ-]+/).filter(t => t.length > 1); if (!toks.length) return { titles: [], paras: [] };
   const all = await index(db); const phrase = toks.join(" ");
-  const titles = all.filter(s => toks.every(t => s.tn.includes(t))).slice(0, 30).map(s => ({ id: s.id, code: s.code, title: s.title, n: s.paras.length }));
+  const titles = all.filter(s => toks.every(t => s.tn.includes(t))).slice(0, 30).map(s => ({ id: s.id, code: s.code, title: s.title, place: s.place, n: s.paras.length }));
   const paras: any[] = [];
   for (const s of all) for (const p of s.paras) {
     if (!toks.every(t => p.nt.includes(t))) continue;
@@ -100,4 +100,42 @@ export async function sermonSearch(db: any, q: string) {
   }
   paras.sort((a, b) => (b.exact ? 1 : 0) - (a.exact ? 1 : 0));
   return { titles, paras: paras.slice(0, 80), more: paras.length > 80 };
+}
+
+/* ---------- Catálogo público de mensajes (código → título y ciudad) ---------- */
+type Meta = { title: string; place: string };
+let CAT: { at: number; map: Map<string, Meta> } | null = null;
+const fixCase = (t: string) => String(t || "").replace(/\s+/g, " ").trim();
+async function catalog(): Promise<Map<string, Meta>> {
+  if (CAT && Date.now() - CAT.at < 24 * 3600_000) return CAT.map;
+  const r = await fetch("https://tabernaculozoe.org/dove/controller/list_by_date.php", { method: "POST", headers: { "user-agent": "Mozilla/5.0", "content-type": "application/x-www-form-urlencoded", "x-requested-with": "XMLHttpRequest" }, body: "" });
+  const d: any = await r.json(); const map = new Map<string, Meta>();
+  for (const x of d?.resultado ?? []) { const code = String(x.Date || "").trim().toUpperCase(); if (!/^\d{2}-\d{4}/.test(code) || code.startsWith("00-")) continue;
+    const m = { title: fixCase(x.Title), place: fixCase(x.Lugar).replace(/^-$/, "") }; if (!map.has(code)) map.set(code, m); }
+  CAT = { at: Date.now(), map }; return map;
+}
+export async function metaFor(code: string): Promise<Meta | null> {
+  if (!code) return null; const map = await catalog(); const c = code.toUpperCase();
+  if (map.has(c)) return map.get(c)!;
+  const base = c.slice(0, 7); const alts = [...map.keys()].filter(k => k.startsWith(base));
+  if (alts.length === 1) return map.get(alts[0])!;
+  const suf = c.slice(7); const swap: Record<string, string> = { A: "E", E: "A", M: "M", B: "B" };
+  if (suf && alts.includes(base + (swap[suf] || ""))) return null;
+  return null;
+}
+/* Nombre que no es un título: empieza en minúscula, es parte de una frase, o está vacío */
+export function badTitle(t: string, code: string) {
+  const s = String(t || "").trim(); if (!s || s === code || !/[a-záéíóúñ]{3}/i.test(s)) return true;
+  if (/^[a-záéíóúñ]/.test(s)) return true; if (s.split(/\s+/).length > 12) return true;
+  if (/^(muy|y|que|estaba|bueno|gracias|amén|amen|hermano|hermanos|buenas|buenos)\b/i.test(s)) return true;
+  return /[,;]\s*\w+\s*$/.test(s) && s.split(/\s+/).length > 7;
+}
+export async function syncSermonMeta(db: any) {
+  const map = await catalog(); const rows = await db`SELECT id, data FROM docs WHERE col = 'sermons'`; let places = 0, titles = 0, missing: string[] = [];
+  for (const r of rows) { const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data; if (!d.code) continue;
+    const m = await metaFor(d.code); if (!m) { missing.push(d.code); continue; } let ch = false;
+    if (m.place && d.place !== m.place) { d.place = m.place; places++; ch = true; }
+    if (m.title && !d.editedBy && badTitle(d.title, d.code)) { d.titleOld = d.title; d.title = m.title; titles++; ch = true; }
+    if (ch) await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'sermons' AND id = ${r.id}`; }
+  resetIndex(); return { catalog: map.size, sermons: rows.length, places, titles, missing: missing.slice(0, 20), missingCount: missing.length };
 }
