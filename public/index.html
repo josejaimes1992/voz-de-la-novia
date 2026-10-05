@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Voz de la Novia"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="description" content="Cancionero de alabanza: letras, acordes y programas."><meta property="og:title" content="Voz de la Novia"><meta property="og:description" content="Unidos en una misma alabanza."><meta property="og:image" content="/icon-512.png"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><title>Voz de la Novia</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Voz de la Novia"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="description" content="Cancionero de alabanza: letras, acordes y programas."><meta property="og:title" content="Voz de la Novia"><meta property="og:description" content="Unidos en una misma alabanza."><meta property="og:image" content="/icon-512.png"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>(function(){try{var t=localStorage.getItem("vdn-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})()</script><title>Voz de la Novia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -13,7 +13,7 @@
   --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   --r:10px; --lyric:1;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]):not([data-theme="sepia"]){
   --bg:#0E0E10; --surface:#18181B; --sunk:#202024; --ink:#ECEAE3; --muted:#A39F92; --line:#2C2B29;
   --accent:#E9C45A; --accent-ink:#14110A; --accent-soft:#2D2614; --chord:#F28B7F; --ok:#6BCB97; --danger:#F28B7F; color-scheme:dark}}
 :root[data-theme="dark"]{
@@ -51,12 +51,12 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .tabs{display:flex;gap:4px;background:#1B1A17;padding:3px;border-radius:999px}
 .tabs button{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;color:#B9B09A}
 .tabs button[aria-pressed="true"]{background:var(--gold);color:#14110A}
-.tabs .ti{display:inline-block;width:19px;height:19px;flex:none;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
+.ti{display:inline-block;width:19px;height:19px;flex:none;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
 .ti-song{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18V5l11-2v13'/><circle cx='6' cy='18' r='3'/><circle cx='17' cy='16' r='3'/></svg>")}
 .ti-prog{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='4' width='14' height='17' rx='2'/><path d='M9 4V2.8h6V4'/><path d='M8.5 10h7M8.5 14h7M8.5 18h4'/></svg>")}
 .ti-bible{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 19.5V5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2.5z'/><path d='M6 21h13v-3'/><path d='M12 6.5v7M9.5 9h5'/></svg>")}
 .ti-lib{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20V5M8 20V5M12 20V7l4-2 4 15-4 1z'/><path d='M3 20h18'/></svg>")}
-.tabs .ti-msg{--ic:url('/nube.png');-webkit-mask-size:118%;mask-size:118%}
+.ti-msg{--ic:url('/nube.png');-webkit-mask-size:118%;mask-size:118%}
 .tabs{gap:2px;padding:4px;background:linear-gradient(180deg,#1d1a14,#14120e);border:1px solid #3a3222;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 .tabs button{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;letter-spacing:.01em;transition:background .15s,color .15s}
 .tabs button:hover{color:#efe3c0}
@@ -112,7 +112,7 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .key.sm{min-width:30px;height:30px;font-size:11px}
 /* ---- Colores por tono ---- */
 :root{--kl:42%;--kbg:93%}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--kl:66%;--kbg:20%}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]):not([data-theme="sepia"]){--kl:66%;--kbg:20%}}
 :root[data-theme="dark"]{--kl:66%;--kbg:20%}
 .key[style*="--kh"]{border-color:hsl(var(--kh) var(--ks,70%) var(--kl));color:hsl(var(--kh) var(--ks,70%) var(--kl));background:hsl(var(--kh) var(--ks,70%) var(--kbg))}
 .key[data-minor]{border-style:dashed;background:transparent}
@@ -364,6 +364,63 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .loading{padding:60px 0;text-align:center;color:var(--muted);font-family:var(--f-display);font-size:18px}
 @media (prefers-reduced-motion:no-preference){.row,.pcard,.btn{transition:background .15s,border-color .15s}}
+
+/* ---- Temas: Oscuro · Día · Sepia ---- */
+:root[data-theme="light"]{--band:#FFFFFF;--band-ink:#1A1914;--gold:#8A6510;--tab-bg:#F2EEE4;--tab-line:#E3DCCA;--tab-ink:#6B6455;--top-line:#E6DFCC;--logo-f:invert(1);--hl:36%}
+:root[data-theme="sepia"]{--bg:#F4ECD8;--surface:#FBF5E6;--sunk:#EBDFC3;--ink:#3A2E1D;--muted:#7A6A4F;--line:#DFD0AE;--accent:#8B5E1A;--accent-ink:#FFF8E7;--accent-soft:#EFE0BD;--chord:#9C3B22;--ok:#4E6B2B;--danger:#9C3B22;
+  --band:#EBDDBC;--band-ink:#3A2E1D;--gold:#7A4E10;--tab-bg:#E2D2AA;--tab-line:#CFBB8E;--tab-ink:#6A573A;--top-line:#D6C39A;--logo-f:invert(1) sepia(.55);--hl:34%;--kl:36%;--kbg:87%;--ks:45%;color-scheme:light}
+.top{border-bottom-color:var(--top-line,#2a2410)}
+.tabs{background:var(--tab-bg,linear-gradient(180deg,#1d1a14,#14120e));border-color:var(--tab-line,#3a3222)}
+.tabs button{color:var(--tab-ink,#B9B09A)}
+.tabs button:hover{color:var(--band-ink)}
+.brand span{color:var(--tab-ink,#B9B09A)}
+.nota{border-color:var(--tab-line,#3A3426);color:var(--tab-ink,#B9B09A)}
+.brand img.vdn,.hero img{filter:var(--logo-f,none)}
+:root[data-theme="sepia"] .brand img.vdn,:root[data-theme="sepia"] .hero img{mix-blend-mode:multiply}
+:root[data-theme="light"] .tabs button[aria-pressed="true"],:root[data-theme="sepia"] .tabs button[aria-pressed="true"]{box-shadow:0 2px 8px rgba(138,101,16,.25)}
+.theme-btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui)!important;font-weight:600}
+.theme-btn i{width:13px;height:13px;border-radius:50%;border:1.5px solid currentColor;background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+
+/* ---- Pantalla de inicio ---- */
+.hm{display:flex;flex-direction:column;gap:16px;min-height:calc(100svh - var(--hdr,150px) - 132px)}
+.home-hi{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding-top:2px}
+.home-hi h2{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:-.01em}
+.home-hi p{margin:3px 0 0;color:var(--muted);font-size:13.5px;font-family:var(--f-display);font-style:italic}
+.hgrid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(150px,1fr);gap:12px}
+.htile{--th:42;position:relative;overflow:hidden;isolation:isolate;border:1px solid var(--line);border-radius:24px;padding:18px 16px 16px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;gap:10px;color:var(--ink);cursor:pointer;
+  background:radial-gradient(130% 100% at 100% 0%,hsl(var(--th) 70% 50% / .20),transparent 62%),linear-gradient(180deg,var(--surface),var(--surface));box-shadow:0 10px 28px -14px rgba(0,0,0,.45);transition:transform .14s ease,box-shadow .14s ease;-webkit-tap-highlight-color:transparent}
+.htile:hover{box-shadow:0 14px 34px -14px rgba(0,0,0,.55)}
+.htile:active{transform:scale(.965)}
+.htile .hic{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:hsl(var(--th) 65% 50% / .16);color:hsl(var(--th) 72% var(--hl,64%));border:1px solid hsl(var(--th) 65% 50% / .25)}
+.htile .hic .ti{width:30px;height:30px}
+.htile .wm{position:absolute;right:-22px;bottom:-22px;width:120px;height:120px;color:hsl(var(--th) 60% 50%);opacity:.10;z-index:-1}
+.htile b{display:block;font-family:var(--f-display);font-size:22px;font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.htile small{display:block;margin-top:3px;color:var(--muted);font-size:12.5px;line-height:1.3}
+.htile .go{position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--muted);border:1px solid var(--line);font-size:15px}
+.htile.wide{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;gap:14px;padding-block:14px}
+.htile.wide .go{position:static;margin-left:auto}
+.ht-songs{--th:42}.ht-bible{--th:8}.ht-msg{--th:205}.ht-lib{--th:145}.ht-prog{--th:275}
+.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:5px;border-radius:16px;background:var(--sunk);border:1px solid var(--line)}
+.themes button{border:0;border-radius:12px;padding:9px 6px;background:transparent;color:var(--muted);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:7px}
+.themes button i{width:14px;height:14px;border-radius:50%;background:var(--sw);border:1px solid rgba(128,128,128,.45)}
+.themes button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.themes-l{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;margin:0 0 -8px}
+@media (min-width:641px){.hgrid{grid-template-columns:repeat(4,1fr);grid-auto-rows:220px}.htile.wide{grid-column:auto;flex-direction:column;align-items:flex-start}.htile.wide .go{position:absolute}.hm{min-height:0}.themes{max-width:420px;margin:0 auto;width:100%}}
+
+/* ---- Barra inferior (móvil) ---- */
+.bnav{display:none}
+@media (max-width:640px){
+  .top .tabs{display:none}
+  body{padding-bottom:84px}
+  .bnav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:35;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:6px;border-radius:24px;
+    background:color-mix(in srgb,var(--band) 86%,transparent);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid var(--tab-line,#3a3222);box-shadow:0 12px 32px -8px rgba(0,0,0,.45)}
+  .bnav button{border:0;background:transparent;color:var(--tab-ink,#B9B09A);display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 6px;border-radius:18px;font-size:10.5px;font-weight:600;letter-spacing:.01em;-webkit-tap-highlight-color:transparent;transition:background .15s,color .15s}
+  .bnav .ti{width:22px;height:22px}
+  .bnav button[aria-pressed="true"]{color:#14110A;background:linear-gradient(180deg,#f2d27a,#d9ad45);box-shadow:0 3px 12px rgba(217,173,69,.35)}
+  body:has(.selbar) .bnav,body:has(.pj-mini) .bnav,body:has(input:focus) .bnav,body:has(textarea:focus) .bnav{display:none}
+  .toast{bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+}
+.ti-home{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10.5 12 3l9 7.5'/><path d='M5.5 9v11h13V9'/><path d='M10 20v-6h4v6'/></svg>")}
 </style></head><body>
 
 <header class="top"><div class="top-in">
@@ -376,10 +433,18 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
     <button id="tab-lib" data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i><span>Libros</span></button>
   </div>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
+  <button class="nota theme-btn" id="theme-btn" data-act="theme-next" title="Cambiar tema: oscuro, día o sepia"><i></i><span>Tema</span></button>
   <a class="nota" id="app-link" href="/instalar" style="font-family:var(--f-ui);font-weight:600;text-decoration:none;display:inline-flex;align-items:center" title="Instalar la app en el teléfono o compartirla">📲 App</a>
   <button class="nota" id="auth" data-act="auth" style="font-family:var(--f-ui);font-weight:600">Ingresar</button>
 </div></header>
 <main id="view"><div class="loading">Abriendo Voz de la Novia…</div></main>
+<nav class="bnav" aria-label="Secciones">
+  <button data-act="tab" data-tab="home" aria-pressed="false"><i class="ti ti-home" aria-hidden="true"></i>Inicio</button>
+  <button data-act="tab" data-tab="songs" aria-pressed="false"><i class="ti ti-song" aria-hidden="true"></i>Canciones</button>
+  <button data-act="tab" data-tab="bible" aria-pressed="false"><i class="ti ti-bible" aria-hidden="true"></i>Biblia</button>
+  <button data-act="tab" data-tab="mensaje" aria-pressed="false"><i class="ti ti-msg" aria-hidden="true"></i>Mensaje</button>
+  <button data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i>Libros</button>
+</nav>
 <footer class="foot"><b>Voz de la Novia</b><span>Tabernáculo Shalom Adonai</span></footer>
 <script>if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{})); if(matchMedia('(display-mode: standalone)').matches||navigator.standalone){ const a=document.getElementById('app-link'); if(a){ a.textContent='🔗 Compartir'; a.title='Compartir la app con otras personas'; } }</script>
 <div id="modal-root"></div>
@@ -543,6 +608,31 @@ function authButton(){ const b=$('#auth'); if(!b) return; b.innerHTML=S.user?`${
 
 /* ============ Estado de vista ============ */
 const V={ver:lsGet('vdn-ver','basica'),missingOnly:false,inst:lsGet('vdn-inst','guitar'),strip:lsGet('vdn-strip',true),capo:0,metro:false,tab:'songs',view:'list',songId:null,programId:null,q:'',key:'all',group:true,shift:0,chords:lsGet('vdn-chords',true),size:lsGet('cancionero-size',1),latin:lsGet('cancionero-latin',false),confirm:null,draft:null,live:null};
+const IS_MOBILE=()=>matchMedia('(max-width:640px)').matches;
+if(IS_MOBILE()){ V.view='home'; V.tab='home'; }
+const THEMES=[['dark','Oscuro','#141416'],['light','Día','#FFFFFF'],['sepia','Sepia','#EBDDBC']];
+function curTheme(){ const t=document.documentElement.getAttribute('data-theme'); return t||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); }
+function setTheme(t){ document.documentElement.setAttribute('data-theme',t); try{ localStorage.setItem('vdn-theme',t); }catch{} const th=THEMES.find(x=>x[0]===t); const mc=document.querySelector('meta[name="theme-color"]'); if(mc&&th) mc.setAttribute('content',t==='dark'?'#000000':th[2]); render(); }
+(function(){ const mc=document.querySelector('meta[name="theme-color"]'); const t=document.documentElement.getAttribute('data-theme'); const th=THEMES.find(x=>x[0]===t); if(mc&&th&&t!=='dark') mc.setAttribute('content',th[2]); })();
+function viewHome(){
+  const n=S.songs?sortedSongs().length:0;
+  const tile=(tab,cls,ic,t,sub,wide)=>`<button class="htile ${cls}${wide?' wide':''}" data-act="tab" data-tab="${tab}"><span class="hic"><i class="ti ${ic}" aria-hidden="true"></i></span><span class="ht-t"><b>${t}</b><small>${sub}</small></span><span class="go" aria-hidden="true">→</span><i class="ti ${ic} wm" aria-hidden="true"></i></button>`;
+  const h=new Date().getHours(); const hi=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  const name=S.user&&S.user.name?', '+esc(String(S.user.name).split(' ')[0]):'';
+  const ct=curTheme();
+  return `<section class="hm">
+    <div class="home-hi"><div><h2>${hi}${name}</h2><p>Unidos en una misma alabanza</p></div></div>
+    <div class="hgrid">
+      ${tile('songs','ht-songs','ti-song','Canciones',n?n+' cánticos':'Letras y acordes')}
+      ${tile('bible','ht-bible','ti-bible','Biblia','Reina-Valera 1960')}
+      ${tile('mensaje','ht-msg','ti-msg','Mensaje','La Palabra hablada')}
+      ${tile('libros','ht-lib','ti-lib','Libros','Material de estudio')}
+      ${S.user?tile('programs','ht-prog','ti-prog','Programas','Tus cultos y listas',true):''}
+    </div>
+    <p class="themes-l">Apariencia</p>
+    <div class="themes" role="group" aria-label="Tema">${THEMES.map(([k,l,c])=>`<button data-act="theme-set" data-t="${k}" aria-pressed="${ct===k}" style="--sw:${c}"><i></i>${l}</button>`).join('')}</div>
+  </section>`;
+}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ICON={
@@ -571,11 +661,15 @@ function render(){
   $('#tab-songs').setAttribute('aria-pressed',V.tab==='songs');
   $('#tab-programs').setAttribute('aria-pressed',V.tab==='programs'); $('#tab-bible').setAttribute('aria-pressed',V.tab==='bible'); $('#tab-msg').setAttribute('aria-pressed',V.tab==='mensaje'); $('#tab-lib').setAttribute('aria-pressed',V.tab==='libros');
   $('#nota').textContent=V.latin?'Do–Si':'A–G'; authButton();
+  document.querySelectorAll('.bnav button').forEach(b=>b.setAttribute('aria-pressed',V.view==='home'?b.dataset.tab==='home':b.dataset.tab===V.tab));
+  { const tb=$('#theme-btn'); const th=THEMES.find(x=>x[0]===curTheme()); if(tb&&th){ tb.style.setProperty('--sw',th[2]); tb.querySelector('span').textContent=th[1]; } }
+  { const tp=document.querySelector('.top'); if(tp) document.documentElement.style.setProperty('--hdr',tp.offsetHeight+'px'); }
   document.documentElement.style.setProperty('--lyric',V.size);
   const m=$('#view');
   if(S.mode==='loading'){ m.innerHTML='<div class="loading">Abriendo Voz de la Novia…</div>'; return; }
   let html='';
-  if(V.view==='list') html=viewSongs();
+  if(V.view==='home') html=viewHome();
+  else if(V.view==='list') html=viewSongs();
   else if(V.view==='song') html=viewSong();
   else if(V.view==='edit') html=viewEdit();
   else if(V.view==='programs') html=viewPrograms();
@@ -1081,12 +1175,14 @@ document.addEventListener('click',async ev=>{
   const a=el.dataset.act, ds=el.dataset;
   switch(a){
     case 'auth': if(S.user) openUserMenu(); else openLogin(); break;
-    case 'tab': V.tab=ds.tab; go(ds.tab==='songs'?'list':ds.tab==='bible'?'bible':ds.tab==='mensaje'?'mensaje':ds.tab==='libros'?'libros':'programs'); break;
+    case 'tab': if(ds.tab==='home'){ closeModal(); V.tab='home'; go('home'); break; } V.tab=ds.tab; go(ds.tab==='songs'?'list':ds.tab==='bible'?'bible':ds.tab==='mensaje'?'mensaje':ds.tab==='libros'?'libros':'programs'); break;
     case 'nota': V.latin=!V.latin; lsSet('cancionero-latin',V.latin); render(); if(V.live) renderLive(); break;
     case 'group': V.group=ds.v==='1'; render(); break;
     case 'key': V.key=ds.k; render(); break;
     case 'go-list': V.tab='songs'; go('list'); break;
-    case 'home': ev.preventDefault(); closeModal(); V.tab='songs'; V.q=''; V.key='all'; V.missingOnly=false; V.lastSongId=null; V.listY=null; go('list'); window.scrollTo(0,0); break;
+    case 'theme-set': setTheme(ds.t); break;
+    case 'theme-next': { const i=THEMES.findIndex(x=>x[0]===curTheme()); setTheme(THEMES[(i+1)%THEMES.length][0]); toast('Tema: '+THEMES[(i+1)%THEMES.length][1]); break; }
+    case 'home': ev.preventDefault(); closeModal(); if(IS_MOBILE()){ V.tab='home'; go('home'); break; } V.tab='songs'; V.q=''; V.key='all'; V.missingOnly=false; V.lastSongId=null; V.listY=null; go('list'); window.scrollTo(0,0); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
     case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; V.lastSongId=ds.id; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
     case 'ver': V.ver=ds.v; lsSet('vdn-ver',V.ver); if(V.live) renderLive(); render(); break;
