@@ -1,6 +1,6 @@
 /* Voz de la Novia — trabajo sin conexión (app instalable) */
-const CACHE='vdn-v1';
-const CORE=['/','/vdn-logo.jpg?v=2','/shalom-logo.jpg?v=1','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
+const CACHE='vdn-v2';
+const CORE=['/','/vdn-logo.jpg?v=3','/shalom-logo.jpg?v=1','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 /* Primero internet; si no hay, lo último guardado */
