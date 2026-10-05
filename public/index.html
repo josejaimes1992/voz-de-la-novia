@@ -408,6 +408,18 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 .themes-l{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;margin:0 0 -8px}
 @media (min-width:641px){.hgrid{grid-template-columns:repeat(4,1fr);grid-auto-rows:220px}.htile.wide{grid-column:auto;flex-direction:column;align-items:flex-start}.htile.wide .go{position:absolute}.hm{min-height:0}.themes{max-width:420px;margin:0 auto;width:100%}}
 
+
+/* Tarjetas con imagen */
+.htile.ph{padding:0;border:1px solid rgba(255,255,255,.08);justify-content:flex-end;background:#0b0b0d;color:#fff;box-shadow:inset 0 -3px 0 hsl(var(--th) 75% 55%),0 12px 30px -14px rgba(0,0,0,.6)}
+.htile.ph .ph-img{position:absolute;inset:0;z-index:-2;background-size:cover;background-position:center;transition:transform .6s ease}
+.htile.ph:hover .ph-img{transform:scale(1.04)}
+.htile.ph::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.5) 62%,rgba(0,0,0,.9))}
+.htile.ph .ht-t{display:block;align-self:stretch;width:100%;text-align:left;padding:14px 14px 16px}
+.htile.ph b{color:#fff;font-size:21px;text-shadow:0 2px 10px rgba(0,0,0,.7)}
+.htile.ph small{color:rgba(255,255,255,.85)}
+.htile.ph .go{color:#fff;border-color:rgba(255,255,255,.4);background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.ht-msg .ph-img{background-position:0% 30%!important}
+.ht-songs .ph-img{background-position:30% 40%!important}
 /* ---- Barra inferior (móvil) ---- */
 .bnav{display:none}
 @media (max-width:640px){
@@ -427,11 +439,11 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <header class="top"><div class="top-in">
   <div class="brand"><img class="vdn" src="/vdn-emblem.jpg?v=1" alt="Logo Voz de la Novia" width="56" height="56"><a class="bt home" href="/" data-act="home" title="Ir al inicio" aria-label="Voz de la Novia — ir al inicio"><b>Voz de la Novia</b><span>Una fe. Un Mensaje. Una voz.</span></a><img class="vdn church" src="/shalom-logo.jpg?v=1" alt="Logo Tabernáculo Shalom Adonai" width="56" height="56"></div>
   <div class="tabs" role="tablist">
-    <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true"><i class="ti ti-song" aria-hidden="true"></i><span>Alabanza</span></button>
+    <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true"><i class="ti ti-song" aria-hidden="true"></i><span>Alabanzas</span></button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false" hidden><i class="ti ti-prog" aria-hidden="true"></i><span>Programas</span></button>
     <button id="tab-bible" data-act="tab" data-tab="bible" aria-pressed="false"><i class="ti ti-bible" aria-hidden="true"></i><span>Biblia</span></button>
     <button id="tab-msg" data-act="tab" data-tab="mensaje" aria-pressed="false"><i class="ti ti-msg" aria-hidden="true"></i><span>Mensaje</span></button>
-    <button id="tab-lib" data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i><span>Libros</span></button>
+    <button id="tab-lib" data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i><span>Material de Interés</span></button>
   </div>
   <button class="nota theme-btn" id="theme-btn" data-act="theme-next" title="Cambiar tema: oscuro, día o sepia"><i></i><span>Tema</span></button>
   <a class="nota" id="app-link" href="/instalar" style="font-family:var(--f-ui);font-weight:600;text-decoration:none;display:inline-flex;align-items:center" title="Instalar la app en el teléfono o compartirla">📲 App</a>
@@ -440,10 +452,10 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 <main id="view"><div class="loading">Abriendo Voz de la Novia…</div></main>
 <nav class="bnav" aria-label="Secciones">
   <button data-act="tab" data-tab="home" aria-pressed="false"><i class="ti ti-home" aria-hidden="true"></i>Inicio</button>
-  <button data-act="tab" data-tab="songs" aria-pressed="false"><i class="ti ti-song" aria-hidden="true"></i>Alabanza</button>
+  <button data-act="tab" data-tab="songs" aria-pressed="false"><i class="ti ti-song" aria-hidden="true"></i>Alabanzas</button>
   <button data-act="tab" data-tab="bible" aria-pressed="false"><i class="ti ti-bible" aria-hidden="true"></i>Biblia</button>
   <button data-act="tab" data-tab="mensaje" aria-pressed="false"><i class="ti ti-msg" aria-hidden="true"></i>Mensaje</button>
-  <button data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i>Libros</button>
+  <button data-act="tab" data-tab="libros" aria-pressed="false" aria-label="Material de Interés"><i class="ti ti-lib" aria-hidden="true"></i>Material</button>
 </nav>
 <footer class="foot"><b>Voz de la Novia</b><span>Tabernáculo Shalom Adonai</span></footer>
 <script>if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{})); if(matchMedia('(display-mode: standalone)').matches||navigator.standalone){ const a=document.getElementById('app-link'); if(a){ a.textContent='🔗 Compartir'; a.title='Compartir la app con otras personas'; } }</script>
@@ -617,16 +629,17 @@ function setTheme(t){ document.documentElement.setAttribute('data-theme',t); try
 function viewHome(){
   const n=S.songs?sortedSongs().length:0;
   const tile=(tab,cls,ic,t,sub,wide)=>`<button class="htile ${cls}${wide?' wide':''}" data-act="tab" data-tab="${tab}"><span class="hic"><i class="ti ${ic}" aria-hidden="true"></i></span><span class="ht-t"><b>${t}</b><small>${sub}</small></span><span class="go" aria-hidden="true">→</span><i class="ti ${ic} wm" aria-hidden="true"></i></button>`;
+  const ptile=(tab,cls,img,t,sub)=>`<button class="htile ph ${cls}" data-act="tab" data-tab="${tab}"><span class="ph-img" style="background-image:url(/${img}?v=1)"></span><span class="ht-t"><b>${t}</b><small>${sub}</small></span><span class="go" aria-hidden="true">→</span></button>`;
   const h=new Date().getHours(); const hi=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
   const name=S.user&&S.user.name?', '+esc(String(S.user.name).split(' ')[0]):'';
   const ct=curTheme();
   return `<section class="hm">
     <div class="home-hi"><div><h2>${hi}${name}</h2><p>Una fe. Un Mensaje. Una voz.</p></div></div>
     <div class="hgrid">
-      ${tile('songs','ht-songs','ti-song','Alabanza',n?n+' cánticos':'Cánticos de la Novia')}
-      ${tile('bible','ht-bible','ti-bible','Biblia','Reina-Valera 1960')}
-      ${tile('mensaje','ht-msg','ti-msg','Mensaje','La Palabra hablada')}
-      ${tile('libros','ht-lib','ti-lib','Libros','Estudios y material')}
+      ${ptile('songs','ht-songs','m-alabanzas.jpg','Alabanzas',n?n+' cánticos':'Cánticos de la Novia')}
+      ${ptile('bible','ht-bible','m-biblia.jpg','Biblia','Reina-Valera 1960')}
+      ${ptile('mensaje','ht-msg','m-mensaje.jpg','Mensaje','La Palabra hablada')}
+      ${ptile('libros','ht-lib','m-material.jpg','Material de Interés','Libros y estudios')}
       ${S.user?tile('programs','ht-prog','ti-prog','Programas','Orden de los cultos',true):''}
     </div>
     <p class="themes-l">Apariencia</p>
@@ -851,7 +864,7 @@ function controls(key,shift,extra=''){
 function viewSong(){
   const s=S.songs.get(V.songId); if(!s){ V.view='list'; return viewSongs(); }
   const k=songKey(s);
-  return `<button class="btn ghost back" data-act="go-list">${ICON.back}Alabanza</button>
+  return `<button class="btn ghost back" data-act="go-list">${ICON.back}Alabanzas</button>
   <div class="song-h"><span class="key"${kc(k?{idx:k.idx+V.shift,minor:k.minor}:null)}>${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${S.user&&window.whoHtml?whoHtml(null,s.updatedBy,20):esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${S.user&&window.whoHtml?whoHtml(null,s.createdBy,20):esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
