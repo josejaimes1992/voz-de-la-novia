@@ -25,6 +25,10 @@ body.upper .txt p{text-transform:uppercase}
 .logos img{height:min(52vh,40vw);width:auto;display:block}
 .ref{position:absolute;left:0;right:0;bottom:4.5vh;text-align:center;color:#e9c45a;font-weight:700;font-size:min(5vh,4vw);letter-spacing:.02em;text-shadow:0 2px 10px rgba(0,0,0,.6)}
 .layer.has-ref .txt{height:76vh;margin-bottom:8vh}
+.rd-box{position:absolute;left:var(--rdm,6vw);right:var(--rdm,6vw);top:3vh;bottom:20vh;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 16%,#000 82%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 16%,#000 82%,transparent 100%)}
+.rd-in{position:absolute;left:0;right:0;top:0;padding:10vh 0 12vh;font-weight:600;line-height:1.3;text-align:justify;hyphens:auto;transition:transform .9s cubic-bezier(.25,.8,.3,1);will-change:transform}
+.rd-in sup{font-size:.45em;opacity:.55;margin-right:.35em;vertical-align:.9em}
+.rd-ref{position:absolute;left:var(--rdm,6vw);right:var(--rdm,6vw);bottom:4vh;height:13vh;border-top:1px solid rgba(255,255,255,.15);padding-top:2.2vh;white-space:pre-line;font-size:4.2vh;line-height:1.2;font-weight:500;text-align:left}
 .hint{position:fixed;left:50%;bottom:5vh;transform:translateX(-50%);background:rgba(255,255,255,.1);color:#ddd;font-size:15px;padding:10px 18px;border-radius:999px;transition:opacity .5s;pointer-events:none;font-weight:600}
 .hint.off{opacity:0}
 .setup{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;background:#141416;border:1px solid #333;border-radius:16px;padding:18px 20px;width:min(560px,92vw);color:#eee;cursor:default;box-shadow:0 20px 60px rgba(0,0,0,.6);font-size:15px}
@@ -50,6 +54,7 @@ body.cur .gear{opacity:1}
 <div id="bg"></div><div id="dim"></div>
 <div class="stage" id="stage">
   <div class="layer" id="L-logo"><div class="logos"><img src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><img src="/shalom-logo.jpg?v=1" alt="Tabernáculo Shalom Adonai"></div></div>
+  <div class="layer" id="L-read"><div class="rd-box" id="rd-box"><div class="rd-in" id="rd-in"></div></div><div class="rd-ref" id="rd-ref"></div></div>
   <div class="layer" id="L-a"><div class="txt"><p></p></div><div class="ref"></div></div>
   <div class="layer" id="L-b"><div class="txt"><p></p></div><div class="ref"></div></div>
 </div>
@@ -93,13 +98,28 @@ function applyStyle(x){
   document.querySelectorAll('.ref').forEach(r=>{ r.style.color=ST.ref||'#e9c45a'; r.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; });
   const m=ST.margin??4; document.querySelectorAll('.txt').forEach(t=>{ t.style.width=(100-2*m)+'vw'; });
   document.body.classList.toggle('noshadow',ST.shadow===false); document.body.classList.toggle('upper',!!ST.upper);
+  if(cur&&cur.read){ lastKey=''; show(cur); }
   const go=()=>document.querySelectorAll('.txt p').forEach(p=>{ if(p.textContent) fit(p); }); if(document.fonts&&document.fonts.load) document.fonts.load(`700 40px "${ST.font||'Figtree'}"`).then(go,go); else go();
 }
+/* Modo lectura (Mensaje): párrafo grande que se desplaza con transparencia arriba y abajo */
+let rdAuto=null, rdOff=0;
+function rdMax(){ const box=$('#rd-box'), inn=$('#rd-in'); return Math.max(0,inn.scrollHeight-box.clientHeight); }
+function rdSet(px,anim){ const inn=$('#rd-in'); rdOff=Math.max(0,Math.min(rdMax(),px)); inn.style.transition=anim===false?'none':''; inn.style.transform=`translateY(${-rdOff}px)`; }
+function rdApply(st){ cancelAnimationFrame(rdAuto); rdAuto=null;
+  if(st.auto>0){ let last=performance.now(); const sp=st.auto*innerHeight/40; const step=t=>{ const dt=(t-last)/1000; last=t; rdSet(rdOff+sp*dt,false); if(rdOff<rdMax()) rdAuto=requestAnimationFrame(step); }; rdAuto=requestAnimationFrame(step); }
+  else rdSet((st.sc||0)*rdMax()); }
 function show(st){
-  cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text+'|'+(st.ref||''):'');
-  if(key===lastKey) return; lastKey=key;
+  cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text+'|'+(st.ref||'')+'|'+(st.read?1:0):'');
+  if(key===lastKey){ if(st.mode==='text'&&st.read) rdApply(st); return; } lastKey=key;
   $('#L-logo').classList.toggle('on', st.mode==='logo');
-  const A=$('#L-a'), B=$('#L-b');
+  const A=$('#L-a'), B=$('#L-b'), R=$('#L-read');
+  if(st.mode==='text'&&st.read){ A.classList.remove('on'); B.classList.remove('on');
+    const inn=$('#rd-in'); inn.innerHTML=(st.num?`<sup>${String(st.num).replace(/[<>&]/g,'')}</sup>`:'')+String(st.text).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    inn.style.fontSize=(7.4*(ST.size||1))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upper?'uppercase':'none';
+    const rf=$('#rd-ref'); rf.textContent=st.ref||''; rf.style.color=ST.ref||'#e9c45a'; rf.style.fontFamily=inn.style.fontFamily;
+    document.documentElement.style.setProperty('--rdm',(ST.margin!=null?Math.max(3,ST.margin+2):6)+'vw');
+    rdSet(0,false); R.classList.add('on'); requestAnimationFrame(()=>rdApply(st)); return; }
+  R.classList.remove('on'); cancelAnimationFrame(rdAuto);
   if(st.mode!=='text'){ A.classList.remove('on'); B.classList.remove('on'); return; }
   const next=front==='a'?B:A, prev=front==='a'?A:B;
   next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); p.textContent=st.text; fit(p);
@@ -185,7 +205,7 @@ setTimeout(()=>{
 document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wake();
   if(!SD&&'getScreenDetails' in window&&!lsGet('vdn-screen-asked')){ lsSet('vdn-screen-asked','1'); await showSetup(); if(!$('#setup').hidden) return; }
   full(); });
-document.addEventListener('keydown',e=>{ if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
+document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); let t=null; try{ t=localStorage.getItem('vdn-token'); t=t&&JSON.parse(t); }catch{} if(t) fetch('/api/proyector/negro',{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); return; } if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
 let mt; document.addEventListener('mousemove',()=>{ document.body.classList.add('cur'); clearTimeout(mt); mt=setTimeout(()=>document.body.classList.remove('cur'),2000); });
 setTimeout(()=>$('#hint').classList.add('off'),6000);
 

@@ -1,6 +1,6 @@
 /* Voz de la Novia — Biblia: buscar citas y proyectarlas (estilo Holyrics) */
 "use strict";
-const BB={pick:false,versions:null,ver:null,data:null,loading:false,err:'',b:42,c:2,v:null,live:false,q:'',hits:null,remote:null};
+const BB={pick:false,versions:null,ver:null,data:null,loading:false,err:'',b:0,c:0,v:0,live:false,q:'',hits:null,remote:null};
 const BB_GROUPS=[[0,5,'#7a4a22'],[5,17,'#d9821e'],[17,22,'#c0392b'],[22,39,'#8e3a9d'],[39,43,'#3f51b5'],[43,44,'#0e8fa3'],[44,57,'#1a9a58'],[57,65,'#14806a'],[65,66,'#7cb342']];
 const BB_ALIAS={salmo:'Salmos',sl:'Salmos',ps:'Salmos',apoc:'Apocalipsis',rev:'Apocalipsis',revelacion:'Apocalipsis',hch:'Hechos',hech:'Hechos',stgo:'Santiago',sant:'Santiago',cant:'Cantares',cantar:'Cantares',mc:'Marcos',mr:'Marcos',mrc:'Marcos',jn:'Juan',lc:'Lucas',mt:'Mateo',ro:'Romanos',rom:'Romanos',gal:'Gálatas',ga:'Gálatas',fil:'Filipenses',flp:'Filipenses',flm:'Filemón',heb:'Hebreos',he:'Hebreos',jud:'Judas',ec:'Eclesiastés',ecl:'Eclesiastés',pr:'Proverbios',prov:'Proverbios',is:'Isaías',jr:'Jeremías',jer:'Jeremías',lm:'Lamentaciones',lam:'Lamentaciones',ez:'Ezequiel',dn:'Daniel',os:'Oseas',jl:'Joel',am:'Amós',abd:'Abdías',jon:'Jonás',mi:'Miqueas',nah:'Nahúm',hab:'Habacuc',sof:'Sofonías',hag:'Hageo',zac:'Zacarías',mal:'Malaquías',gn:'Génesis',gen:'Génesis',ex:'Éxodo',lv:'Levítico',lev:'Levítico',nm:'Números',num:'Números',dt:'Deuteronomio',deut:'Deuteronomio',jos:'Josué',jue:'Jueces',rt:'Rut',esd:'Esdras',ne:'Nehemías',neh:'Nehemías',est:'Ester',ef:'Efesios',col:'Colosenses',tit:'Tito'};
 
@@ -186,6 +186,7 @@ function bbAfter(){
     else if(e.key==='Backspace'&&/\s$/.test(BB.q)&&Q&&Q.stage==='book'){ /* borra el libro completo */ }
   });
   if(BB.focusQ){ BB.focusQ=false; qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch{} }
+  const LL=$('#bb-vlist'); if(LL){ const k=BB.b+':'+BB.c; if(BB.lsKey===k) LL.scrollTop=BB.listScroll||0; else { BB.lsKey=k; BB.listScroll=0; } LL.addEventListener('scroll',()=>{ BB.listScroll=LL.scrollTop; },{passive:true}); }
   const cur=document.querySelector('#bb-vlist [aria-current="true"]'); if(cur){ const L=$('#bb-vlist'); const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/3; }
 }
 function bbPickBook(b){ const bk=bbBooks()[b]; BB.b=b; BB.c=0; BB.v=null; BB.sel=0; BB.q=bk[1]+' '; BB.focusQ=true; render(); }

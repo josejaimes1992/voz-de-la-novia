@@ -1,6 +1,6 @@
 /* Voz de la Novia — Mensaje: buscar citas de los sermones y proyectarlas (como la Biblia) */
 "use strict";
-const MS={edit:false,list:null,loading:false,err:'',cur:null,curId:null,p:null,part:0,live:false,q:'',res:null,remote:null,imp:null};
+const MS={auto:0,listScroll:0,edit:false,list:null,loading:false,err:'',cur:null,curId:null,p:null,part:0,live:false,q:'',res:null,remote:null,imp:null};
 const MS_WORDS=55;
 
 (function(){ const st=document.createElement('style'); st.textContent=`
@@ -27,7 +27,7 @@ async function msLoadList(force){
   MS.loading=false; if(V.view==='mensaje') render();
 }
 async function msOpen(id,p){
-  MS.curId=id; MS.edit=false; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
+  if(MS.curId!==id) MS.listScroll=0; MS.curId=id; MS.edit=false; MS.p=p!=null?p:null; MS.part=0; if(!MS.cur||MS.cur.id!==id){ MS.cur=null; render();
     try{ MS.cur=await api('/api/sermons/'+encodeURIComponent(id)); }catch{ toast('No se pudo abrir el mensaje.'); MS.curId=null; } }
   MS.q=''; MS.res=null; render(); if(MS.p!=null) setTimeout(msScroll,30);
 }
@@ -60,13 +60,17 @@ window.viewMensaje=function(){
     }
     h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}${s.place?`<small style="display:block;font-family:var(--f-ui);font-size:13.5px;color:var(--muted);font-weight:500;margin-top:2px">${esc(s.place)}</small>`:''}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
       <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${esc(p.t)}</button>`).join('')}</div>`;
-    if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const parts=P?msParts(P.t):[];
+    if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const steps=P?msSteps(P.t):0; const onThis=onP&&onP.id===s.id&&onP.p===MS.p;
       h+=`<div class="bb-bar">
-        <span class="ref">${P?`¶${esc(P.n)}${parts.length>1?` · parte ${MS.part+1} de ${parts.length}`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo: al tocar un párrafo sale en pantalla':'Toca “Proyectar” para ponerlo en pantalla'}</small></span>
-        <button class="btn" data-act="ms-step" data-d="-1" aria-label="Anterior">◀</button>
+        ${window.bbLiveBox?bbLiveBox(r):''}
+        <span class="ref">${P?`¶${esc(P.n)}${onThis&&steps?` · ${Math.round((MS.part/steps)*100)}% leído`:''}`:'Elige un párrafo'}<small>${MS.live?'● En vivo · ▶◀ párrafo · ⏬⏫ texto · F9 negro':'Enter, doble clic o “Proyectar” lo pone en pantalla'}</small></span>
+        <button class="btn" data-act="ms-step" data-d="-1" aria-label="Párrafo anterior">◀</button>
+        <button class="btn" data-act="ms-scroll" data-d="-1" title="Subir el texto en pantalla (Re Pág)">⏫</button>
         <button class="btn ${MS.live?'':'pri'}" data-act="ms-proj" aria-pressed="${MS.live}">${ICON.screen}${MS.live?'En vivo':'Proyectar'}</button>
-        <button class="btn" data-act="ms-step" data-d="1" aria-label="Siguiente">▶</button>
-        <button class="btn" data-act="ms-mode" data-m="black" aria-pressed="${r&&r.mode==='black'}">Negro</button>
+        <button class="btn" data-act="ms-scroll" data-d="1" title="Bajar el texto en pantalla (Av Pág)">⏬</button>
+        <button class="btn" data-act="ms-step" data-d="1" aria-label="Párrafo siguiente">▶</button>
+        <select id="ms-auto" class="bb-ver" title="Desplazamiento automático mientras se lee" aria-label="Desplazamiento automático">${[[0,'Auto: no'],[0.6,'Auto: lento'],[1,'Auto: normal'],[1.6,'Auto: rápido']].map(([v,t])=>`<option value="${v}" ${+MS.auto===v?'selected':''}>${t}</option>`).join('')}</select>
+        <button class="btn" data-act="ms-mode" data-m="black" aria-pressed="${r&&r.mode==='black'}" title="F9">Negro</button>
         <button class="btn" data-act="ms-mode" data-m="logo" aria-pressed="${r&&r.mode==='logo'}">Logo</button>
         <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">Abrir pantalla</button></div>`; }
     return h+'</div>';
@@ -94,22 +98,29 @@ async function msSearch(){
   const b=$('#ms-res'); if(b) b.innerHTML=msResHtml();
 }
 function msScroll(){ const cur=document.querySelector('#ms-plist [aria-current="true"]'); const L=$('#ms-plist'); if(cur&&L){ const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/4; } }
+function msSteps(t){ return Math.max(0,Math.ceil(t.split(/\s+/).length/45)-1); }
 async function msProject(){
-  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const parts=msParts(P.t); MS.part=Math.min(MS.part,parts.length-1);
-  const ref=`${s.title}${s.code?' · '+s.code:''} · ¶${P.n}${parts.length>1?` (${MS.part+1}/${parts.length})`:''}`;
-  const st={mode:'text',title:s.title,text:parts[MS.part],label:'Mensaje',ref,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part}};
+  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const steps=msSteps(P.t); MS.part=Math.max(0,Math.min(MS.part,steps));
+  const st={mode:'text',read:true,title:s.title,text:P.t,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part}};
   MS.remote=st; MS.live=true; render(); setTimeout(msScroll,20);
   try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo poner en pantalla. Revisa el internet.'); }
   if(V.view==='mensaje') render();
 }
 async function msMode(m){ const r=MS.remote||{}; if(r.mode===m){ if(MS.p!=null) return msProject(); m='logo'; }
   MS.remote={...r,mode:m}; render(); try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify({...r,mode:m})}); }catch{ toast('No se pudo cambiar la pantalla.'); } if(V.view==='mensaje') render(); }
-function msStep(d){
-  const s=MS.cur; if(!s) return; if(MS.p==null){ MS.p=d>0?0:s.paras.length-1; MS.part=0; }
-  else { const parts=msParts(s.paras[MS.p].t); const np=MS.part+d;
-    if(np>=0&&np<parts.length) MS.part=np;
-    else { const p=MS.p+d; if(p<0||p>=s.paras.length) return; MS.p=p; MS.part=d>0?0:msParts(s.paras[p].t).length-1; } }
-  render(); setTimeout(msScroll,20); if(MS.live) msProject();
+function msStep(d,noProj){
+  const s=MS.cur; if(!s) return; if(MS.p==null){ MS.p=d>0?0:s.paras.length-1; }
+  else { const p=MS.p+d; if(p<0||p>=s.paras.length) return; MS.p=p; } MS.part=0;
+  render(); setTimeout(msScroll,20); if(MS.live&&!noProj) msProject();
+}
+/* Bajar/subir el texto del párrafo en pantalla; al llegar al final pasa al siguiente párrafo */
+function msScrollLive(d){
+  const s=MS.cur; if(!s||MS.p==null) return; const r=MS.remote; const onThis=r&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p&&r.mode==='text';
+  if(!onThis){ return msProject(); }
+  const steps=msSteps(s.paras[MS.p].t); const np=MS.part+d; MS.auto=0;
+  if(np>=0&&np<=steps){ MS.part=np; return msProject(); }
+  if(d>0&&MS.p+1<s.paras.length){ MS.p++; MS.part=0; return msProject(); }
+  if(d<0&&MS.p>0){ MS.p--; MS.part=msSteps(s.paras[MS.p].t); return msProject(); }
 }
 /* Importar: PDF, texto o .zip con muchos */
 async function msImport(files){
@@ -135,28 +146,35 @@ function msAfter(){
   const qi=$('#ms-q'); if(qi){ qi.addEventListener('input',e=>{ MS.q=e.target.value; clearTimeout(MS.t); MS.res=null; const b=$('#ms-res'); if(b&&!MS.q.trim()) b.innerHTML=''; MS.t=setTimeout(msSearch,220); });
     qi.addEventListener('keydown',e=>{ if(e.key==='Escape'){ MS.q=''; qi.value=''; MS.res=null; $('#ms-res').innerHTML=''; qi.blur(); } });
     if(MS.focusQ){ MS.focusQ=false; qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch{} } }
+  const L=$('#ms-plist'); if(L){ L.scrollTop=MS.listScroll||0; L.addEventListener('scroll',()=>{ MS.listScroll=L.scrollTop; },{passive:true}); }
+  const au=$('#ms-auto'); if(au) au.addEventListener('change',e=>{ MS.auto=+e.target.value; if(MS.live&&MS.p!=null) msProject(); });
   const fi=$('#ms-file'); if(fi) fi.addEventListener('change',()=>{ const f=[...fi.files]; fi.value=''; if(f.length) msImport(f); });
 }
 document.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='ms-open') msOpen(d.id,null);
-  else if(a==='ms-go'){ (async()=>{ await msOpen(d.id,null); const s=MS.cur; if(!s) return; const i=s.paras.findIndex(p=>p.n===d.n); MS.p=i>=0?i:null; MS.part=0; render(); setTimeout(msScroll,30); if(MS.live&&MS.p!=null) msProject(); })(); }
+  else if(a==='ms-go'){ (async()=>{ await msOpen(d.id,null); const s=MS.cur; if(!s) return; const i=s.paras.findIndex(p=>p.n===d.n); MS.p=i>=0?i:null; MS.part=0; render(); setTimeout(msScroll,30); })(); }
   else if(a==='ms-back'){ MS.curId=null; MS.p=null; MS.edit=false; render(); }
   else if(a==='ms-edit'){ MS.edit=true; V.confirm=null; render(); window.scrollTo(0,0); }
   else if(a==='ms-edit-cancel'){ MS.edit=false; V.confirm=null; render(); }
   else if(a==='ms-edit-save') msSaveEdit();
   else if(a==='ms-del'){ V.confirm='ms-del'; render(); }
   else if(a==='ms-del-yes'){ (async()=>{ try{ await api('/api/sermons/'+encodeURIComponent(MS.curId),{method:'DELETE'}); toast('Mensaje borrado.'); MS.curId=null; MS.cur=null; MS.edit=false; V.confirm=null; await msLoadList(true); render(); }catch{ toast('No se pudo borrar.'); } })(); }
-  else if(a==='ms-p'){ const i=+d.i; const again=MS.p===i; if(!again){ MS.p=i; MS.part=0; } render(); if(MS.live||again) msProject(); }
+  else if(a==='ms-p'){ const i=+d.i; const now=Date.now(); const dbl=MS.lastTap&&MS.lastTap.i===i&&now-MS.lastTap.t<450; MS.lastTap={i,t:now}; if(MS.p!==i){ MS.p=i; MS.part=0; } render(); if(dbl&&S.canWrite){ MS.lastTap=null; MS.part=0; msProject(); } }
+  else if(a==='ms-scroll') msScrollLive(+d.d);
   else if(a==='ms-proj'){ if(MS.p==null) toast('Primero elige un párrafo.'); else if(MS.live&&MS.remote&&MS.remote.sermon&&MS.remote.mode==='text'&&MS.remote.sermon.p===MS.p){ MS.live=false; render(); toast('Modo en vivo apagado.'); } else msProject(); }
   else if(a==='ms-step') msStep(+d.d);
   else if(a==='ms-mode') msMode(d.m);
 });
 document.addEventListener('keydown',e=>{
   if(V.view!=='mensaje'||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select')) return;
-  if(MS.cur&&(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key==='PageDown')){ e.preventDefault(); msStep(1); }
-  else if(MS.cur&&(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp')){ e.preventDefault(); msStep(-1); }
-  else if(e.key==='Enter'&&MS.p!=null&&S.canWrite){ e.preventDefault(); msProject(); }
+  if(MS.cur&&e.key==='ArrowDown'){ e.preventDefault(); msStep(1,true); }
+  else if(MS.cur&&e.key==='ArrowUp'){ e.preventDefault(); msStep(-1,true); }
+  else if(MS.cur&&e.key==='ArrowRight'){ e.preventDefault(); msStep(1); }
+  else if(MS.cur&&e.key==='ArrowLeft'){ e.preventDefault(); msStep(-1); }
+  else if(MS.cur&&(e.key==='PageDown'||e.key===' ')){ e.preventDefault(); msScrollLive(1); }
+  else if(MS.cur&&e.key==='PageUp'){ e.preventDefault(); msScrollLive(-1); }
+  else if(e.key==='Enter'&&MS.p!=null&&S.canWrite){ e.preventDefault(); MS.part=0; msProject(); }
   else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ MS.q=e.key; MS.focusQ=true; e.preventDefault(); render(); clearTimeout(MS.t); MS.t=setTimeout(msSearch,400); }
 });
 window.mensajeAfterRender=msAfter;

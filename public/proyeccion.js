@@ -272,3 +272,8 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   else if(a==='pjs-color') styleSet({color:d.c});
   else if(a==='pjs-ref') styleSet({ref:d.c});
 });
+
+/* F9: poner la pantalla en negro (y volver a mostrar lo que había) desde cualquier parte */
+document.addEventListener('keydown',async e=>{ if(e.key!=='F9') return; e.preventDefault(); if(!S.token){ toast('Ingresa con tu usuario para controlar la pantalla.'); return; }
+  try{ const r=await api('/api/proyector/negro',{method:'POST'}); PJ.remote=r; if(typeof BB!=='undefined') BB.remote=r; if(typeof MS!=='undefined') MS.remote=r; toast(r.mode==='black'?'■ Pantalla en negro (F9 para volver)':'Pantalla restaurada'); if(PJ.open) pjRender(); if(V.view==='bible'||V.view==='mensaje') render(); }
+  catch(err){ if(err.message==='auth') lostAuth(); else toast('No se pudo cambiar la pantalla.'); } });
