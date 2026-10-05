@@ -410,16 +410,24 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 
 
 /* Tarjetas con imagen */
-.htile.ph{padding:0;border:1px solid rgba(255,255,255,.08);justify-content:flex-end;background:#0b0b0d;color:#fff;box-shadow:inset 0 -3px 0 hsl(var(--th) 75% 55%),0 12px 30px -14px rgba(0,0,0,.6)}
+.ti-note{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18V5.5l11-2.3V16' fill='none'/><path d='M9 9l11-2.3' fill='none'/><ellipse cx='6.3' cy='18' rx='2.8' ry='2.3' fill='black'/><ellipse cx='17.3' cy='16' rx='2.8' ry='2.3' fill='black'/></svg>")}
+.ti-bookw{--ic:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='15' width='12' height='5' rx='1'/><rect x='3.5' y='10' width='10.5' height='5' rx='1'/><path d='M5.5 17.5h7M6 12.5h6'/><path d='M19 21V6.5'/><path d='M19 10.5c-1.7-.3-2.6-1.5-2.6-3 1.7.3 2.6 1.5 2.6 3zM19 10.5c1.7-.3 2.6-1.5 2.6-3-1.7.3-2.6 1.5-2.6 3zM19 15c-1.7-.3-2.6-1.5-2.6-3 1.7.3 2.6 1.5 2.6 3zM19 15c1.7-.3 2.6-1.5 2.6-3-1.7.3-2.6 1.5-2.6 3zM19 6.5c-.9-.7-1-2-.1-3.3.9.8.9 2.1.1 3.3z'/></svg>")}
+.ht-songs{--th:42}.ht-bible{--th:4}.ht-msg{--th:205}.ht-lib{--th:140}
+.hgrid:has(.ph){flex:0 0 auto;grid-auto-rows:auto}
+.hm:has(.ph){min-height:0;gap:14px}
+.htile.ph{--c:hsl(var(--th) 75% 58%);aspect-ratio:.92;min-height:0;padding:0;justify-content:flex-end;background:#0b0b0d;color:#fff;border:1.5px solid hsl(var(--th) 70% 55% / .85);border-radius:22px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 22px -6px hsl(var(--th) 80% 50% / .45),0 12px 28px -14px rgba(0,0,0,.7)}
 .htile.ph .ph-img{position:absolute;inset:0;z-index:-2;background-size:cover;background-position:center;transition:transform .6s ease}
 .htile.ph:hover .ph-img{transform:scale(1.04)}
-.htile.ph::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.5) 62%,rgba(0,0,0,.9))}
-.htile.ph .ht-t{display:block;align-self:stretch;width:100%;text-align:left;padding:14px 14px 16px}
+.htile.ph::after{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(70% 45% at 0% 0%,rgba(0,0,0,.55),transparent 70%),linear-gradient(180deg,rgba(0,0,0,0) 42%,rgba(0,0,0,.55) 68%,rgba(0,0,0,.92))}
+.htile.ph .ph-ic{position:absolute;top:12px;left:12px;width:50px;height:50px;border-radius:14px;display:grid;place-items:center;color:var(--c);background:rgba(10,10,12,.55);border:1px solid hsl(var(--th) 70% 55% / .7);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.htile.ph .ph-ic .ti{width:28px;height:28px}
+.htile.ph .ht-t{display:block;align-self:stretch;width:100%;text-align:left;padding:12px 14px 14px}
 .htile.ph b{color:#fff;font-size:21px;text-shadow:0 2px 10px rgba(0,0,0,.7)}
-.htile.ph small{color:rgba(255,255,255,.85)}
-.htile.ph .go{color:#fff;border-color:rgba(255,255,255,.4);background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-.ht-msg .ph-img{background-position:0% 30%!important}
-.ht-songs .ph-img{background-position:30% 40%!important}
+.htile.ph small{color:rgba(255,255,255,.86);margin-top:2px}
+.htile.ph .ph-bar{display:block;width:26px;height:3px;border-radius:2px;background:var(--c);margin-top:8px}
+.htile.ph .go{top:12px;right:12px;width:32px;height:32px;color:var(--c);border:1.5px solid var(--c);background:rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+@media (max-width:380px){.htile.ph b{font-size:18px}.htile.ph .ph-ic{width:44px;height:44px}}
 /* ---- Barra inferior (móvil) ---- */
 .bnav{display:none}
 @media (max-width:640px){
@@ -629,17 +637,17 @@ function setTheme(t){ document.documentElement.setAttribute('data-theme',t); try
 function viewHome(){
   const n=S.songs?sortedSongs().length:0;
   const tile=(tab,cls,ic,t,sub,wide)=>`<button class="htile ${cls}${wide?' wide':''}" data-act="tab" data-tab="${tab}"><span class="hic"><i class="ti ${ic}" aria-hidden="true"></i></span><span class="ht-t"><b>${t}</b><small>${sub}</small></span><span class="go" aria-hidden="true">→</span><i class="ti ${ic} wm" aria-hidden="true"></i></button>`;
-  const ptile=(tab,cls,img,t,sub)=>`<button class="htile ph ${cls}" data-act="tab" data-tab="${tab}"><span class="ph-img" style="background-image:url(/${img}?v=1)"></span><span class="ht-t"><b>${t}</b><small>${sub}</small></span><span class="go" aria-hidden="true">→</span></button>`;
+  const ptile=(tab,cls,img,ic,t,sub)=>`<button class="htile ph ${cls}" data-act="tab" data-tab="${tab}"><span class="ph-img" style="background-image:url(/${img}?v=2)"></span><span class="ph-ic"><i class="ti ${ic}" aria-hidden="true"></i></span><span class="ht-t"><b>${t}</b><small>${sub}</small><em class="ph-bar"></em></span><span class="go" aria-hidden="true">→</span></button>`;
   const h=new Date().getHours(); const hi=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
   const name=S.user&&S.user.name?', '+esc(String(S.user.name).split(' ')[0]):'';
   const ct=curTheme();
   return `<section class="hm">
     <div class="home-hi"><div><h2>${hi}${name}</h2><p>Una fe. Un Mensaje. Una voz.</p></div></div>
     <div class="hgrid">
-      ${ptile('songs','ht-songs','m-alabanzas.jpg','Alabanzas',n?n+' cánticos':'Cánticos de la Novia')}
-      ${ptile('bible','ht-bible','m-biblia.jpg','Biblia','Reina-Valera 1960')}
-      ${ptile('mensaje','ht-msg','m-mensaje.jpg','Mensaje','La Palabra hablada')}
-      ${ptile('libros','ht-lib','m-material.jpg','Material de Interés','Libros y estudios')}
+      ${ptile('songs','ht-songs','m-alabanzas.jpg','ti-note','Alabanzas',n?n+' cánticos':'Cánticos de la Novia')}
+      ${ptile('bible','ht-bible','m-biblia.jpg','ti-bible','Biblia','Reina-Valera 1960')}
+      ${ptile('mensaje','ht-msg','m-mensaje.jpg','ti-msg','Mensaje','La Palabra hablada')}
+      ${ptile('libros','ht-lib','m-material.jpg','ti-bookw','Material de Interés','Libros y estudios')}
       ${S.user?tile('programs','ht-prog','ti-prog','Programas','Orden de los cultos',true):''}
     </div>
     <p class="themes-l">Apariencia</p>
