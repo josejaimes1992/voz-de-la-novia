@@ -106,7 +106,7 @@ window.viewBible=function(){
     <div class="bb-wrap">
       <div class="bb-left">
         <div class="bb-h"><b>${esc(bk[1])} ${BB.c+1}</b><button class="bb-pickbtn" data-act="bb-pick">${BB.pick?'Cerrar':'📚 Libro y capítulo'}</button>${BB.versions&&BB.versions.length>1?`<select id="bb-ver" class="bb-ver" aria-label="Versión">${BB.versions.map(v=>`<option value="${esc(v.id)}" ${v.id===BB.ver?'selected':''}>${esc(v.id)}</option>`).join('')}</select>`:`<span class="bb-note">${esc(BB.data.name)}</span>`}</div>
-        <div class="bb-vlist" id="bb-vlist">${ch.map((t,i)=>`<button class="bb-v${onRef&&onRef.b===BB.b&&onRef.c===BB.c&&onRef.v===i?' onscr':''}" data-act="bb-v" data-v="${i}" aria-current="${BB.v===i}"><b>${i+1}</b>${esc(t||'—')}</button>`).join('')}</div>
+        <div class="bb-vlist" id="bb-vlist">${(()=>{ const rc=rfCounts(BB.b,BB.c); return ch.map((t,i)=>`<button class="bb-v${onRef&&onRef.b===BB.b&&onRef.c===BB.c&&onRef.v===i?' onscr':''}${rc&&rc[i]?' has-rf':''}" data-act="bb-v" data-v="${i}" aria-current="${BB.v===i}"><b>${i+1}</b>${esc(t||'—')}${rc&&rc[i]?`<span class="bb-rf" data-act="bb-refs" data-v="${i}" role="button" title="${rc[i]} ${rc[i]===1?'vez':'veces'} en el Mensaje" aria-label="Ver dónde se habla de este versículo en el Mensaje"><img src="/profeta.jpg" alt=""><em>${rc[i]}</em></span>`:''}</button>`).join(''); })()}</div>
       </div>
       <div class="bb-right${BB.pick?' open':''}">
         <div class="bb-books">${books.map((x,i)=>`<button class="bb-bk" style="background:${bbColor(i)}" data-act="bb-b" data-b="${i}" aria-pressed="${i===BB.b}" title="${esc(x[1])}"><b>${esc(x[2])}</b><small>${esc(x[1])}</small></button>`).join('')}</div>
@@ -330,3 +330,89 @@ function qkDraw(){
   else if(QK.b!=null) pv.textContent=`Capítulos 1 a ${books[QK.b][3].length}`;
   else pv.textContent=QK.stage==='book'&&!c.length&&!QK.txt?'Escribe las primeras letras del libro (para 1 Juan: 1 jua)':(c.length>1?'Sigue escribiendo, o Enter / espacio para el resaltado':'');
 }
+
+/* ================= Referencias: en qué parte del Mensaje se habla de este versículo ================= */
+const RF={counts:{},open:false,b:0,c:0,v:0,list:null,k:null,ser:{},i:null};
+(function(){ const st=document.createElement('style'); st.textContent=`
+.bb-v.has-rf{position:relative;padding-right:46px}
+.bb-rf{position:absolute;right:8px;top:8px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:block}
+.bb-rf img{width:30px;height:30px;border-radius:50%;object-fit:cover;display:block;border:1.5px solid #5aa9e6;box-shadow:0 1px 4px rgba(0,0,0,.35);filter:saturate(.9)}
+.bb-rf em{position:absolute;right:-5px;bottom:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#2f7fc1;color:#fff;font:700 10px/16px var(--f-ui);font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.bb-v[aria-current="true"] .bb-rf em{box-shadow:0 0 0 2px #5b6b16}
+.rf-scrim{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35)}
+.rf{position:fixed;left:0;right:0;bottom:0;z-index:61;margin:0 auto;max-width:760px;height:min(64vh,640px);display:flex;flex-direction:column;background:var(--surface);color:var(--ink);border-radius:20px 20px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.45);border:1px solid var(--line);border-bottom:0;padding-bottom:env(safe-area-inset-bottom,0px);animation:rfUp .22s ease}
+@keyframes rfUp{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.rf-grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 2px;flex:none}
+.rf-h{display:flex;align-items:center;gap:10px;padding:6px 14px 10px;border-bottom:1px solid var(--line);flex:none}
+.rf-h img{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;border:1.5px solid #5aa9e6}
+.rf-h .t{flex:1;min-width:0}
+.rf-h b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rf-h small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rf-x{border:0;background:var(--sunk);color:var(--ink);width:32px;height:32px;border-radius:50%;font-size:18px;line-height:1;cursor:pointer;flex:none}
+.rf-back{border:0;background:none;color:var(--accent);font:600 15px var(--f-ui);cursor:pointer;padding:4px 2px;flex:none}
+.rf-body{overflow:auto;flex:1;-webkit-overflow-scrolling:touch}
+.rf-vt{margin:0;padding:10px 16px;font-size:14px;color:var(--muted);font-style:italic;border-bottom:1px solid var(--line);background:var(--sunk)}
+.rf-it{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:inherit;font:inherit;padding:12px 16px;cursor:pointer}
+.rf-it:hover{background:var(--sunk)}
+.rf-it b{display:block;font-size:16px}
+.rf-it code{color:#3d8fd6;font:600 13px var(--f-mono);margin-right:8px}
+.rf-it .m{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin:2px 0 4px}
+.rf-it .tag{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:0 6px}
+.rf-it p{margin:0;font-size:14px;line-height:1.45;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rf-p{padding:12px 18px 18px}
+.rf-p .num{color:var(--muted);font-size:13px;margin-bottom:4px}
+.rf-p .tx{font-size:17.5px;line-height:1.6;white-space:pre-wrap}
+.rf-p .tx mark{background:color-mix(in srgb,#3d8fd6 26%,transparent);color:inherit;border-radius:4px;padding:1px 2px;-webkit-box-decoration-break:clone;box-decoration-break:clone;border-bottom:2px solid #3d8fd6}
+.rf-p .side{opacity:.55;font-size:15px;line-height:1.5;white-space:pre-wrap;margin:10px 0}
+.rf-nav{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--line);flex:none;flex-wrap:wrap}
+.rf-nav .btn{flex:1;justify-content:center}
+.rf-empty{padding:28px 18px;text-align:center;color:var(--muted)}
+@media (max-width:640px){body:has(.rf) .bnav{display:none}}
+`; document.head.appendChild(st); })();
+function rfCounts(b,c){ const k=b+'.'+c; const x=RF.counts[k]; if(x===undefined){ RF.counts[k]=null; fetch(`/api/biblia/refs?b=${b}&c=${c}`).then(r=>r.json()).then(d=>{ RF.counts[k]=d.counts||{}; if(V.view==='bible'&&BB.b===b&&BB.c===c) render(); }).catch(()=>{ delete RF.counts[k]; }); return null; } return x; }
+async function rfOpen(v){
+  Object.assign(RF,{open:true,b:BB.b,c:BB.c,v,list:null,k:null,i:null}); rfDraw();
+  try{ const d=await (await fetch(`/api/biblia/refs?b=${RF.b}&c=${RF.c}&v=${v}`)).json(); RF.list=d.refs||[]; }catch{ RF.list=[]; toast('No se pudieron cargar las referencias.'); }
+  rfDraw();
+}
+function rfClose(){ RF.open=false; const a=document.getElementById('rf'), b=document.getElementById('rf-scrim'); if(a) a.remove(); if(b) b.remove(); }
+function rfWords(t){ return (t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function rfMark(text,verse){
+  /* resalta la parte del párrafo que coincide con el versículo */
+  const e=esc(text); const vw=rfWords(verse).replace(/[^a-z0-9ñ\s]/g,' ').split(/\s+/).filter(w=>w.length>3); if(vw.length<3) return e;
+  const set=new Set(vw); let h=e.replace(/[\p{L}\p{N}]+/gu,w=>set.has(rfWords(w))||(w.length<=3&&/^[\p{L}]+$/u.test(w))?`<mark>${w}</mark>`:w);
+  h=h.replace(/<\/mark>([\s,;:.]{1,3})<mark>/g,'$1');
+  /* solo se resaltan tramos de 4 palabras o más (la lectura del versículo) */
+  return h.replace(/<mark>([^<]*)<\/mark>/g,(m,t)=>{ const n=(t.match(/[\p{L}\p{N}]{4,}/gu)||[]).length; return n>=4?`<mark>${t.trim()===t?t:t}</mark>`:t; });
+}
+async function rfShow(k){
+  RF.k=k; const r=RF.list[k]; RF.i=r.i; rfDraw();
+  if(!RF.ser[r.id]){ try{ RF.ser[r.id]=await api('/api/sermons/'+encodeURIComponent(r.id)); }catch{ toast('No se pudo abrir el mensaje.'); RF.k=null; } rfDraw(); }
+}
+function rfDraw(){
+  if(!RF.open) return; let root=document.getElementById('rf');
+  if(!root){ const sc=document.createElement('div'); sc.id='rf-scrim'; sc.className='rf-scrim'; sc.addEventListener('click',rfClose); document.body.appendChild(sc);
+    root=document.createElement('div'); root.id='rf'; root.className='rf'; root.setAttribute('role','dialog'); root.setAttribute('aria-label','Referencias en el Mensaje'); document.body.appendChild(root); }
+  const ref=bbRef(RF.b,RF.c,RF.v); const vt=(bbBooks()[RF.b]||[])[3]?.[RF.c]?.[RF.v]||'';
+  if(RF.k==null){
+    const L=RF.list; const n=L?L.length:0;
+    root.innerHTML=`<div class="rf-grip"></div><div class="rf-h"><img src="/profeta.jpg" alt=""><div class="t"><b>${esc(ref)}${L?` · ${n} ${n===1?'referencia':'referencias'}`:''}</b><small>Dónde se habla de este versículo en el Mensaje</small></div><button class="rf-x" data-act="rf-close" aria-label="Cerrar">×</button></div>
+      <div class="rf-body"><p class="rf-vt">${esc(vt)}</p>${!L?'<div class="rf-empty">Buscando en los mensajes…</div>':!n?'<div class="rf-empty">Todavía no hay mensajes subidos que hablen de este versículo.</div>':L.map((r,k)=>`<button class="rf-it" data-act="rf-item" data-k="${k}"><b>${esc(r.title)}</b><span class="m"><code>${esc(r.code||'')}</code>Párrafo ${esc(r.n)}${r.place?` · ${esc(r.place)}`:''}<span class="tag">${r.how==='cita'?'Cita':'Lectura'}</span></span><p>${esc(r.snip)}</p></button>`).join('')}</div>`;
+    const bd=root.querySelector('.rf-body'); if(bd&&RF.listScroll) bd.scrollTop=RF.listScroll; if(bd) bd.addEventListener('scroll',()=>{ RF.listScroll=bd.scrollTop; },{passive:true});
+    return;
+  }
+  const r=RF.list[RF.k], s=RF.ser[r.id]; const P=s&&s.paras||[]; const i=RF.i; const p=P[i];
+  root.innerHTML=`<div class="rf-grip"></div><div class="rf-h"><button class="rf-back" data-act="rf-back">‹ Atrás</button><div class="t"><b>${esc(r.title)}</b><small>${esc(r.code||'')}${r.place?' · '+esc(r.place):''} · ${esc(ref)}</small></div><button class="rf-x" data-act="rf-close" aria-label="Cerrar">×</button></div>
+    <div class="rf-body">${!s?'<div class="rf-empty">Abriendo el mensaje…</div>':`<div class="rf-p">${P[i-1]?`<div class="side">${esc(P[i-1].t)}</div>`:''}<div class="num">Párrafo ${esc(p?p.n:'')}</div><div class="tx">${p?(i===r.i?rfMark(p.t,vt):esc(p.t)):''}</div>${P[i+1]?`<div class="side">${esc(P[i+1].t)}</div>`:''}</div>`}</div>
+    <div class="rf-nav"><button class="btn" data-act="rf-step" data-d="-1" ${!s||i<=0?'disabled':''}>◀ Anterior</button><button class="btn" data-act="rf-step" data-d="1" ${!s||i>=P.length-1?'disabled':''}>Siguiente ▶</button><button class="btn pri" data-act="rf-full">Abrir mensaje</button></div>`;
+}
+document.addEventListener('click',ev=>{
+  const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
+  if(a==='bb-refs'){ ev.preventDefault(); ev.stopPropagation(); rfOpen(+d.v); }
+  else if(a==='rf-close') rfClose();
+  else if(a==='rf-item') rfShow(+d.k);
+  else if(a==='rf-back'){ RF.k=null; rfDraw(); }
+  else if(a==='rf-step'){ const s=RF.ser[RF.list[RF.k].id]; if(!s) return; RF.i=Math.max(0,Math.min(s.paras.length-1,RF.i+(+d.d))); rfDraw(); const b=document.querySelector('#rf .rf-body'); if(b) b.scrollTop=0; }
+  else if(a==='rf-full'){ const r=RF.list[RF.k]; const i=RF.i; rfClose(); V.tab='mensaje'; go('mensaje'); if(window.msOpen) msOpen(r.id,i); }
+});
+document.addEventListener('keydown',e=>{ if(RF.open&&e.key==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); if(RF.k!=null){ RF.k=null; rfDraw(); } else rfClose(); } },true);

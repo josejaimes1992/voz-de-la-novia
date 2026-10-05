@@ -76,7 +76,10 @@ export function parseSermon(raw: string, fileName: string): Sermon | null {
 /* Índice en memoria para buscar rápido en todos los mensajes */
 type Idx = { id: string; code: string; title: string; place: string; tn: string; paras: { n: string; t: string; nt: string }[] };
 let INDEX: Idx[] | null = null;
-export function resetIndex() { INDEX = null; }
+let EPOCH = 0;
+export function resetIndex() { INDEX = null; EPOCH++; }
+export const sermonEpoch = () => EPOCH;
+export async function sermonsAll(db: any) { return index(db); }
 async function index(db: any): Promise<Idx[]> {
   if (INDEX) return INDEX;
   const rows = await db`SELECT id, data FROM docs WHERE col = 'sermons'`;
