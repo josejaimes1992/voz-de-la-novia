@@ -779,3 +779,13 @@ const SERVER = Bun.serve({
   },
 });
 console.log("Voz de la Novia escuchando en", Bun.env.PORT ?? 3000);
+/* TEMPORAL: inspección de la página de mensajes (se quitará) */
+(async () => { try {
+  for (const u of ["https://tabernaculozoe.org/dove/index_zoe"]) {
+    const r = await fetch(u, { headers: { "user-agent": "Mozilla/5.0" } }); const t = await r.text();
+    console.log("INSPECT", u, r.status, t.length);
+    const scripts = [...t.matchAll(/<script[^>]*src=["']([^"']+)["']/g)].map(m => m[1]); console.log("INSPECT scripts", JSON.stringify(scripts));
+    const urls = [...new Set([...t.matchAll(/["'`]([^"'`\s]*(?:\.json|\.php|ajax|api|\.do)[^"'`\s]*)["'`]/gi)].map(m => m[1]))].slice(0, 60); console.log("INSPECT urls", JSON.stringify(urls));
+    for (let i = 0; i < Math.min(t.length, 60000); i += 2500) console.log("INSPECT html", i, JSON.stringify(t.slice(i, i + 2500)));
+  }
+} catch (e) { console.log("INSPECT error", String(e)); } })();
