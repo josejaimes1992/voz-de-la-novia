@@ -11,6 +11,7 @@ const BB_ALIAS={salmo:'Salmos',sl:'Salmos',ps:'Salmos',apoc:'Apocalipsis',rev:'A
 .bb-sug{display:grid;gap:4px;max-height:50vh;overflow:auto}
 .bb-sug button{text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;color:inherit;font:inherit;cursor:pointer}
 .bb-sug button b{color:var(--accent)}
+.bb-sug button.sel{border-color:var(--accent);background:var(--accent-soft)}
 .bb-sug button small{display:block;color:var(--muted);font-size:13px;line-height:1.35}
 .bb-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .bb-books{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:3px}
@@ -119,8 +120,37 @@ window.viewBible=function(){
     <p class="bb-note">${esc(BB.data.name)} · ${esc(BB.data.note||'')}</p>
   </div>`;
 };
+/* ---------- Buscador rápido (como Holyrics): letras → libro, Enter → capítulo, Enter → versículo ---------- */
+const BB_POP=['Juan','Salmos','Mateo','Marcos','Lucas','Hechos','Romanos','Génesis','Isaías','Apocalipsis','Hebreos','Efesios','Proverbios','1 Juan','1 Corintios','Éxodo','Daniel','Jeremías','Santiago','Gálatas','Filipenses','Colosenses','Ezequiel','Josué','Jueces'];
+const BB_COMMON=new Set(['la','las','lo','los','de','del','el','en','es','un','una','mi','su','se','si','no','me','te','le','y','o','a','al','con','por','para','que','ya','yo','tu','ni','pues','mas','ha','he','son','fue']);
+function bbCands(num,word){
+  const books=bbBooks(); if(!word) return []; const key=(num||'')+word; const alias=BB_ALIAS[word]; const out=[];
+  books.forEach((bk,i)=>{ const n=bbNorm(bk[1]), a=bbNorm(bk[2]); let sc=0;
+    if(n===key) sc=120; else if(a===key) sc=110; else if(alias&&bbNorm((num||'')+alias)===n) sc=105; else if(n.startsWith(key)) sc=60; else if(a.startsWith(key)&&key.length>=2) sc=50;
+    if(!sc) return; const pi=BB_POP.indexOf(bk[1]); if(sc<100) sc+=pi>=0?(30-pi):0; out.push({i,sc}); });
+  return out.sort((x,y)=>y.sc-x.sc||x.i-y.i).map(x=>x.i);
+}
+function bbQuick(q){
+  const t=(q||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^\s+/,'');
+  const m=t.match(/^([123])?\s*([a-zñ]+)\.?(?:\s+|(?=\d))?(\d+)?(\s*[:.\s]\s*)?(\d+)?\s*$/); if(!m) return null;
+  const [,num,word,ch,sep,vs]=m; const cands=bbCands(num,word); if(!cands.length) return null;
+  const b=cands[Math.min(BB.sel||0,cands.length-1)]; const bk=bbBooks()[b];
+  if(ch==null) return {stage:'book',cands,b,word,num};
+  const c=Math.min(Math.max(1,+ch),bk[3].length)-1;
+  if(!sep) return {stage:'chapter',cands,b,c};
+  const v=vs!=null&&vs!==''?Math.min(Math.max(1,+vs),bk[3][c].length)-1:null;
+  return {stage:'verse',cands,b,c,v};
+}
+function bbQuickSug(Q){
+  const books=bbBooks();
+  if(Q.stage==='book') return Q.cands.slice(0,6).map((i,k)=>`<button data-act="bb-pickbook" data-b="${i}" class="${k===(BB.sel||0)?'sel':''}"><b>${esc(books[i][1])}</b>${k===(BB.sel||0)?' — Enter o espacio':''}<small>${books[i][3].length} capítulos</small></button>`).join('')+(Q.cands.length>1?'<p class="bb-note">↑ ↓ para elegir otro libro</p>':'');
+  const bk=books[Q.b];
+  if(Q.stage==='chapter') return `<button data-act="bb-go" data-b="${Q.b}" data-c="${Q.c}" data-v=""><b>${esc(bk[1])} ${Q.c+1}</b> — Enter para elegir el versículo<small>Capítulos 1 a ${bk[3].length}</small></button>`;
+  const v=Q.v; const tx=v!=null?bk[3][Q.c][v]:''; return `<button data-act="bb-go" data-b="${Q.b}" data-c="${Q.c}" data-v="${v==null?'':v}"><b>${esc(bbRef(Q.b,Q.c,v))}</b> — Enter${BB.live?' para proyectar':' para ir'}<small>${v!=null?esc(tx):`Versículos 1 a ${bk[3][Q.c].length}`}</small></button>`;
+}
 function bbSugHtml(){
   const q=BB.q.trim(); if(!q||!BB.data) return '';
+  const Q=bbQuick(BB.q); if(Q) return bbQuickSug(Q);
   const p=bbParse(q); let h='';
   if(p){ const bk=bbBooks()[p.b]; const t=p.v!=null?bk[3][p.c][p.v]:bk[3][p.c][0]; h+=`<button data-act="bb-go" data-b="${p.b}" data-c="${p.c}" data-v="${p.v==null?'':p.v}"><b>${esc(bbRef(p.b,p.c,p.v))}</b> — Enter para ir<small>${esc((t||'').slice(0,160))}</small></button>`; }
   if(!p&&q.length>=3){ const hits=bbSearchWords(q); h+=hits.length?hits.map(x=>`<button data-act="bb-go" data-b="${x.b}" data-c="${x.c}" data-v="${x.v}"><b>${esc(bbRef(x.b,x.c,x.v))}</b><small>${esc(x.tx)}</small></button>`).join('')+(hits.length>=80?'<p class="bb-note">Se muestran los primeros 80. Agrega otra palabra para afinar.</p>':''):'<p class="bb-note">Sin resultados.</p>'; }
@@ -129,11 +159,27 @@ function bbSugHtml(){
 function bbAfter(){
   const vs=$('#bb-ver'); if(vs) vs.addEventListener('change',e=>{ BB.ver=e.target.value; try{ localStorage.setItem('vdn-biblia',BB.ver); }catch{} BB.data=null; render(); });
   const qi=$('#bb-q'); if(!qi) return;
-  qi.addEventListener('input',e=>{ BB.q=e.target.value; clearTimeout(BB.t); BB.t=setTimeout(()=>{ const s=$('#bb-sug'); if(s) s.innerHTML=bbSugHtml(); },120); });
-  qi.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const p=bbParse(BB.q); if(p){ bbGo(p.b,p.c,p.v); } else { const f=$('#bb-sug button'); if(f) f.click(); } } else if(e.key==='Escape'){ BB.q=''; qi.value=''; $('#bb-sug').innerHTML=''; qi.blur(); } });
+  const sug=()=>{ const s=$('#bb-sug'); if(s) s.innerHTML=bbSugHtml(); };
+  qi.addEventListener('input',e=>{ const prev=BB.q; BB.q=e.target.value;
+    /* espacio después de las letras del libro = elegir el libro (como Holyrics) */
+    if(/\s$/.test(BB.q)&&!/\s$/.test(prev)&&BB.q.length>prev.length){ const Q=bbQuick(BB.q.trimEnd()); if(Q&&Q.stage==='book'&&Q.word.length>=2&&!BB_COMMON.has(Q.word)) { bbPickBook(Q.b); return; } }
+    if(BB.q.length<prev.length||!/\s$/.test(BB.q)) BB.sel=BB.q.length>prev.length&&/[a-zñ]$/i.test(BB.q)?0:BB.sel;
+    clearTimeout(BB.t); BB.t=setTimeout(sug,40); });
+  qi.addEventListener('keydown',e=>{
+    const Q=bbQuick(BB.q);
+    if((e.key==='ArrowDown'||e.key==='ArrowUp')&&Q&&Q.stage==='book'){ e.preventDefault(); BB.sel=Math.max(0,Math.min(Q.cands.length-1,(BB.sel||0)+(e.key==='ArrowDown'?1:-1))); sug(); return; }
+    if(e.key==='Enter'||(e.key==='Tab'&&Q&&Q.stage==='book')){ e.preventDefault();
+      if(Q&&Q.stage==='book'){ bbPickBook(Q.b); return; }
+      if(Q&&Q.stage==='chapter'){ BB.b=Q.b; BB.c=Q.c; BB.v=null; BB.pick=false; BB.q=`${bbBooks()[Q.b][1]} ${Q.c+1}:`; BB.focusQ=true; render(); const L=$('#bb-vlist'); if(L) L.scrollTop=0; return; }
+      if(Q&&Q.stage==='verse'){ if(Q.v==null){ BB.b=Q.b; BB.c=Q.c; BB.v=null; BB.q=''; render(); return; } BB.sel=0; bbGo(Q.b,Q.c,Q.v); const n=$('#bb-q'); if(n) n.blur(); return; }
+      const p=bbParse(BB.q); if(p){ bbGo(p.b,p.c,p.v); } else { const f=$('#bb-sug button'); if(f) f.click(); } }
+    else if(e.key==='Escape'){ BB.q=''; BB.sel=0; qi.value=''; $('#bb-sug').innerHTML=''; qi.blur(); }
+    else if(e.key==='Backspace'&&/\s$/.test(BB.q)&&Q&&Q.stage==='book'){ /* borra el libro completo */ }
+  });
   if(BB.focusQ){ BB.focusQ=false; qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch{} }
   const cur=document.querySelector('#bb-vlist [aria-current="true"]'); if(cur){ const L=$('#bb-vlist'); const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/3; }
 }
+function bbPickBook(b){ const bk=bbBooks()[b]; BB.b=b; BB.c=0; BB.v=null; BB.sel=0; BB.q=bk[1]+' '; BB.focusQ=true; render(); }
 function bbGo(b,c,v){ BB.b=b; BB.c=c; BB.v=v; BB.q=''; render(); if(v!=null&&BB.live) bbProject(); }
 async function bbProject(){
   if(BB.v==null||!S.canWrite) return; const bk=bbBooks()[BB.b]; const text=bk[3][BB.c][BB.v]||''; const ref=bbRef(BB.b,BB.c,BB.v);
@@ -158,6 +204,7 @@ document.addEventListener('click',ev=>{
   else if(a==='bb-c'){ BB.c=+d.c; BB.v=null; BB.pick=false; render(); const L=$('#bb-vlist'); if(L) L.scrollTop=0; }
   else if(a==='bb-v'){ const v=+d.v; const again=BB.v===v; BB.v=v; BB.pick=false; render(); if(BB.live||again) bbProject(); }
   else if(a==='bb-pick'){ BB.pick=!BB.pick; render(); window.scrollTo({top:0}); }
+  else if(a==='bb-pickbook'){ bbPickBook(+d.b); }
   else if(a==='bb-go'){ bbGo(+d.b,+d.c,d.v===''?null:+d.v); }
   else if(a==='bb-proj'){ if(BB.live&&BB.remote&&BB.remote.bible&&BB.v!=null&&BB.remote.bible.v===BB.v&&BB.remote.mode==='text'){ BB.live=false; render(); toast('Modo en vivo apagado: tocar un versículo ya no lo proyecta.'); } else if(BB.v==null) toast('Primero elige un versículo.'); else bbProject(); }
   else if(a==='bb-step') bbStep(+d.d);
