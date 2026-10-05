@@ -38,12 +38,18 @@ NAMES.forEach((list, bi) => { for (const a of list) {
   else if (a.length > 2 && !SKIP.has(a) && !ALIAS.has(a)) { ALIAS.set(a, bi); parts.push(a); }
 } });
 parts.sort((a, b) => b.length - a.length);
-/* Libro + capítulo + versículo, con varias formas de escribirlo */
-const CITE = new RegExp(`(?<![a-z0-9])(${parts.map(p => esc(p).replace(/ /g, "\\s+")).join("|")})\\.?,?\\s*(?:(?:capitulo|cap\\.?)\\s*)?(\\d{1,3})\\s*(?::|\\.|,?\\s*(?:y\\s+(?:el\\s+)?)?(?:versiculos?|vers\\.?|vs?\\.?)\\s*)\\s*(\\d{1,3})(?:\\s*(?:-|–|al|a|y)\\s*(\\d{1,3}))?`, "g");
-
+/* Primero se buscan los números ("1:26", "14, versículo 12") y luego el libro justo antes */
+const NUMS = /(\d{1,3})\s*(?::|\.(?=\d)|,?\s*(?:y\s+(?:el\s+)?)?(?:versiculos?|vers\.?|vs?\.)\s*)\s*(\d{1,3})(?:\s*(?:-|–|al|a|y)\s*(\d{1,3}))?/g;
+const BOOK_END = new RegExp(`(?<![a-z0-9])(${parts.map(p => esc(p).replace(/ /g, "\\s+")).join("|")})\\.?,?\\s*(?:(?:capitulo|cap\\.?)\\s*)?$`);
 function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 const WORDS = (t: string) => norm(t).replace(/[^a-z0-9ñ\s]+/g, " ").split(/\s+/).filter(Boolean);
-const K = 6;
+const K = 5;
+const WH = new Map<string, number>();
+const wh = (w: string) => { let h = WH.get(w); if (h === undefined) { h = hash(w); if (WH.size < 400000) WH.set(w, h); } return h; };
+function shingles(words: string[], out: (h: number, j: number) => void) {
+  const n = words.length; if (n < K) return; const hs = new Array(n); for (let i = 0; i < n; i++) hs[i] = wh(words[i]);
+  for (let j = 0; j + K <= n; j++) { let h = 0; for (let q = 0; q < K; q++) h = (Math.imul(h, 31) + hs[j + q]) >>> 0; out(h, j); }
+}
 
 export type Ref = { id: string; n: string; i: number; how: "cita" | "lectura" };
 export type RefIndex = { byVerse: Map<string, Ref[]>; built: number; sermons: number };
@@ -55,9 +61,9 @@ export async function buildRefs(sermons: { id: string; paras: { n: string; t: st
   const sh = new Map<number, number>(); const vKey: string[] = []; const vNeed: number[] = [];
   const multi = new Set<number>();
   books.forEach((bk: any, b: number) => (bk[3] || []).forEach((ch: string[], c: number) => ch.forEach((tx: string, v: number) => {
-    const w = WORDS(tx); if (w.length < 7) return; const id = vKey.length; vKey.push(`${b}.${c}.${v}`);
-    const seen = new Set<number>(); for (let i = 0; i + K <= w.length; i++) { const h = hash(w.slice(i, i + K).join(" ")); if (seen.has(h)) continue; seen.add(h); if (sh.has(h) && sh.get(h) !== id) multi.add(h); else sh.set(h, id); }
-    vNeed.push(Math.max(2, Math.ceil(seen.size * 0.45)));
+    const w = WORDS(tx); if (w.length < 6) return; const id = vKey.length; vKey.push(`${b}.${c}.${v}`);
+    const seen = new Set<number>(); shingles(w, h => { if (seen.has(h)) return; seen.add(h); if (sh.has(h) && sh.get(h) !== id) multi.add(h); else sh.set(h, id); });
+    vNeed.push(Math.max(2, Math.ceil(seen.size * 0.4)));
   })));
   for (const h of multi) sh.delete(h);
   const byVerse = new Map<string, Ref[]>();
@@ -65,18 +71,19 @@ export async function buildRefs(sermons: { id: string; paras: { n: string; t: st
   let ops = 0;
   for (const s of sermons) {
     (s.paras || []).forEach((p, i) => {
-      const nt = norm(p.t);
+      const nt = (p as any).nt ?? norm(p.t);
       // 1) citas escritas
-      CITE.lastIndex = 0; let m: RegExpExecArray | null;
-      while ((m = CITE.exec(nt))) {
-        const b = ALIAS.get(m[1].replace(/\s+/g, " ")); if (b == null || !books[b]) continue;
-        const c = +m[2] - 1, v1 = +m[3] - 1, v2 = m[4] && +m[4] - 1 > v1 ? Math.min(+m[4] - 1, v1 + 30) : v1; const ch = books[b][3][c]; if (!ch) continue;
+      NUMS.lastIndex = 0; let m: RegExpExecArray | null;
+      while ((m = NUMS.exec(nt))) {
+        const bm = nt.slice(Math.max(0, m.index - 34), m.index).match(BOOK_END); if (!bm) continue;
+        const b = ALIAS.get(bm[1].replace(/\s+/g, " ")); if (b == null || !books[b]) continue;
+        const c = +m[1] - 1, v1 = +m[2] - 1, v2 = m[3] && +m[3] - 1 > v1 ? Math.min(+m[3] - 1, v1 + 30) : v1; const ch = books[b][3][c]; if (!ch) continue;
         for (let v = v1; v <= v2 && v < ch.length; v++) if (v >= 0) add(`${b}.${c}.${v}`, { id: s.id, n: p.n, i, how: "cita" });
       }
       // 2) lecturas del texto bíblico
       const w = nt.replace(/[^a-z0-9ñ\s]+/g, " ").split(/\s+/).filter(Boolean); if (w.length < K) return;
       const hits = new Map<number, number>();
-      for (let j = 0; j + K <= w.length; j++) { const id = sh.get(hash(w.slice(j, j + K).join(" "))); if (id != null) hits.set(id, (hits.get(id) || 0) + 1); }
+      shingles(w, h => { const id = sh.get(h); if (id != null) hits.set(id, (hits.get(id) || 0) + 1); });
       for (const [id, n] of hits) if (n >= vNeed[id]) add(vKey[id], { id: s.id, n: p.n, i, how: "lectura" });
     });
     if (++ops % 25 === 0) await new Promise(r => setTimeout(r, 0));
