@@ -91,6 +91,42 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .row .t small{color:var(--muted);font-size:13px}
 .key{flex:none;display:inline-grid;place-items:center;min-width:42px;height:42px;padding:0 6px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--accent-soft)}
 .key.sm{min-width:30px;height:30px;font-size:11px}
+/* ---- Colores por tono ---- */
+:root{--kl:42%;--kbg:93%}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--kl:66%;--kbg:20%}}
+:root[data-theme="dark"]{--kl:66%;--kbg:20%}
+.key[style*="--kh"]{border-color:hsl(var(--kh) var(--ks,70%) var(--kl));color:hsl(var(--kh) var(--ks,70%) var(--kl));background:hsl(var(--kh) var(--ks,70%) var(--kbg))}
+.key[data-minor]{border-style:dashed;background:transparent}
+.kchip[style*="--kh"]{border-color:hsl(var(--kh) 60% var(--kl) / .55);color:hsl(var(--kh) 70% var(--kl));font-weight:700}
+.kchip[style*="--kh"]::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:hsl(var(--kh) 70% var(--kl));margin-right:6px;vertical-align:1px}
+.kchip[data-minor]::before{background:transparent;border:1.5px solid hsl(var(--kh) 70% var(--kl));width:5px;height:5px}
+.kchip[aria-pressed="true"][style*="--kh"]{background:hsl(var(--kh) 70% var(--kl));border-color:hsl(var(--kh) 70% var(--kl));color:#fff}
+.kchip[aria-pressed="true"]::before{background:#fff}
+.group[style*="--kh"] .group-h{border-bottom:2px solid hsl(var(--kh) 70% var(--kl) / .6)}
+.group[style*="--kh"] .group-h b{color:hsl(var(--kh) 70% var(--kl));font-size:17px}
+/* ---- Botones y barra ---- */
+.btn{border-radius:10px;transition:background .15s,border-color .15s,box-shadow .15s,transform .05s}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:translateY(1px)}
+.btn.pri{box-shadow:0 2px 10px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn.pri:hover{filter:brightness(1.06)}
+.seg{border-radius:10px}
+.chip{transition:background .15s,border-color .15s}
+.chip:hover{border-color:var(--accent)}
+.tb-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.more{position:relative}
+.more summary{list-style:none;cursor:pointer}
+.more summary::-webkit-details-marker{display:none}
+.more[open] summary{border-color:var(--accent)}
+.more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:200px;display:grid;gap:2px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
+.more-menu .btn{justify-content:flex-start;width:100%;color:var(--ink)}
+.more-menu .btn:hover{background:var(--sunk)}
+.row{border-radius:10px;transition:background .12s}
+.row .key{transition:transform .12s}
+.row:hover .key{transform:scale(1.06)}
+@media (max-width:600px){.hero{max-width:200px;margin-bottom:14px}.hero p{font-size:14px}}
+.pcard{transition:border-color .15s,box-shadow .15s,transform .1s}
+.pcard:hover{box-shadow:0 6px 18px rgba(0,0,0,.12);transform:translateY(-1px)}
 .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);margin-left:6px;vertical-align:1px;font-weight:600}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 .empty b{display:block;color:var(--ink);font-family:var(--f-display);font-size:18px;margin-bottom:6px}
@@ -383,6 +419,8 @@ function keyLabel(idx,minor,latin){
   const n=(minor?MIN_NAMES:MAJ_NAMES)[((idx%12)+12)%12];
   return (latin? LAT[n[0]]+n.slice(1) : n)+(minor?'m':'');
 }
+const KEY_HUE=[0,195,35,85,130,305,55,215,280,170,335,250]; /* C Db D Eb E F F# G Ab A Bb B */
+function kc(k){ if(!k) return ' style="--kh:220;--ks:8%"'; return ` style="--kh:${KEY_HUE[((k.idx%12)+12)%12]}"${k.minor?' data-minor':''}`; }
 function keyCanon(idx,minor){ return keyLabel(idx,minor,false); }
 function keyLong(idx,minor){ const n=(minor?MIN_NAMES:MAJ_NAMES)[((idx%12)+12)%12]; return LAT[n[0]]+n.slice(1).replace('#','♯').replace('b','♭')+(minor?' menor':' mayor'); }
 function useFlatFor(k,shift){ if(!k) return false; const i=((k.idx+shift)%12+12)%12; return k.minor?FLAT_MIN.has(i):FLAT_MAJ.has(i); }
@@ -562,22 +600,28 @@ function viewSongsInner(){
     <div class="search">${ICON.search}<input id="q" type="search" placeholder="${V.qmode==='lyrics'?'Escribe una palabra o frase de la letra':V.qmode==='title'?'Escribe el nombre del cántico':'Buscar por nombre o por una palabra de la letra'}" value="${esc(V.q)}" data-in="q" aria-label="Buscar canciones"></div>
     <div class="seg" role="group" aria-label="Buscar en">${[['all','Todo'],['title','Nombre'],['lyrics','Letra']].map(([v,t])=>`<button data-act="qmode" data-v="${v}" aria-pressed="${(V.qmode||'all')===v}">${t}</button>`).join('')}</div>
     <div class="seg"><button data-act="group" data-v="1" aria-pressed="${V.group}">Por tono</button><button data-act="group" data-v="0" aria-pressed="${!V.group}">A–Z</button></div>
-    ${S.canWrite?`<button class="btn" data-act="sel-start" aria-pressed="${!!V.sel}">${V.sel?'Cancelar selección':'Seleccionar'}</button>`:''}${S.isAdmin?'<button class="btn" data-act="go-trash">Papelera</button>':''}${S.canWrite?`<button class="btn" data-act="open-export" data-scope="songs">Exportar</button><button class="btn" data-act="open-excel">Excel</button><button class="btn" data-act="open-import">Importar</button><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button><button class="btn" data-act="cif-new">🎙 Desde audio</button>`:''}
+    ${S.canWrite?`<div class="tb-actions"><button class="btn pri" data-act="new-song">${ICON.plus}Nueva canción</button><button class="btn" data-act="cif-new">🎙 Desde audio</button>${V.sel?`<button class="btn" data-act="sel-start" aria-pressed="true">Cancelar selección</button>`:''}
+      <details class="more"><summary class="btn">Más <span aria-hidden="true">▾</span></summary><div class="more-menu">
+        <button class="btn ghost" data-act="sel-start">☑ Seleccionar varias</button>
+        <button class="btn ghost" data-act="open-import">⬆ Importar</button>
+        <button class="btn ghost" data-act="open-export" data-scope="songs">⬇ Exportar</button>
+        <button class="btn ghost" data-act="open-excel">▦ Excel</button>
+        ${S.isAdmin?'<button class="btn ghost" data-act="go-trash">🗑 Papelera</button>':''}</div></details></div>`:''}
   </div>
   <div class="chips">${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
-  ${order.map(c=>`<button class="chip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}">${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div><div id="song-res">`;
+  ${order.map(c=>`<button class="chip kchip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}"${c==='?'?'':kc(parseKey(c))}>${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div><div id="song-res">`;
   if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div></div>`;
   if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>${V.qmode==='title'?'Ningún nombre coincide. Prueba buscar en “Letra” o en “Todo”.':'Prueba con otra palabra, revisa la ortografía o quita el filtro de tono.'}</div></div>`;
   if(toks.length){
     const MAXR=120, shown=filtered.length>MAXR?filtered.slice(0,MAXR):filtered;
     h+=`<p class="muted" style="margin:0 0 8px;font-size:13px">${filtered.length} ${filtered.length===1?'cántico encontrado':'cánticos encontrados'}${filtered.length>MAXR?` · se muestran los ${MAXR} más parecidos; escribe más para afinar`:''}</p><div class="list">`+shown.map(s=>{ const m=hits.get(s.id); const k=songKey(s);
-      return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
+      return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
     return h;
   }
-  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key">${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
+  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
   if(V.group){
     const groups=new Map(); filtered.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; if(!groups.has(c)) groups.set(c,[]); groups.get(c).push(s); });
-    h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'canción':'canciones'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
+    h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"${k?kc(k):''}><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'canción':'canciones'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
   } else h+=`<div class="list">${filtered.map(row).join('')}</div>`;
   return h+'</div>';
 }
@@ -696,7 +740,7 @@ function viewSong(){
   const s=S.songs.get(V.songId); if(!s){ V.view='list'; return viewSongs(); }
   const k=songKey(s);
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Canciones</button>
-  <div class="song-h"><span class="key">${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${S.user&&window.whoHtml?whoHtml(null,s.updatedBy,20):esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${S.user&&window.whoHtml?whoHtml(null,s.createdBy,20):esc(s.createdBy)}`:''}</p>`:''}</div></div>
+  <div class="song-h"><span class="key"${kc(k?{idx:k.idx+V.shift,minor:k.minor}:null)}>${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${S.user&&window.whoHtml?whoHtml(null,s.updatedBy,20):esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${S.user&&window.whoHtml?whoHtml(null,s.createdBy,20):esc(s.createdBy)}`:''}</p>`:''}</div></div>
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
@@ -787,7 +831,7 @@ function viewProgram(){
     ${w?`<button class="btn" data-act="pick-song">${ICON.plus}Agregar canción</button>`:''}
   </div>
   <div class="items">${items.length?items.map((it,i)=>{ const s=S.songs.get(it.songId); return `<div class="item"><span class="n">${i+1}</span><div class="t"><b>${s?esc(s.title):'<em>Canción borrada</em>'}</b>
-    <div class="meta">${w?`<select data-it="key" data-i="${i}" aria-label="Tono para este culto">${ALL_KEYS.map(k=>`<option value="${k}" ${keyMatch(it.key,k)?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select><input data-it="note" data-i="${i}" value="${esc(it.note||'')}" placeholder="Indicación (ej. coro 2 veces)">`:`<span class="key sm">${esc(keyText(parseKey(it.key)))}</span><span style="color:var(--muted);font-size:13px">${esc(it.note||'')}</span>`}
+    <div class="meta">${w?`<select data-it="key" data-i="${i}" aria-label="Tono para este culto">${ALL_KEYS.map(k=>`<option value="${k}" ${keyMatch(it.key,k)?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select><input data-it="note" data-i="${i}" value="${esc(it.note||'')}" placeholder="Indicación (ej. coro 2 veces)">`:`<span class="key sm"${kc(parseKey(it.key))}>${esc(keyText(parseKey(it.key)))}</span><span style="color:var(--muted);font-size:13px">${esc(it.note||'')}</span>`}
     ${s&&songKey(s)&&itemShift(it)?`<span style="font-size:12px;color:var(--muted)">original ${esc(keyText(songKey(s)))}</span>`:''}</div></div>
     <div class="ops">${s?`<button data-act="open-song" data-id="${esc(s.id)}" title="Ver canción" aria-label="Ver canción">${ICON.list}</button>`:''}${w?`<button data-act="mv" data-i="${i}" data-d="-1" title="Subir" aria-label="Subir" ${i===0?'disabled':''}>${ICON.up}</button><button data-act="mv" data-i="${i}" data-d="1" title="Bajar" aria-label="Bajar" ${i===items.length-1?'disabled':''}>${ICON.down}</button><button data-act="rm-item" data-i="${i}" title="Quitar" aria-label="Quitar del programa">${ICON.x}</button>`:''}</div></div>`; }).join(''):`<div class="empty"><b>Programa vacío</b>Pulsa “Agregar canción” para elegir cánticos del cancionero.</div>`}</div>
   ${w?(V.confirm==='del-prog'?`<span class="confirm">¿Borrar este programa? <button class="btn danger" data-act="del-prog-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-prog">Borrar programa</button> <button class="btn ghost" data-act="dup-prog">Duplicar programa</button>`):''}`;
@@ -800,7 +844,7 @@ function openPicker(){
     <header><h3>Agregar canción</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body"><div class="search">${ICON.search}<input id="pick-q" type="search" placeholder="Buscar por nombre o por una palabra de la letra" aria-label="Buscar canción"></div><div class="list" id="pick-list"></div></div></div></div>`;
   const draw=()=>{ const toks=searchTokens($('#pick-q').value); const songs=sortedSongs().filter(s=>!toks.length||matchSong(s,toks,'all'));
-    $('#pick-list').innerHTML=songs.length?songs.map(s=>`<button class="row" data-act="pick" data-id="${esc(s.id)}"><span class="key sm">${esc(keyText(songKey(s)))}</span><span class="t"><b>${esc(s.title)}</b><small>${esc(s.author||'')}</small></span>${ICON.plus}</button>`).join(''):'<div class="empty">No hay canciones que coincidan.</div>'; };
+    $('#pick-list').innerHTML=songs.length?songs.map(s=>`<button class="row" data-act="pick" data-id="${esc(s.id)}"><span class="key sm"${kc(songKey(s))}>${esc(keyText(songKey(s)))}</span><span class="t"><b>${esc(s.title)}</b><small>${esc(s.author||'')}</small></span>${ICON.plus}</button>`).join(''):'<div class="empty">No hay canciones que coincidan.</div>'; };
   $('#pick-q').addEventListener('input',draw); draw(); setTimeout(()=>$('#pick-q').focus(),30);
 }
 function openProgPicker(){
@@ -829,7 +873,7 @@ function renderLive(){
   const oldBody=$('#live-body'); const keepScroll=oldBody&&V.live.renderedIdx===V.live.idx?oldBody.scrollTop:0; V.live.renderedIdx=V.live.idx;
   root.innerHTML=`<div class="live" role="dialog" aria-label="Modo en vivo">
     <div class="live-top"><button class="btn ghost" data-act="live-close" aria-label="Salir del modo en vivo">${ICON.x}</button>
-      <span class="key sm">${esc(keyText(k,shift))}</span><span class="ttl">${esc(e.song.title)}</span>${E.length>1?`<span class="cnt">${V.live.idx+1} / ${E.length}</span>`:''}
+      <span class="key sm"${kc(k?{idx:k.idx+shift,minor:k.minor}:null)}>${esc(keyText(k,shift))}</span><span class="ttl">${esc(e.song.title)}</span>${E.length>1?`<span class="cnt">${V.live.idx+1} / ${E.length}</span>`:''}
       <span style="flex-basis:100%;height:0"></span>${controls(k,shift)}${e.note?`<span style="color:var(--muted);font-size:13px">${esc(e.note)}</span>`:''}</div>
     <div class="live-body" id="live-body">${V.chords?verBar(e.song)+instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(sb(e.song),shift,k,V.inst==='piano'?0:liveCapo)}${V.chords?chordsByLine(e.song):''}${renderSheet(sb(e.song),{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
     ${E.length>1?`<div class="live-bot"><button class="btn" data-act="live-go" data-d="-1" ${prev?'':'disabled'}>${ICON.back}${prev?esc(prev.song.title):'Inicio'}</button><button class="btn" data-act="live-go" data-d="1" ${next?'':'disabled'}>${next?esc(next.song.title):'Fin del programa'} <span style="transform:rotate(180deg);display:inline-flex">${ICON.back}</span></button></div>`:''}
@@ -1079,6 +1123,7 @@ document.addEventListener('click',async ev=>{
   }
 });
 let _qT=null;
+document.addEventListener('click',ev=>{ document.querySelectorAll('details.more[open]').forEach(d=>{ if(!d.contains(ev.target)||ev.target.closest('.more-menu [data-act]')) d.removeAttribute('open'); }); },true);
 document.addEventListener('input',ev=>{ const el=ev.target; if(el.dataset.in==='q'){ V.q=el.value; clearTimeout(_qT);
   _qT=setTimeout(updateSongResults,V.q.length<=1?140:70); } });
 document.addEventListener('change',async ev=>{
