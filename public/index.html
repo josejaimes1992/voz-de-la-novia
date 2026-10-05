@@ -68,6 +68,12 @@ h1,h2,h3{text-wrap:balance;margin:0}
 @media (max-width:480px){.tabs button{padding:6px 8px;font-size:13.5px}}
 .nota{border:1px solid #3A3426;background:transparent;border-radius:999px;padding:5px 10px;font-family:var(--f-mono);font-size:12px;color:#B9B09A}
 .foot{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:0 28px;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;text-align:center}
+.foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:18px}
+.foot b{font-family:var(--f-display);font-size:15px;font-weight:700;letter-spacing:.02em;text-transform:none;color:var(--gold)}
+.foot span{font-size:11px;letter-spacing:.14em}
+.brand a.home{color:inherit;text-decoration:none;cursor:pointer;border-radius:10px;padding:2px 8px;-webkit-tap-highlight-color:transparent}
+.brand a.home:hover b{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
+.brand a.home:active{opacity:.7}
 @media (max-width:520px){.brand .mark{width:74px;height:42px}.brand b{font-size:18px}}
 
 main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
@@ -361,7 +367,7 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 </style></head><body>
 
 <header class="top"><div class="top-in">
-  <div class="brand"><img class="vdn" src="/vdn-logo.jpg?v=2" alt="Logo Voz de la Novia" width="56" height="56"><div class="bt"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></div><img class="vdn church" src="/shalom-logo.jpg?v=1" alt="Logo Tabernáculo Shalom Adonai" width="56" height="56"></div>
+  <div class="brand"><img class="vdn" src="/vdn-logo.jpg?v=2" alt="Logo Voz de la Novia" width="56" height="56"><a class="bt home" href="/" data-act="home" title="Ir al inicio" aria-label="Voz de la Novia — ir al inicio"><b>Voz de la Novia</b><span>Unidos en una misma alabanza</span></a><img class="vdn church" src="/shalom-logo.jpg?v=1" alt="Logo Tabernáculo Shalom Adonai" width="56" height="56"></div>
   <div class="tabs" role="tablist">
     <button id="tab-songs" data-act="tab" data-tab="songs" aria-pressed="true"><i class="ti ti-song" aria-hidden="true"></i><span>Canciones</span></button>
     <button id="tab-programs" data-act="tab" data-tab="programs" aria-pressed="false" hidden><i class="ti ti-prog" aria-hidden="true"></i><span>Programas</span></button>
@@ -369,13 +375,12 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
     <button id="tab-msg" data-act="tab" data-tab="mensaje" aria-pressed="false"><i class="ti ti-msg" aria-hidden="true"></i><span>Mensaje</span></button>
     <button id="tab-lib" data-act="tab" data-tab="libros" aria-pressed="false"><i class="ti ti-lib" aria-hidden="true"></i><span>Libros</span></button>
   </div>
-  <button class="nota" data-act="tuner" style="font-family:var(--f-ui);font-weight:600" title="Afinador de guitarra">Afinador</button>
   <button class="nota" id="nota" data-act="nota" title="Cambiar notación de acordes">A–G</button>
   <a class="nota" id="app-link" href="/instalar" style="font-family:var(--f-ui);font-weight:600;text-decoration:none;display:inline-flex;align-items:center" title="Instalar la app en el teléfono o compartirla">📲 App</a>
   <button class="nota" id="auth" data-act="auth" style="font-family:var(--f-ui);font-weight:600">Ingresar</button>
 </div></header>
 <main id="view"><div class="loading">Abriendo Voz de la Novia…</div></main>
-<footer class="foot">Tabernáculo Shalom Adonai · Voz de la Novia · <a href="/instalar" style="color:inherit">Instalar o compartir la app</a></footer>
+<footer class="foot"><b>Voz de la Novia</b><span>Tabernáculo Shalom Adonai</span></footer>
 <script>if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{})); if(matchMedia('(display-mode: standalone)').matches||navigator.standalone){ const a=document.getElementById('app-link'); if(a){ a.textContent='🔗 Compartir'; a.title='Compartir la app con otras personas'; } }</script>
 <div id="modal-root"></div>
 <div id="live-root"></div>
@@ -1081,6 +1086,7 @@ document.addEventListener('click',async ev=>{
     case 'group': V.group=ds.v==='1'; render(); break;
     case 'key': V.key=ds.k; render(); break;
     case 'go-list': V.tab='songs'; go('list'); break;
+    case 'home': ev.preventDefault(); closeModal(); V.tab='songs'; V.q=''; V.key='all'; V.missingOnly=false; V.lastSongId=null; V.listY=null; go('list'); window.scrollTo(0,0); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
     case 'open-song': { closeModal(); stopMetro(); V.tab='songs'; V.lastSongId=ds.id; const so=S.songs.get(ds.id); go('song',{songId:ds.id,shift:0,capo:Number(so&&so.capo)||0}); break; }
     case 'ver': V.ver=ds.v; lsSet('vdn-ver',V.ver); if(V.live) renderLive(); render(); break;
