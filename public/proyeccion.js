@@ -261,7 +261,7 @@ function styleDraw(){
     try{ const r=await fetch('/api/fondos',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJF.unshift({url:d.url}); styleSet({img:d.url}); }catch{ toast('No se pudo subir esa imagen.'); } });
 }
 let PJS_T=null;
-function styleSet(ch,soft){ Object.assign(PJS,ch); if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
+function styleSet(ch,soft){ Object.assign(PJS,ch); if(typeof BB!=='undefined') BB.style={...PJS}; if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
   clearTimeout(PJS_T); PJS_T=setTimeout(async()=>{ try{ PJS=await api('/api/proyector/estilo',{method:'POST',body:JSON.stringify(PJS)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar el estilo.'); } },soft?250:0); }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='proj-style') styleOpen();
