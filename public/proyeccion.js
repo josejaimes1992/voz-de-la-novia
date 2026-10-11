@@ -30,6 +30,11 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pjw-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;border-bottom:1px solid var(--line);background:var(--surface)}
+.pjw-tabs button{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:8px;padding:7px 4px;font:700 12.5px var(--f-ui);cursor:pointer}
+.pjw-tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pjw-h select{padding:3px 6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:inherit;font:600 12px var(--f-ui)}
+
 .pj-it{position:relative}
 .pj-it.pick{outline:2px solid #3d8fd6;outline-offset:-2px;background:color-mix(in srgb,#3d8fd6 16%,transparent)}
 .pj-it .rm{position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;display:none;place-items:center;font-size:14px;line-height:1;color:var(--muted);background:var(--sunk)}
@@ -171,6 +176,11 @@ function pjResHtml(sug){
 
 function openProj(opt){
   if(!S.canWrite) return;
+  if(opt.live){ /* Culto en vivo: abre la consola directo (con el programa de hoy si existe) */
+    const today=new Date(Date.now()-5*3600_000).toISOString().slice(0,10); const tp=[...S.programs.values()].find(p=>p.date===today&&!p._shared);
+    PJ.programId=tp?tp.id:null; PJ.songIds=tp?(tp.items||[]).map(it=>it.songId).filter(id=>S.songs.has(id)):[]; PJ.tab=PJ.tab||'songs';
+    PJ.si=0; PJ.open=true; PJ.min=false; PJ.q=''; PJ.peek=null; const r=PJ.remote; if(r&&r.songId){ const i=PJ.songIds.indexOf(r.songId); if(i>=0) PJ.si=i; }
+    pjConnect(); pjRender(true); if(typeof keepAwake==='function') keepAwake(true); return; }
   if(PJ.open&&opt.songId){ pjAdd(opt.songId,!!opt.show); if(!opt.stayMin) PJ.min=false; pjRender(true); return; }
   if(opt.programId){ const p=S.programs.get(opt.programId); PJ.programId=opt.programId; PJ.songIds=(p?.items||[]).map(it=>it.songId).filter(id=>S.songs.has(id)); }
   else { PJ.programId=null; PJ.songIds=[opt.songId]; }
@@ -212,6 +222,9 @@ function pjStep(d){
   const j=PJ.si+(d>0?1:-1);
   if(j>=0&&j<PJ.songIds.length){ PJ.si=j; const m=pjSlides(pjSong()).length; pjRender(true); return pjShow(d>0?0:Math.max(0,m-1)); }
 }
+async function pjNav(d){ const r=PJ.remote||{};
+  if(r.mode==='text'&&(r.bible||r.sermon)){ try{ PJ.remote=await api('/api/proyector/nav',{method:'POST',body:JSON.stringify({d,kind:r.bible?'item':'scroll'})}); if(r.bible&&PJ.remote.bible&&typeof BB!=='undefined'){ BB.b=PJ.remote.bible.b; BB.c=PJ.remote.bible.c; BB.v=PJ.remote.bible.v; } if(r.sermon&&PJ.remote.sermon&&typeof MS!=='undefined'){ MS.p=PJ.remote.sermon.p; MS.part=PJ.remote.sermon.part||0; } pjRender(); }catch{ toast('No se pudo cambiar.'); } return; }
+  pjStep(d); }
 function pjMode(m){ const r=PJ.remote||{}; if(r.mode===m) m='text'; if(m==='text'&&!r.text){ return pjShow(0); } pjSend({...r,mode:m}); }
 
 function pjSide(r){
@@ -278,22 +291,55 @@ function pjRenderWide(r,qf,qpos,scrollTop){
       <button class="btn" data-act="pj-min" title="Esconder el control para usar el resto de la app">${ICON.search}Seguir en la app</button>
       <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjw-grid side">
-      <section class="pjw-lib"><div class="pjw-h">Alabanzas</div><div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div></section>
-      <section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
-        <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>
+      <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
+        ${(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():pjMsgLib()}</section>
+      ${PJ.tab==='bible'?pjBibleCenter(r):PJ.tab==='msg'?pjMsgCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
+        <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
       <section class="pjw-live"><div class="pjw-h">En directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
         <p class="pjw-now"><b>${r.mode==='black'?'■ Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</p>
-        <div class="pjw-btns"><button class="btn" data-act="pj-step" data-d="-1">◀ Anterior</button><button class="btn pri" data-act="pj-step" data-d="1">Siguiente ▶</button>
+        <div class="pjw-btns"><button class="btn" data-act="pj-nav" data-d="-1">◀ Anterior</button><button class="btn pri" data-act="pj-nav" data-d="1">Siguiente ▶</button>
           <button class="btn" data-act="pj-mode" data-m="black" aria-pressed="${r.mode==='black'}">Negro <small>(B / F9)</small></button><button class="btn" data-act="pj-mode" data-m="logo" aria-pressed="${r.mode==='logo'}">Logo <small>(L)</small></button></div>
         <p class="pjw-tip">Clic en una alabanza: ver sus estrofas · Doble clic: proyectar · Clic en una estrofa: en vivo · ← → cambian de estrofa</p></section>
       ${pjSide(r)}
     </div></div>`;
-  const qi=$('#pj-q'); qi.addEventListener('input',e=>{ PJ.q=e.target.value; clearTimeout(PJ.qt); PJ.qt=setTimeout(()=>{ const box=$('#pj-res'); if(box){ box.innerHTML=pjLibHtml(); box.scrollTop=0; } },80); });
+  pjBindTabs(); const qi=$('#pj-q'); if(qi){ qi.addEventListener('input',e=>{ PJ.q=e.target.value; clearTimeout(PJ.qt); PJ.qt=setTimeout(()=>{ const box=$('#pj-res'); if(box){ box.innerHTML=pjLibHtml(); box.scrollTop=0; } },80); });
   qi.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const f=document.querySelector('#pj-res .pjw-row'); if(f){ e.preventDefault(); pjAdd(f.dataset.id,true); PJ.peek=null; PJ.q=''; pjRender(true); } } else if(e.key==='Escape'){ PJ.q=''; qi.value=''; const box=$('#pj-res'); if(box) box.innerHTML=pjLibHtml(); } });
-  if(qf){ qi.focus(); try{ qi.setSelectionRange(qpos,qpos); }catch{} }
+  if(qf){ qi.focus(); try{ qi.setSelectionRange(qpos,qpos); }catch{} } }
   const L2=$('#pj-res'); if(L2) L2.scrollTop=PJ.q===PJ.lastQ?keepLib:0; PJ.lastQ=PJ.q;
   const nb=$('#pj-body'); if(nb){ nb.scrollTop=keepBody; const c=nb.querySelector('[aria-current="true"]'); if(c&&!scrollTop){ const a=c.getBoundingClientRect(), b=nb.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) c.scrollIntoView({block:'nearest',behavior:'smooth'}); } }
+}
+/* ---- Pestañas Biblia y Mensaje dentro de la consola ---- */
+function pjBibleLib(){
+  if(typeof BB==='undefined') return ''; if(!BB.data){ bbLoad(); clearTimeout(PJ.bbt); PJ.bbt=setTimeout(()=>{ if(PJ.open&&PJ.tab==='bible') pjRender(); },700); return '<p class="pj-sug-h">Abriendo la Biblia…</p>'; }
+  const books=bbBooks(); const q=(PJ.bq||'').trim(); const pr=q?bbParse(q):null;
+  return `<div class="pjw-q"><input id="pjb-q" type="search" placeholder="Cita: jn 3 16 · gen 1 · sal 23" value="${esc(PJ.bq||'')}" autocomplete="off" aria-label="Cita bíblica"></div>
+    ${pr?`<button class="pjw-row sel" data-act="pjb-go" data-b="${pr.b}" data-c="${pr.c}" data-v="${pr.v==null?'':pr.v}"><span class="t">${esc(bbRef(pr.b,pr.c,pr.v))}<small>Enter para ${pr.v!=null?'proyectar':'abrir'}</small></span></button>`:''}
+    <div class="pjw-scroll" id="pjb-books">${books.map((bk,i)=>`<button class="pjw-row${i===BB.b?' sel':''}" data-act="pjb-book" data-b="${i}"><span class="t">${esc(bk[1])}</span><small style="color:var(--muted);font-size:11px">${bk[3].length}</small></button>`).join('')}</div>`;
+}
+function pjBibleCenter(r){
+  if(typeof BB==='undefined'||!BB.data) return '<section class="pjw-sl"><div class="pjw-h">Biblia</div></section>';
+  const bk=bbBooks()[BB.b], ch=bk[3][BB.c]||[]; const on=r&&r.mode==='text'&&r.bible&&r.bible.b===BB.b&&r.bible.c===BB.c?r.bible.v:-1;
+  return `<section class="pjw-sl"><div class="pjw-h">${esc(bk[1])} ${BB.c+1}<span class="sp"></span><button class="btn sm" data-act="pjb-ch" data-d="-1" ${BB.c<=0?'disabled':''}>◀ Cap.</button><select id="pjb-chsel" aria-label="Capítulo">${bk[3].map((_,i)=>`<option value="${i}" ${i===BB.c?'selected':''}>${i+1}</option>`).join('')}</select><button class="btn sm" data-act="pjb-ch" data-d="1" ${BB.c>=bk[3].length-1?'disabled':''}>Cap. ▶</button></div>
+    <div class="pjw-scroll" id="pj-body">${ch.map((t,i)=>`<button class="pjw-v" data-act="pjb-v" data-v="${i}" aria-current="${on===i}"><span class="h">${esc(bk[1])} ${BB.c+1}:${i+1}</span><p>${esc(t)}</p></button>`).join('')}</div></section>`;
+}
+function pjMsgLib(){
+  if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
+  const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
+  return `<div class="pjw-q"><input id="pjm-q" type="search" placeholder="Buscar mensaje por título o código" value="${esc(PJ.mq||'')}" autocomplete="off" aria-label="Buscar mensaje"></div>
+    <div class="pjw-scroll" id="pjm-list">${L.slice(0,400).map(x=>`<button class="pjw-row${MS.curId===x.id?' sel':''}" data-act="pjm-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title)}<small>${esc(x.code||'')}${x.place?' · '+esc(x.place):''}</small></span></button>`).join('')||'<p class="pj-sug-h">Sin resultados.</p>'}</div>`;
+}
+function pjMsgCenter(r){
+  const s=typeof MS!=='undefined'&&MS.cur; if(!s) return `<section class="pjw-sl"><div class="pjw-h">Mensaje</div><p class="pj-empty" style="padding:16px">${MS&&MS.curId?'Abriendo…':'Elige un mensaje a la izquierda.'}</p></section>`;
+  const on=r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id?r.sermon.p:-1;
+  return `<section class="pjw-sl"><div class="pjw-h"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">${esc(s.title)}</span><span class="sp"></span><span>${esc(s.code||'')}</span></div>
+    <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v" data-act="pjm-p" data-i="${i}" aria-current="${on===i}"><span class="h">Párrafo ${esc(p.n)}</span><p>${esc(p.t)}</p></button>`).join('')}</div></section>`;
+}
+function pjBindTabs(){
+  const bq=$('#pjb-q'); if(bq){ bq.addEventListener('input',e=>{ PJ.bq=e.target.value; clearTimeout(PJ.bqt); PJ.bqt=setTimeout(()=>{ pjRender(); const n=$('#pjb-q'); if(n){ n.focus(); const l=n.value.length; try{ n.setSelectionRange(l,l); }catch{} } },250); });
+    bq.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); const pr=bbParse(PJ.bq||''); if(!pr) return; BB.b=pr.b; BB.c=pr.c; PJ.bq=''; if(pr.v!=null){ BB.v=pr.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(); }); }
+  const cs=$('#pjb-chsel'); if(cs) cs.addEventListener('change',e=>{ BB.c=+e.target.value; BB.v=null; pjRender(true); });
+  const mq=$('#pjm-q'); if(mq) mq.addEventListener('input',e=>{ PJ.mq=e.target.value; clearTimeout(PJ.mqt); PJ.mqt=setTimeout(()=>{ const box=$('#pjm-list'); if(box){ const tmp=document.createElement('div'); tmp.innerHTML=pjMsgLib(); const nl=tmp.querySelector('#pjm-list'); if(nl) box.innerHTML=nl.innerHTML; } },120); });
 }
 let pjWas=null; addEventListener('resize',()=>{ const w=pjWide(); if(PJ.open&&!PJ.min&&w!==pjWas){ pjWas=w; pjRender(true); } });
 function pjRender(scrollTop){
@@ -359,6 +405,15 @@ document.addEventListener('click',ev=>{
     case 'pj-saveprog': pjSaveAsProgram(); break;
     case 'pj-peek': { const now=Date.now(); const dbl=PJ.lastPeek&&PJ.lastPeek.id===ds.id&&now-PJ.lastPeek.t<450; PJ.lastPeek={id:ds.id,t:now};
       if(dbl){ PJ.peek=null; pjAdd(ds.id,true); pjRender(true); } else { const i=PJ.songIds.indexOf(ds.id); if(i>=0){ PJ.si=i; PJ.peek=null; } else PJ.peek=ds.id; pjRender(true); } break; }
+    case 'pj-nav': pjNav(+ds.d); break;
+    case 'culto-vivo': openProj({live:true}); break;
+    case 'pj-tab': PJ.tab=ds.t; pjRender(true); break;
+    case 'pjb-book': BB.b=+ds.b; BB.c=0; BB.v=null; pjRender(true); break;
+    case 'pjb-ch': { const bk=bbBooks()[BB.b]; BB.c=Math.max(0,Math.min(bk[3].length-1,BB.c+(+ds.d))); BB.v=null; pjRender(true); break; }
+    case 'pjb-go': BB.b=+ds.b; BB.c=+ds.c; PJ.bq=''; if(ds.v!==''){ BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(true); break;
+    case 'pjb-v': BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); break;
+    case 'pjm-open': (async()=>{ await msOpen(ds.id,0); pjRender(true); })(); break;
+    case 'pjm-p': MS.p=+ds.i; MS.part=0; MS.auto=0; msProject().then(()=>pjRender()); break;
     case 'pj-peekadd': if(PJ.peek){ pjAdd(PJ.peek,false); PJ.peek=null; pjRender(true); } break;
     case 'pj-peekshow': if(PJ.peek){ const id=PJ.peek; PJ.peek=null; pjAdd(id,false); pjShow(+ds.i); pjRender(true); } break;
     case 'pj-libmore': PJ.libN=(PJ.libN||250)+500; { const box=$('#pj-res'); if(box){ const t=box.scrollTop; box.innerHTML=pjLibHtml(); box.scrollTop=t; } } break;
@@ -369,8 +424,8 @@ document.addEventListener('keydown',e=>{
   const k=e.key;
   if((k==='Delete'||k==='Backspace')&&!PJ.min&&PJ.sel&&PJ.sel.size){ e.preventDefault(); pjRemove([...PJ.sel]); return; }
   if(PJ.min){ if(k==='PageDown'){ e.preventDefault(); pjStep(1); } else if(k==='PageUp'){ e.preventDefault(); pjStep(-1); } return; }
-  if(k==='ArrowRight'||k==='ArrowDown'||k==='PageDown'||k===' '){ e.preventDefault(); pjStep(1); }
-  else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'){ e.preventDefault(); pjStep(-1); }
+  if(k==='ArrowRight'||k==='ArrowDown'||k==='PageDown'||k===' '){ e.preventDefault(); pjNav(1); }
+  else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'){ e.preventDefault(); pjNav(-1); }
   else if(k==='b'||k==='B'||k==='.') pjMode('black');
   else if(k==='l'||k==='L') pjMode('logo');
   else if(k==='Escape') closeProj();
