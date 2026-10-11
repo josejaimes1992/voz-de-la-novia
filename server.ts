@@ -396,6 +396,7 @@ Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines":
   } finally { if (prep) trClean(prep.dir); }
 }
 
+const BUILD = String(Date.now());
 const SERVER = Bun.serve({
   maxRequestBodySize: 120 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
@@ -928,7 +929,7 @@ const SERVER = Bun.serve({
   websocket: {
     idleTimeout: 60,
     sendPings: true,
-    open(ws) { if ((ws.data as any)?.team) { ws.subscribe("team"); return; } ws.subscribe("proj"); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
+    open(ws) { if ((ws.data as any)?.team) { ws.subscribe("team"); return; } ws.subscribe("proj"); ws.send(JSON.stringify({ _ver: BUILD })); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
     message(ws, msg) { if (msg === "ping") ws.send("pong"); },
     close(ws) { try { ws.unsubscribe((ws.data as any)?.team ? "team" : "proj"); } catch {} },
   },

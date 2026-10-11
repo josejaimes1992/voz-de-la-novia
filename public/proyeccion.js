@@ -174,7 +174,7 @@ function pjConnect(){
   let ws; try{ ws=new WebSocket(url); }catch{ return pjLater(); }
   PJ.ws=ws;
   ws.onopen=()=>{ PJ.retry=0; PJ.online=true; pjRender(); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._sung){ setSung(d._sung); return; } if(d._style){ PJ.style=d._style; return; } PJ.remote=d; pjRender(); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver) return; if(d._sung){ setSung(d._sung); return; } if(d._style){ PJ.style=d._style; if(PJ.open&&!PJ.min) pjRender(); return; } PJ.remote=d; pjRender(); }catch{} };
   ws.onclose=()=>{ PJ.online=false; if(PJ.open){ pjRender(); pjLater(); } };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
@@ -228,7 +228,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
   const onSong=r.mode==='text'&&s&&r.songId===s.id; const st=PJ.style||{}; const k=s?songKey(s):null;
   const lib=$('#pj-res'), keepLib=lib?lib.scrollTop:0, body=$('#pj-body'), keepBody=body&&!scrollTop?body.scrollTop:0;
   const scrBg=st.img?`url('${st.img}') center/cover,${st.bg||'#000'}`:(st.bg||'#000');
-  const scr=r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=3" alt="" style="height:78%">':`<span style="color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
+  const scr=r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=3" alt="" style="height:78%">':`<span style="font-size:calc(clamp(11px,1.05vw,17px) * ${st.size||1});color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
   root.innerHTML=`<div class="pj pjw" role="dialog" aria-label="Proyección">
     <div class="pj-top"><button class="btn ghost" data-act="pj-close" aria-label="Cerrar proyección">${ICON.x}</button>
       <span class="ttl">${esc(s?s.title:'')}${k?` <small class="muted">· ${esc(keyText(k))}</small>`:''}</span>
@@ -422,7 +422,7 @@ function lwConnect(){
   if(!S.token||(LW.ws&&LW.ws.readyState<2)) return;
   let ws; try{ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'); }catch{ return; }
   LW.ws=ws;
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; let d; try{ d=JSON.parse(ev.data); }catch{ return; } if(d._sung){ setSung(d._sung); return; } if(d._style){ PJ.style=d._style; if(typeof BB!=='undefined') BB.style=d._style; if(typeof MS!=='undefined') MS.style=d._style; return; }
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; let d; try{ d=JSON.parse(ev.data); }catch{ return; } if(d._ver) return; if(d._sung){ setSung(d._sung); return; } if(d._style){ PJ.style=d._style; if(typeof BB!=='undefined') BB.style=d._style; if(typeof MS!=='undefined') MS.style=d._style; return; }
     let changed=false;
     if(typeof BB!=='undefined'){ BB.remote=d; if(d.mode==='text'&&d.bible&&BB.live&&BB.data&&(BB.b!==d.bible.b||BB.c!==d.bible.c||BB.v!==d.bible.v)){ BB.b=d.bible.b; BB.c=d.bible.c; BB.v=d.bible.v; } changed=V.view==='bible'; }
     if(typeof MS!=='undefined'){ MS.remote=d; if(d.mode==='text'&&d.sermon&&MS.cur&&MS.cur.id===d.sermon.id&&MS.live){ MS.p=d.sermon.p; MS.part=d.sermon.part||0; } changed=changed||V.view==='mensaje'; }

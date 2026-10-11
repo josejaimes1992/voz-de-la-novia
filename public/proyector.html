@@ -157,7 +157,7 @@ function connect(){
   const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector';
   try{ ws=new WebSocket(url); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; $('#dot').classList.remove('show'); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver) location.reload(); return; } if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
   ws.onclose=()=>{ $('#dot').classList.add('show'); later(); };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
