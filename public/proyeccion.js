@@ -212,8 +212,11 @@ async function openProyector(){
   try{ if('getScreenDetails' in window){ const st=await navigator.permissions.query({name:'window-management'}).catch(()=>null);
     if(st&&st.state==='granted'){ const sd=await window.getScreenDetails(); let saved=null; try{ saved=localStorage.getItem('vdn-screen'); }catch{}
       const key=x=>`${x.label||''}|${x.left},${x.top}|${x.width}x${x.height}`; let s=sd.screens.find(x=>key(x)===saved)||sd.screens.find(x=>!x.isPrimary&&x!==sd.currentScreen);
-      if(s) feat=`popup,fullscreen,left=${s.left},top=${s.top},width=${s.width},height=${s.height}`; } } }catch{}
-  const w=window.open('/proyector','vdn-proyector',feat); if(!w) toast('El navegador bloqueó la ventana. Permite ventanas emergentes para esta página.'); else { try{ w.focus(); }catch{} }
+      if(s) feat=`popup,left=${s.availLeft},top=${s.availTop},width=${s.availWidth},height=${s.availHeight}`; } } }catch{}
+  const w=window.open('/proyector','vdn-proyector',feat); if(!w){ toast('El navegador bloqueó la ventana. Permite ventanas emergentes para esta página.'); return; }
+  /* la app se queda en esta pantalla (la 1): se devuelve el foco aquí */
+  setTimeout(()=>{ try{ window.focus(); }catch{} },300);
+  if(feat) toast('Pantalla del proyector abierta en la pantalla 2. Haz un clic sobre ella (o F11) para que quede a pantalla completa.');
 }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act="open-proj"]'); if(el){ ev.preventDefault(); openProyector(); } });
 
