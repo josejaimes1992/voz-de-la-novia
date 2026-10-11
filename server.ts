@@ -214,6 +214,12 @@ async function projNav(d: number, kind: string): Promise<any | null> {
   if (P.sermon?.id) {
     const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
     let pi = P.sermon.p, part = P.sermon.part || 0;
+    if (kind === "glide") { /* bajada suave: un tercio de pantalla por movimiento de la rueda */
+      const st0 = msStepsSrv(paras[pi]?.t || ""); let sc = (P.sc || 0) + d / (Math.max(st0, 1) * 3);
+      if (sc > 1.001) { if (pi + 1 >= paras.length) return null; pi++; sc = 0; } else if (sc < -0.001) { if (pi - 1 < 0) return null; pi--; sc = 1; }
+      sc = Math.max(0, Math.min(1, sc)); const st1 = msStepsSrv(paras[pi].t);
+      return { ...P, text: paras[pi].t, num: paras[pi].n, sc, auto: 0, idx: pi, glide: true, sermon: { id: s.id || P.sermon.id, p: pi, part: Math.round(sc * st1) } };
+    }
     if (kind === "scroll") { const steps = msStepsSrv(paras[pi]?.t || ""); if (part + d >= 0 && part + d <= steps) part += d; else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = d > 0 ? 0 : msStepsSrv(paras[pi].t); } }
     else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = 0; }
     const steps = msStepsSrv(paras[pi].t);
@@ -548,7 +554,7 @@ const SERVER = Bun.serve({
       if (fdm && req.method === "DELETE") { if (!user) return json({ error: "unauthorized" }, 401); try { unlinkSync(`${FONDOS_DIR}/${fdm[1]}.jpg`); } catch {} return json({ ok: true }); }
       if (p === "/api/proyector/nav" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
-        const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : "scroll";
+        const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : b.kind === "glide" ? "glide" : "scroll";
         const next = await projNav(d, kind); if (!next) return json(PROJ);
         PROJ = { ...next, by: user.name, at: Date.now() }; PROJ_PREV = null; SERVER.publish("proj", JSON.stringify(PROJ)); return json(PROJ);
       }

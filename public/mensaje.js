@@ -193,7 +193,9 @@ document.addEventListener('keydown',e=>{
 });
 window.mensajeAfterRender=msAfter;
 
-/* Rueda del mouse sobre la vista previa: baja o sube el texto en pantalla */
+/* Rueda del mouse sobre la vista previa: el texto en pantalla baja despacio, con transición */
 let msWT=0, msWA=0;
+async function msGlide(d){ try{ const r=await api('/api/proyector/nav',{method:'POST',body:JSON.stringify({d,kind:'glide'})}); MS.remote=r; if(r&&r.sermon&&MS.cur&&r.sermon.id===MS.cur.id){ MS.p=r.sermon.p; MS.part=r.sermon.part||0; } if(V.view==='mensaje') render(); }catch{} }
 document.addEventListener('wheel',e=>{ if(V.view!=='mensaje'||!S.canWrite) return; const box=e.target.closest&&e.target.closest('.bb-live'); if(!box) return; e.preventDefault();
-  msWA+=e.deltaY; if(Math.abs(msWA)>=60&&Date.now()-msWT>320){ msWT=Date.now(); const d=msWA>0?1:-1; msWA=0; msScrollLive(d); } },{passive:false});
+  const r=MS.remote; const onThis=r&&r.sermon&&MS.cur&&r.sermon.id===MS.cur.id&&r.mode==='text'; if(!onThis){ if(Date.now()-msWT>800){ msWT=Date.now(); msScrollLive(1); } return; }
+  msWA+=e.deltaY*(e.deltaMode===1?16:1); if(Math.abs(msWA)>=50&&Date.now()-msWT>260){ msWT=Date.now(); const d=msWA>0?1:-1; msWA=0; msGlide(d); } },{passive:false});
