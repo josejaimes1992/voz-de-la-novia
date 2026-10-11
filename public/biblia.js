@@ -68,7 +68,7 @@ async function bbLoad(){
     fetch('/api/proyector/estilo').then(x=>x.json()).then(x=>{ BB.style=x; }).catch(()=>{});
     const r=await fetch(v.url); if(!r.ok) throw new Error(r.status); BB.data=await r.json(); }
   catch(e){ BB.err='No se pudo cargar la Biblia. Revisa tu internet.'; }
-  BB.loading=false; if(V.view==='bible') render();
+  BB.loading=false; if(V.view==='bible'||(typeof PJ!=='undefined'&&PJ.open&&PJ.tab==='bible')) render();
 }
 /* "jn 3 16", "Juan 3:16", "1co13:4", "sal 23" */
 function bbParse(q){

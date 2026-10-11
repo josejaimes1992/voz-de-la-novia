@@ -188,6 +188,7 @@ function openProj(opt){
     const today=new Date(Date.now()-5*3600_000).toISOString().slice(0,10); const tp=[...S.programs.values()].find(p=>p.date===today&&!p._shared);
     PJ.programId=tp?tp.id:null; PJ.songIds=tp?(tp.items||[]).map(it=>it.songId).filter(id=>S.songs.has(id)):[]; PJ.tab=PJ.tab||'songs';
     PJ.si=0; PJ.open=true; PJ.min=false; PJ.q=''; PJ.peek=null; const r=PJ.remote; if(r&&r.songId){ const i=PJ.songIds.indexOf(r.songId); if(i>=0) PJ.si=i; }
+    if(typeof bbLoad==='function') bbLoad(); if(typeof msLoadList==='function') msLoadList();
     pjConnect(); pjRender(true); if(typeof keepAwake==='function') keepAwake(true); return; }
   if(PJ.open&&opt.songId){ pjAdd(opt.songId,!!opt.show); if(!opt.stayMin) PJ.min=false; pjRender(true); return; }
   if(opt.programId){ const p=S.programs.get(opt.programId); PJ.programId=opt.programId; PJ.songIds=(p?.items||[]).map(it=>it.songId).filter(id=>S.songs.has(id)); }
@@ -417,7 +418,8 @@ document.addEventListener('click',ev=>{
       if(dbl){ PJ.peek=null; pjAdd(ds.id,true); pjRender(true); } else { const i=PJ.songIds.indexOf(ds.id); if(i>=0){ PJ.si=i; PJ.peek=null; } else PJ.peek=ds.id; pjRender(true); } break; }
     case 'pj-nav': pjNav(+ds.d); break;
     case 'culto-vivo': openProj({live:true}); break;
-    case 'pj-tab': PJ.tab=ds.t; if(ds.t==='bible'&&V.view==='bible'){ V.tab='songs'; V.view='list'; } pjRender(true); break;
+    case 'pj-tab': if(ds.t==='bible'&&typeof BB!=='undefined'&&!BB.data){ bbLoad(); const w=setInterval(()=>{ if(BB.data||BB.err){ clearInterval(w); if(PJ.open&&PJ.tab==='bible') pjRender(true); } },300); setTimeout(()=>clearInterval(w),20000); }
+      PJ.tab=ds.t; if(ds.t==='bible'&&V.view==='bible'){ V.tab='songs'; V.view='list'; } pjRender(true); break;
     case 'pjb-book': BB.b=+ds.b; BB.c=0; BB.v=null; pjRender(true); break;
     case 'pjb-ch': { const bk=bbBooks()[BB.b]; BB.c=Math.max(0,Math.min(bk[3].length-1,BB.c+(+ds.d))); BB.v=null; pjRender(true); break; }
     case 'pjb-go': BB.b=+ds.b; BB.c=+ds.c; PJ.bq=''; if(ds.v!==''){ BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(true); break;
