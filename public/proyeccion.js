@@ -30,6 +30,27 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+/* ---- Consola en el celular: letra grande primero, luego el programa y al final el buscador ---- */
+.pjm-now{display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line);background:var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjm-now small{color:var(--muted);font-weight:500;margin-right:4px}
+.pjm-now i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}.pjm-now i.on{background:#e05a4f}
+.pjm-body{display:grid;gap:8px;align-content:start;padding:10px 12px 14px}
+.pjm-body .pj-sl{min-height:0;padding:12px 14px}
+.pjm-body .pj-sl p{font-size:clamp(19px,5vw,26px);line-height:1.38;font-weight:500}
+.pjm-body .pj-sl[aria-current="true"]{background:#2b5f93;border-color:#3d8fd6;color:#fff}.pjm-body .pj-sl[aria-current="true"] .h span{color:#d6ecff}
+.pjm-prog{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface);scrollbar-width:none;flex:none}
+.pjm-it{flex:none;width:150px;text-align:left;border:1px solid var(--line);background:var(--bg);color:inherit;border-radius:10px;padding:6px 9px;font:inherit;cursor:pointer;display:grid;gap:1px}
+.pjm-it .n{font:700 11px var(--f-mono);color:var(--muted)}.pjm-it .n i{color:#e05a4f;font-style:normal}
+.pjm-it b{font-size:13.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjm-it small{font-size:11.5px;color:var(--muted)}
+.pjm-it[aria-pressed="true"]{border:2px solid var(--accent);padding:5px 8px}
+.pjm-find{position:relative;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface);flex:none}
+.pjm-find input{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit}
+.pjm-res{position:absolute;left:8px;right:8px;bottom:100%;max-height:58vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -12px 30px rgba(0,0,0,.35);padding:4px 8px;display:none;z-index:5}
+.pjm-res:not(:empty){display:block}
+@media (max-width:640px){.pj-top{padding:6px 10px;gap:6px}.pj-top .btn{padding:6px 9px;font-size:13px}.pj-top .ttl{font-size:16px}
+  .pj-bot{grid-template-columns:.8fr .8fr 1.2fr 1.4fr;gap:6px;padding:6px 10px}.pj-bot .btn{padding:10px 4px;font-size:14px}}
+
 .pjw-grid.side.bbmode{grid-template-columns:minmax(0,1fr) minmax(290px,26%) minmax(220px,18%)}
 .pjw-grid{position:relative}.pjw-grid.bbmode>.pjw-lib{position:absolute;z-index:3;left:14px;top:8px;width:auto;background:transparent;border:0;min-height:0}
 .pjw-grid.bbmode>.pjw-lib .pjw-tabs{border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
@@ -130,7 +151,7 @@ body.pj-has-mini{padding-bottom:70px}
 body.pj-has-mini .toast{bottom:calc(86px + env(safe-area-inset-bottom,0px))}
 .pj-top .ttl{min-width:140px}
 .row{touch-action:manipulation}
-@media (max-width:560px){.pj-now{grid-template-columns:120px minmax(0,1fr)}.pj-bot{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.pj-now{grid-template-columns:120px minmax(0,1fr)}}
 `; document.head.appendChild(st); })();
 
 /* Divide la letra en diapositivas: por sección y párrafo, máx. 4 líneas */
@@ -376,12 +397,10 @@ function pjRender(scrollTop){
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
       <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
-    <div class="pj-wrap${PJ.songIds.length>1?' has-side':''}">${PJ.songIds.length>1?pjSide(r):''}<div class="pj-col">
-    <div class="pj-find"><input id="pj-q" type="search" placeholder="Buscar la siguiente: toca aquí para ver las que conectan por acordes, o escribe nombre, frase o tono…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar canción"><div class="pj-res" id="pj-res">${pjResHtml(PJ.sug)}</div></div>
-    <div class="pj-body" id="pj-body">
-      <div class="pj-now"><div class="pj-scr">${scr}</div><div><small>En pantalla ahora</small><b>${r.mode==='black'?'Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</div></div>
-      ${sl.length?`<div class="pj-grid">${sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span><p>${esc(x.text)}</p></button>`).join('')}</div>`:'<p class="pj-empty">Esta canción no tiene letra para proyectar.</p>'}
-    </div></div></div>
+    <div class="pjm-now"><i class="${r.mode==='text'?'on':''}"></i><span><small>En pantalla</small> ${r.mode==='black'?'■ Negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1}/${r.total}`:''))}</span></div>
+    <div class="pj-body pjm-body" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza abajo para empezar.'}</p>`}</div>
+    ${PJ.songIds.length?`<div class="pjm-prog" id="pjm-prog">${PJ.songIds.map((id,i)=>{ const so=S.songs.get(id); const k=so?songKey(so):null; const live=r.mode==='text'&&r.songId===id; return `<button class="pjm-it${isSung(id)?' sung':''}" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}"><span class="n">${i+1}${live?' <i>●</i>':''}</span><b>${esc(so?so.title:'')}</b>${k?`<small>${esc(keyText(k))}${isSung(id)?' · ✓':''}</small>`:(isSung(id)?'<small>✓ Cantada</small>':'')}</button>`; }).join('')}</div>`:''}
+    <div class="pjm-find"><div class="pjm-res" id="pj-res">${pjResHtml(PJ.sug)}</div><input id="pj-q" type="search" placeholder="🎵 Buscar la siguiente (mismo acorde primero)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div>
     <div class="pj-bot">
       <button class="btn" data-act="pj-mode" data-m="black" aria-pressed="${r.mode==='black'}">Negro</button>
       <button class="btn" data-act="pj-mode" data-m="logo" aria-pressed="${r.mode==='logo'}">Logo</button>
@@ -391,6 +410,7 @@ function pjRender(scrollTop){
   const qi=$('#pj-q'); if(qi){ qi.addEventListener('input',e=>{ PJ.q=e.target.value; clearTimeout(PJ.qt); PJ.qt=setTimeout(()=>{ const box=$('#pj-res'); if(box) box.innerHTML=pjResHtml(true); },80); });
     qi.addEventListener('focus',()=>{ PJ.sug=true; const box=$('#pj-res'); if(box) box.innerHTML=pjResHtml(true); });
     qi.addEventListener('blur',()=>{ setTimeout(()=>{ if(document.activeElement&&document.activeElement.id==='pj-q') return; PJ.sug=false; if(!PJ.q.trim()){ const box=$('#pj-res'); if(box) box.innerHTML=''; } },250); }); if(qf){ qi.focus(); try{ qi.setSelectionRange(qpos,qpos); }catch{} } }
+  const ps=$('#pjm-prog'); if(ps){ const c=ps.querySelector('[aria-pressed="true"]'); if(c) ps.scrollLeft=c.offsetLeft-ps.clientWidth/2+c.clientWidth/2; }
   const nb=$('#pj-body'); if(nb){ nb.scrollTop=keep; if(!scrollTop){ const c=nb.querySelector('[aria-current="true"]'); if(c){ const a=c.getBoundingClientRect(), b=nb.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) c.scrollIntoView({block:'nearest',behavior:'smooth'}); } } }
 }
 
