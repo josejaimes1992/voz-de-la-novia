@@ -104,7 +104,7 @@ async function msSearch(){
   const b=$('#ms-res'); if(b) b.innerHTML=msResHtml();
 }
 function msScroll(){ const cur=document.querySelector('#ms-plist [aria-current="true"]'); const L=$('#ms-plist'); if(cur&&L){ const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/4; } }
-function msSteps(t){ const x=(typeof BB!=='undefined'&&BB.style)||MS.style||{}; const z=+x.size||1; const per=Math.max(12,Math.round(40/(z*z)*(x.upper?0.82:1))); return Math.max(0,Math.ceil(t.split(/\s+/).length/per)-1); }
+function msSteps(t){ const x=(typeof BB!=='undefined'&&BB.style)||MS.style||{}; const z=+x.size||1; const per=Math.max(12,Math.round(40/(z*z)*(x.upperRead?0.82:1))); return Math.max(0,Math.ceil(t.split(/\s+/).length/per)-1); }
 function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true; render(); setTimeout(msScroll,20); }
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){

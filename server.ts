@@ -172,7 +172,7 @@ const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
 const VOZ_LIMIT = new Map<string, { n: number; t: number }>();
-const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, size: 1, margin: 4, shadow: true };
+const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, upperRead: false, size: 1, margin: 4, shadow: true };
 let STYLE: any = { ...STYLE_DEFAULT };
 try { const r = await db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) STYLE = { ...STYLE_DEFAULT, ...parseJ(r[0].data) }; } catch {}
 function cleanStyle(b: any) {
@@ -181,7 +181,7 @@ function cleanStyle(b: any) {
   const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
   const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
-    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, size: num(b.size, 0.6, 1.3, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.3, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
 }
 /* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
 let BIBLES: Record<string, any> = {};
@@ -197,7 +197,15 @@ function refIndex(): Promise<RefIndex> {
   return REFS.p;
 }
 setTimeout(() => { refIndex().catch(() => {}); }, 15000);
-function msStepsSrv(t: string) { const z = +STYLE.size || 1; const per = Math.max(12, Math.round(40 / (z * z) * (STYLE.upper ? 0.82 : 1))); return Math.max(0, Math.ceil(String(t).split(/\s+/).length / per) - 1); }
+/* Alabanzas cantadas hoy (todo lo que se proyectó en el servicio) */
+const limaDay = () => new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
+let SUNG: { date: string; ids: string[] } = { date: limaDay(), ids: [] };
+let SUNG_LOADED = false;
+async function sungLoad() { if (SUNG_LOADED) return; SUNG_LOADED = true; try { const r = await db`SELECT data FROM docs WHERE col = 'sung' AND id = ${limaDay()}`; if (r[0]) { const d = parseJ(r[0].data); SUNG = { date: limaDay(), ids: Array.isArray(d.ids) ? d.ids : [] }; } } catch {} }
+function sungNow() { if (SUNG.date !== limaDay()) SUNG = { date: limaDay(), ids: [] }; return SUNG; }
+function sungSave() { const S2 = sungNow(); db`INSERT INTO docs (col, id, data, updated_at) VALUES ('sung', ${S2.date}, ${JSON.stringify(S2)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`.catch(() => {}); SERVER.publish("proj", JSON.stringify({ _sung: S2 })); SERVER.publish("team", JSON.stringify({ _sung: S2 })); }
+function pubProj() { SERVER.publish("proj", JSON.stringify(PROJ)); const P: any = PROJ; if (P.mode === "text" && P.songId) { const S2 = sungNow(); if (!S2.ids.includes(P.songId)) { S2.ids.push(P.songId); sungSave(); } } }
+function msStepsSrv(t: string) { const z = +STYLE.size || 1; const per = Math.max(12, Math.round(40 / (z * z) * (STYLE.upperRead ? 0.82 : 1))); return Math.max(0, Math.ceil(String(t).split(/\s+/).length / per) - 1); }
 const CHORD_TOK = /^\(?((?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b|♯|♭)?(?:m|maj|min|dim|aug|sus|add|M)?\d*(?:\([^)]*\))?(?:\/(?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b)?)?)\)?$/;
 function songSlides(song: any) {
   const body = (song?.body && String(song.body).trim()) ? song.body : (song?.bodyPro || ""); const out: { label: string; text: string }[] = []; let label = "", block: string[] = [];
@@ -556,7 +564,18 @@ const SERVER = Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : b.kind === "glide" ? "glide" : "scroll";
         const next = await projNav(d, kind); if (!next) return json(PROJ);
-        PROJ = { ...next, by: user.name, at: Date.now() }; PROJ_PREV = null; SERVER.publish("proj", JSON.stringify(PROJ)); return json(PROJ);
+        PROJ = { ...next, by: user.name, at: Date.now() }; PROJ_PREV = null; pubProj(); return json(PROJ);
+      }
+      if (p === "/api/proyector/sung") {
+        await sungLoad();
+        if (req.method === "GET") return json(sungNow());
+        if (req.method === "DELETE") { if (!user) return json({ error: "unauthorized" }, 401); SUNG = { date: limaDay(), ids: [] }; sungSave(); return json(SUNG); }
+        if (req.method === "POST") { if (!user) return json({ error: "unauthorized" }, 401); const b = await req.json().catch(() => ({})); const id = typeof b.id === "string" ? b.id.slice(0, 80) : ""; const S2 = sungNow();
+          if (id) { if (b.off) S2.ids = S2.ids.filter(x => x !== id); else if (!S2.ids.includes(id)) S2.ids.push(id); sungSave(); } return json(S2); }
+      }
+      if (p === "/api/proyector/slides" && req.method === "GET") {
+        const id = url.searchParams.get("song") ?? ""; const r = id ? await db`SELECT data FROM docs WHERE col = 'songs' AND id = ${id}` : [];
+        return json({ texts: r[0] ? songSlides(parseJ(r[0].data)).map(x => x.text) : [] });
       }
       if (p === "/api/proyector/negro" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
@@ -575,7 +594,7 @@ const SERVER = Bun.serve({
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, by: user.name, at: Date.now() };
         if (mode !== "black") PROJ_PREV = null; else if (BEFORE.mode !== "black") PROJ_PREV = BEFORE;
-        SERVER.publish("proj", JSON.stringify(PROJ));
+        pubProj();
         return json(PROJ);
       }
       if (p === "/api/me" && req.method === "GET") {

@@ -70,7 +70,7 @@ function chConnect(){
   if(CH.ws){ try{ CH.ws.onclose=null; CH.ws.close(); }catch{} }
   CH.token=S.token; const ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/equipo?t='+encodeURIComponent(S.token)); CH.ws=ws;
   ws.onopen=()=>{ CH.retry=0; chLoad(); };
-  ws.onmessage=e=>{ let d; try{ d=JSON.parse(e.data); }catch{ return; } if(!d||!d._chat) return; const m=d._chat; if(CH.list.some(x=>x.id===m.id)) return; CH.list.push(m); if(CH.list.length>120) CH.list.shift();
+  ws.onmessage=e=>{ let d; try{ d=JSON.parse(e.data); }catch{ return; } if(d&&d._sung&&window.setSung){ setSung(d._sung); return; } if(!d||!d._chat) return; const m=d._chat; if(CH.list.some(x=>x.id===m.id)) return; CH.list.push(m); if(CH.list.length>120) CH.list.shift();
     if(!chMine(m)){ if(!CH.open) CH.unread++; chPop(m); } chDraw(); };
   ws.onclose=()=>{ CH.ws=null; if(!S.user) return; CH.retry=Math.min(CH.retry+1,6); setTimeout(chConnect,1000*CH.retry*2); };
   const ping=setInterval(()=>{ if(ws.readyState===1) ws.send('ping'); else if(ws.readyState>1) clearInterval(ping); },25000);

@@ -17,6 +17,8 @@ body.cur{cursor:default}
 #dim{position:fixed;inset:0;background:#000;opacity:0;transition:opacity .4s}
 body.noshadow .txt p,body.noshadow .ref{text-shadow:none}
 body.upper .txt p{text-transform:uppercase}
+.layer.rd-up .txt p{text-transform:uppercase}
+.layer.rd-low .txt p{text-transform:none}
 .layer{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transition:opacity .35s ease}
 .layer.on{opacity:1}
 .txt{width:92vw;height:86vh;display:flex;align-items:center;justify-content:center;text-align:center}
@@ -91,8 +93,20 @@ function fitMode(p,W,H,wrap){
   for(let i=0;i<14;i++){ const mid=(lo+hi)/2; p.style.fontSize=mid+'px'; if(ok()) lo=mid; else hi=mid; }
   return lo;
 }
+/* Un solo tamaño para toda la alabanza: el más grande en que caben todas sus diapositivas */
+let SL={id:null,texts:null,size:0,k:''};
+function songSize(p,W,H){
+  if(!cur||!cur.songId||SL.id!==cur.songId||!SL.texts||!SL.texts.length) return 0;
+  const k=W+'x'+H+'|'+(ST.size||1)+'|'+(!!ST.upper)+'|'+(ST.font||'')+'|'+(p.parentElement.parentElement.classList.contains('has-ref')?1:0);
+  if(SL.size&&SL.k===k) return SL.size;
+  const keep=p.textContent; let m=Infinity;
+  for(const t of SL.texts){ if(!t||!t.trim()) continue; p.textContent=t; let s=fitMode(p,W,H,false); if(s<H*0.075) s=fitMode(p,W,H,true); if(s<m) m=s; }
+  p.textContent=keep; if(!isFinite(m)) return 0; SL.size=m; SL.k=k; return m;
+}
 function fit(p){
   const box=p.parentElement; const W=box.clientWidth, H=box.clientHeight; if(!W||!H) return;
+  const u=songSize(p,W,H);
+  if(u){ p.style.fontSize=u+'px'; p.style.whiteSpace='pre'; if(p.scrollWidth>W+1||p.offsetHeight>H) p.style.whiteSpace='pre-line'; return; }
   // Primero sin partir líneas; si queda muy chico, se permite partirlas
   let s=fitMode(p,W,H,false);
   if(s<H*0.075){ s=fitMode(p,W,H,true); } else p.style.whiteSpace='pre';
@@ -105,7 +119,7 @@ function applyStyle(x){
   document.querySelectorAll('.txt p').forEach(p=>{ p.style.color=ST.color||'#fff'; p.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; });
   document.querySelectorAll('.ref').forEach(r=>{ r.style.color=ST.ref||'#e9c45a'; r.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; });
   const m=ST.margin??4; document.querySelectorAll('.txt').forEach(t=>{ t.style.width=(100-2*m)+'vw'; });
-  document.body.classList.toggle('noshadow',ST.shadow===false); document.body.classList.toggle('upper',!!ST.upper);
+  document.body.classList.toggle('noshadow',ST.shadow===false); document.body.classList.toggle('upper',!!ST.upper); document.querySelectorAll('.layer.rd-up,.layer.rd-low').forEach(l=>{ l.classList.toggle('rd-up',!!ST.upperRead); l.classList.toggle('rd-low',!ST.upperRead); }); const ri=document.getElementById('rd-in'); if(ri) ri.style.textTransform=ST.upperRead?'uppercase':'none';
   if(cur&&cur.read){ lastKey=''; show(cur); }
   const go=()=>document.querySelectorAll('.txt p').forEach(p=>{ if(p.textContent) fit(p); }); if(document.fonts&&document.fonts.load) document.fonts.load(`700 40px "${ST.font||'Figtree'}"`).then(go,go); else go();
 }
@@ -123,14 +137,17 @@ function show(st){
   const A=$('#L-a'), B=$('#L-b'), R=$('#L-read');
   if(st.mode==='text'&&st.read){ A.classList.remove('on'); B.classList.remove('on');
     const inn=$('#rd-in'); inn.innerHTML=(st.num?`<sup>${String(st.num).replace(/[<>&]/g,'')}</sup>`:'')+String(st.text).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-    inn.style.fontSize=(7.4*(ST.size||1))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upper?'uppercase':'none';
+    inn.style.fontSize=(7.4*(ST.size||1))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upperRead?'uppercase':'none';
     const rf=$('#rd-ref'); rf.textContent=st.ref||''; rf.style.color=ST.ref||'#e9c45a'; rf.style.fontFamily=inn.style.fontFamily;
     document.documentElement.style.setProperty('--rdm',(ST.margin!=null?Math.max(3,ST.margin+2):6)+'vw');
     rdSet(0,false); R.classList.add('on'); requestAnimationFrame(()=>rdApply(st)); return; }
   R.classList.remove('on'); cancelAnimationFrame(rdAuto);
   if(st.mode!=='text'){ A.classList.remove('on'); B.classList.remove('on'); return; }
   const next=front==='a'?B:A, prev=front==='a'?A:B;
-  next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); p.textContent=st.text; fit(p);
+  next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); p.textContent=st.text;
+  const isRead=!!st.bible||!!st.sermon; next.classList.toggle('rd-up',isRead&&!!ST.upperRead); next.classList.toggle('rd-low',isRead&&!ST.upperRead);
+  if(st.songId&&SL.id!==st.songId){ const id=st.songId; SL={id,texts:null,size:0,k:''}; fetch('/api/proyector/slides?song='+encodeURIComponent(id)).then(r=>r.json()).then(d=>{ if(SL.id!==id) return; SL.texts=d.texts||[]; SL.size=0; document.querySelectorAll('.layer.on .txt p').forEach(fit); }).catch(()=>{}); }
+  fit(p);
   next.classList.add('on'); prev.classList.remove('on'); front=front==='a'?'b':'a';
 }
 addEventListener('resize',()=>{ document.querySelectorAll('.txt p').forEach(fit); });
@@ -139,7 +156,7 @@ function connect(){
   const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector';
   try{ ws=new WebSocket(url); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; $('#dot').classList.remove('show'); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._style) applyStyle(d._style); else show(d); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
   ws.onclose=()=>{ $('#dot').classList.add('show'); later(); };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
