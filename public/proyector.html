@@ -177,8 +177,11 @@ function drawMap(){
 function updGo(){ const b=$('#go'); if(b&&SD&&SD.screens[selIdx]) b.textContent=`Proyectar en pantalla ${selIdx+1}${SD.screens[selIdx].isPrimary?' (principal)':''}`; }
 function full(){
   const d=document.documentElement; if(document.fullscreenElement) return;
+  const plain=()=>{ try{ const p=(d.requestFullscreen||d.webkitRequestFullscreen).call(d); if(p&&p.catch) p.catch(()=>{}); }catch{} };
   const scr=SD&&SD.screens[selIdx];
-  try{ const p=scr?d.requestFullscreen({screen:scr}):(d.requestFullscreen||d.webkitRequestFullscreen).call(d); if(p&&p.catch) p.catch(()=>{}); }catch{}
+  /* si la ventana ya está en una pantalla externa, se queda ahí; solo se mueve si está en la pantalla principal */
+  if(!scr||scr===SD.currentScreen||!SD.currentScreen||!SD.currentScreen.isPrimary||scr.isPrimary){ plain(); return; }
+  try{ const p=d.requestFullscreen({screen:scr}); if(p&&p.catch) p.catch(()=>plain()); }catch{ plain(); }
 }
 function isFull(){ return !!document.fullscreenElement||(Math.abs(window.innerHeight-screen.height)<=2&&Math.abs(window.innerWidth-screen.width)<=2); }
 function updFs(){ document.body.classList.toggle('fs',!!document.fullscreenElement); document.body.classList.toggle('notfull',!isFull()); }

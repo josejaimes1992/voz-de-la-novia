@@ -297,3 +297,17 @@ function lwConnect(){
 }
 setInterval(()=>{ if(LW.ws&&LW.ws.readyState===1) LW.ws.send('ping'); else if(S.token&&(V.view==='bible'||V.view==='mensaje')) lwConnect(); },20000);
 document.addEventListener('click',()=>{ if(S.token&&!LW.ws&&(V.view==='bible'||V.view==='mensaje')) setTimeout(lwConnect,300); });
+
+/* Aviso: la app (no el proyector) quedó abierta en la pantalla externa */
+(async function(){ try{
+  if(!('getScreenDetails' in window)||!navigator.permissions) return; const st=await navigator.permissions.query({name:'window-management'}).catch(()=>null); if(!st||st.state!=='granted') return;
+  const sd=await window.getScreenDetails(); let off=false;
+  const chk=()=>{ const on=!off&&sd.screens.length>1&&sd.currentScreen&&!sd.currentScreen.isPrimary; let b=document.getElementById('scr-warn');
+    if(on&&!b){ b=document.createElement('div'); b.id='scr-warn'; b.className='scr-warn'; b.innerHTML=`<b>La app está abierta en la pantalla ${sd.screens.indexOf(sd.currentScreen)+1} (${esc(sd.currentScreen.label||'externa')}).</b> Esa pantalla es para el proyector. Pásala a tu pantalla con <kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>←</kbd> (o <kbd>→</kbd>), o arrastrándola. <button type="button" aria-label="Cerrar">×</button>`;
+      b.querySelector('button').onclick=()=>{ off=true; b.remove(); }; document.body.appendChild(b); }
+    if(!on&&b) b.remove(); };
+  chk(); sd.addEventListener('currentscreenchange',chk); sd.addEventListener('screenschange',chk);
+  const st2=document.createElement('style'); st2.textContent=`.scr-warn{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:90;width:min(720px,94vw);background:#3a2a06;color:#fff3cf;border:2px solid #e9c45a;border-radius:14px;padding:12px 44px 12px 16px;font:500 14.5px/1.45 var(--f-ui);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.scr-warn b{color:#ffd76a}.scr-warn kbd{background:#000;border:1px solid #777;border-radius:5px;padding:0 6px;font:600 12.5px var(--f-mono)}
+.scr-warn button{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:18px;cursor:pointer}`; document.head.appendChild(st2);
+}catch{} })();
