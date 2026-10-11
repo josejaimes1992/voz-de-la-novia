@@ -45,6 +45,12 @@ body.upper .txt p{text-transform:uppercase}
 .setup .lg{font-size:12px;color:#888;margin-top:8px}
 .ident{position:fixed;inset:0;z-index:30;display:grid;place-items:center;font-size:40vh;font-weight:800;color:#e9c45a;background:rgba(0,0,0,.85);pointer-events:none}
 body.fs .setup{display:none}
+.fsbar{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);z-index:25;display:none;align-items:center;gap:12px;max-width:92vw;padding:14px 22px;border-radius:16px;background:rgba(20,18,12,.92);border:2px solid #e9c45a;color:#fff;font:600 clamp(15px,1.6vw,22px)/1.3 system-ui;cursor:pointer;box-shadow:0 10px 40px rgba(0,0,0,.6);animation:fsp 2s ease-in-out infinite}
+.fsbar b{color:#e9c45a}.fsbar small{display:block;font-weight:500;color:#bbb;font-size:.72em;margin-top:2px}
+.fsbar .k{font-size:1.8em;line-height:1}
+body.notfull .fsbar{display:flex}
+body.notfull .hint{display:none}
+@keyframes fsp{50%{box-shadow:0 10px 40px rgba(233,196,90,.35)}}
 .gear{position:fixed;left:14px;bottom:12px;z-index:15;font:600 13px system-ui;border-radius:999px;border:1px solid #444;background:#1b1b1f;color:#ccc;padding:6px 12px;opacity:0;transition:opacity .3s;cursor:pointer}
 body.cur .gear{opacity:1}
 .dot{position:fixed;right:14px;bottom:12px;font-size:12px;color:#888;display:flex;gap:6px;align-items:center;opacity:0;transition:opacity .4s;font-weight:600}
@@ -53,12 +59,13 @@ body.cur .gear{opacity:1}
 </style></head><body>
 <div id="bg"></div><div id="dim"></div>
 <div class="stage" id="stage">
-  <div class="layer" id="L-logo"><div class="logos"><img src="/vdn-logo.jpg?v=2" alt="Voz de la Novia"><img src="/shalom-logo.jpg?v=1" alt="Tabernáculo Shalom Adonai"></div></div>
+  <div class="layer" id="L-logo"><div class="logos"><img src="/vdn-logo.jpg?v=3" alt="Voz de la Novia"><img src="/shalom-logo.jpg?v=1" alt="Tabernáculo Shalom Adonai"></div></div>
   <div class="layer" id="L-read"><div class="rd-box" id="rd-box"><div class="rd-in" id="rd-in"></div></div><div class="rd-ref" id="rd-ref"></div></div>
   <div class="layer" id="L-a"><div class="txt"><p></p></div><div class="ref"></div></div>
   <div class="layer" id="L-b"><div class="txt"><p></p></div><div class="ref"></div></div>
 </div>
 <div class="hint" id="hint">Toca la pantalla para verla completa</div>
+<div class="fsbar" id="fsbar" role="button"><span class="k">⛶</span><span><b>Haz clic aquí para pantalla completa</b> (o tecla F11)<small>Así desaparece la barra de Windows y el borde de la ventana</small></span></div>
 <button id="gear" class="gear" title="Elegir pantalla (tecla P)">⚙ Pantalla</button>
 <div class="setup" id="setup" hidden>
   <h2>📺 Elegir la pantalla del proyector</h2>
@@ -173,7 +180,9 @@ function full(){
   const scr=SD&&SD.screens[selIdx];
   try{ const p=scr?d.requestFullscreen({screen:scr}):(d.requestFullscreen||d.webkitRequestFullscreen).call(d); if(p&&p.catch) p.catch(()=>{}); }catch{}
 }
-document.addEventListener('fullscreenchange',()=>{ document.body.classList.toggle('fs',!!document.fullscreenElement); });
+function isFull(){ return !!document.fullscreenElement||(Math.abs(window.innerHeight-screen.height)<=2&&Math.abs(window.innerWidth-screen.width)<=2); }
+function updFs(){ document.body.classList.toggle('fs',!!document.fullscreenElement); document.body.classList.toggle('notfull',!isFull()); }
+document.addEventListener('fullscreenchange',updFs); window.addEventListener('resize',updFs); setTimeout(updFs,300); setInterval(updFs,3000);
 async function showSetup(){
   const ok=await loadScreens(true); if(!ok||!SD||SD.screens.length<2){ if(ok&&SD&&SD.screens.length<2) alertOne(); return; }
   $('#setup').hidden=false; $('#hint').classList.add('off'); drawMap();
@@ -208,7 +217,7 @@ document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wa
 function tok(){ try{ const t=localStorage.getItem('vdn-token'); return t&&JSON.parse(t); }catch{ return null; } }
 function nav(d,kind){ const t=tok(); if(!t){ const h=$('#hint'); h.textContent='Para navegar desde aquí, ingresa con tu usuario en la app en esta computadora.'; h.classList.remove('off'); setTimeout(()=>h.classList.add('off'),4000); return; }
   fetch('/api/proyector/nav',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({d,kind})}).catch(()=>{}); }
-document.addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,select,textarea')) return;
+document.addEventListener('keydown',e=>{ if(!isFull()&&e.key!=='F11'&&e.key!=='Escape'&&!(e.target.closest&&e.target.closest('input,select,textarea'))) full(); if(e.target.closest&&e.target.closest('input,select,textarea')) return;
   if(e.key==='ArrowDown'||e.key==='PageDown'||e.key===' '){ e.preventDefault(); nav(1,'scroll'); return; }
   if(e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); nav(-1,'scroll'); return; }
   if(e.key==='ArrowRight'){ e.preventDefault(); nav(1,'item'); return; }
