@@ -189,7 +189,8 @@ function ioRender(){
   $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
   const nd=IO.chunks.filter(c=>c.dup).length; const nsys=IO.chunks.filter(c=>c.dup&&c.dupOf&&!c.dupOf.inBatch).length;
-  list.innerHTML=errs+(nd?`<div class="banner dupbar"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra. Elige qué hacer con cada una (o con todas a la vez). Toca “Comparar” para ver la que ya tienes junto a la del PDF.${nsys>1?`<label class="f" style="margin-top:8px">A todas las que ya existen:<select id="imp-dupall"><option value="">Elegir…</option>${DUP_OPTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label>`:''}</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
+  const sh=ioShiftGuess();
+  list.innerHTML=errs+(sh?`<div class="banner shiftbar"><b>Los títulos parecen corridos un lugar.</b> En ${sh.n} canciones, la letra corresponde al título de la ${sh.d>0?'siguiente':'anterior'}. <button class="btn pri" data-act="imp-shift" data-d="${sh.d}">Corregir títulos</button></div>`:'')+(nd?`<div class="banner dupbar"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra. Elige qué hacer con cada una (o con todas a la vez). Toca “Comparar” para ver la que ya tienes junto a la del PDF.${nsys>1?`<label class="f" style="margin-top:8px">A todas las que ya existen:<select id="imp-dupall"><option value="">Elegir…</option>${DUP_OPTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label>`:''}</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
     ${ioDoubtBanner()}
     <div class="imp-rows">${IO.chunks.map((c,i)=>IO.onlyDoubts&&!(c.doubts&&c.doubts.length)?'':`<div class="imp-row${c.doubts&&c.doubts.length?' doubt':''}">
       <input type="checkbox" data-imp="include" data-i="${i}" ${c.include?'checked':''} aria-label="Incluir">
@@ -199,7 +200,12 @@ function ioRender(){
       ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
       ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch?`<div class="dupact"><select data-imp="dupact" data-i="${i}" aria-label="Qué hacer con esta canción">${DUP_OPTS.map(([v,t])=>`<option value="${v}" ${c.dupAct===v?'selected':''}>${t}${v==='pro'&&c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?' (reemplaza la que tiene)':''}</option>`).join('')}</select><button class="btn ghost" data-act="imp-cmp" data-i="${i}">${c.cmp?'Cerrar comparación':'Comparar'}</button></div>`:''}
-      ${c.cmp&&c.dupOf?`<div class="cmp"><div><h4>Ya en el sistema · ${esc(c.dupOf.song.title)}${c.dupOf.song.key?' · '+esc(keyText(parseKey(c.dupOf.song.key))):''}</h4><pre>${esc(c.dupOf.song.body||'')}</pre>${c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?`<h4>Su versión Original</h4><pre>${esc(c.dupOf.song.bodyPro)}</pre>`:''}</div><div><h4>Del PDF${c.key?' · '+esc(keyText(parseKey(c.key))):''}</h4><textarea data-imp="body" data-i="${i}" class="body">${esc(c.body)}</textarea></div></div>`:''}
+      ${c.dup&&c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8&&chNorm(c.title)!==chNorm(c.dupOf.song.title)?`<div class="tmis">⚠ El título del PDF («${esc(c.title)}») no coincide con su letra: esa letra es «${esc(c.dupOf.song.title)}». <button class="btn ghost" data-act="imp-usetitle" data-i="${i}">Usar «${esc(c.dupOf.song.title)}»</button></div>`:''}
+      ${c.cmp&&c.dupOf?(()=>{ const ex=c.dupOf.song, chm=c.dupAct==='cpro'||c.dupAct==='cnew', tab=c.cmpTab||'ex';
+        return `<div class="cmp-tabs" role="tablist"><button data-act="imp-tab" data-i="${i}" data-t="ex" aria-pressed="${tab==='ex'}">Ya en el sistema</button><button data-act="imp-tab" data-i="${i}" data-t="pdf" aria-pressed="${tab==='pdf'}">Del PDF</button>${chm?`<button data-act="imp-tab" data-i="${i}" data-t="res" aria-pressed="${tab==='res'}">Resultado</button>`:''}</div>
+        <div class="cmp t-${tab}${chm?' three':''}"><div class="p-ex"><h4>Ya en el sistema · «${esc(ex.title)}»${ex.key?' · '+esc(keyText(parseKey(ex.key))):''}</h4><pre>${esc(ex.body||'')}</pre>${ex.bodyPro&&ex.bodyPro.trim()?`<h4>Su versión Original</h4><pre>${esc(ex.bodyPro)}</pre>`:''}</div>
+          <div class="p-pdf"><h4>Del PDF · «${esc(c.title)}»${c.key?' · '+esc(keyText(parseKey(c.key))):''}</h4><textarea data-imp="body" data-i="${i}" class="body">${esc(c.body)}</textarea></div>
+          ${chm?`<div class="p-res"><h4>Resultado · tu letra con los acordes del PDF</h4><pre>${esc(chordsResult(c))}</pre></div>`:''}</div>`; })():''}
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.doubts&&c.doubts.length?`<div class="ask"><b>Tengo una duda${c.num?` con la n.º ${c.num}`:''}:</b> ${esc(c.doubts.join(' '))}
         <div class="ask-snip">${esc(c.body.split('\n').filter(l=>l.trim()&&!/^#/.test(l)).slice(0,3).join(' / ').replace(/\[[^\]]*\]/g,'').slice(0,160))}…</div>
@@ -210,19 +216,51 @@ function ioRender(){
 }
 document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
-  if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:'new'):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value;
+  if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:(c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?'cnew':'cpro')):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value;
   else if(el.dataset.imp==='dupact'){ c.dupAct=el.value; c.include=el.value!=='skip'; ioRender(); } });
 document.addEventListener('change',e=>{ if(e.target.id!=='imp-dupall'||!e.target.value) return; const v=e.target.value; IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=v; c.include=v!=='skip'; } }); ioRender(); });
-const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],['pro','Guardarla como versión “Original” de la que ya tengo'],['body','Reemplazar la versión “Básica” de la que ya tengo'],['new','Guardarla aparte como otra versión (otros acordes)']];
+const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],
+  ['cpro','Solo los acordes del PDF sobre MI letra → versión “Original”'],
+  ['cnew','Solo los acordes del PDF sobre MI letra → otra versión aparte'],
+  ['pro','PDF completo (su letra y acordes) → versión “Original”'],
+  ['new','PDF completo (su letra y acordes) → otra versión aparte'],
+  ['body','PDF completo → reemplaza mi versión “Básica”']];
+/* ---------- Pasar solo los acordes de una letra a otra (sin tocar la letra) ---------- */
+const chStrip=l=>l.replace(/\[[^\]]*\]/g,'');
+function chList(l){ const out=[]; let pos=0; l.replace(/\[([^\]]*)\]|([^\[]+)/g,(m,c,t)=>{ if(c!=null) out.push({pos,ch:c}); else pos+=t.length; return m; }); return out; }
+const chNorm=t=>plainNorm(t).trim().replace(/\s+/g,' ');
+function chWords(t){ const w=[]; t.replace(/[\p{L}\p{N}'’]+/gu,(m,i)=>{ w.push({s:i,e:i+m.length,n:chNorm(m)}); return m; }); return w; }
+function chSim(a,b){ if(!a.length||!b.length) return 0; const A=new Set(a.map(x=>x.n)), B=new Set(b.map(x=>x.n)); let k=0; for(const x of A) if(B.has(x)) k++; return k/Math.max(A.size,B.size); }
+function chPlace(base,src){
+  const bw=chWords(base), sw=chWords(src.t); if(!bw.length) return base;
+  /* emparejar palabras iguales en orden (LCS) */
+  const n=sw.length,m=bw.length,L=Array.from({length:n+1},()=>new Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--) L[i][j]=sw[i].n===bw[j].n?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  const map=new Array(n).fill(-1); for(let i=0,j=0;i<n&&j<m;){ if(sw[i].n===bw[j].n){ map[i]=j; i++; j++; } else if(L[i+1][j]>=L[i][j+1]) i++; else j++; }
+  const at=i=>{ if(map[i]>=0) return map[i]; let a=i-1; while(a>=0&&map[a]<0) a--; let b=i+1; while(b<n&&map[b]<0) b++;
+    const ja=a>=0?map[a]:-1, jb=b<n?map[b]:m; const r=(i-a)/((b-a)||1); return Math.max(0,Math.min(m-1,Math.round(ja+(jb-ja)*r))); };
+  const ins=[];
+  for(const c of src.ch){ let wi=sw.findIndex(w=>c.pos<w.e); if(wi<0){ ins.push({p:base.length,ch:c.ch}); continue; } const off=Math.max(0,c.pos-sw[wi].s); const j=at(wi); ins.push({p:Math.min(bw[j].s+Math.min(off,Math.max(0,bw[j].e-bw[j].s-1)),base.length),ch:c.ch}); }
+  let out=base; ins.sort((a,b)=>b.p-a.p); for(const x of ins) out=out.slice(0,x.p)+'['+x.ch+']'+out.slice(x.p); return out;
+}
+function transferChords(target,source){
+  const src=source.split('\n').filter(l=>!/^\s*#/.test(l)&&chStrip(l).trim()&&chList(l).length).map(l=>{ const t=chStrip(l); return {t,w:chWords(t),ch:chList(l)}; });
+  let last=-1;
+  return target.split('\n').map(line=>{ if(/^\s*#/.test(line)) return line; const base=chStrip(line); if(!base.trim()) return base; const bw=chWords(base);
+    let best=-1,bs=0; src.forEach((x,k)=>{ let sc=chSim(bw,x.w); if(k===last+1) sc+=0.05; if(sc>bs){ bs=sc; best=k; } });
+    if(best<0||bs<0.5) return base; last=best; return chPlace(base,src[best]); }).join('\n');
+}
+function chordsResult(c){ const ex=c.dupOf&&c.dupOf.song; if(!ex) return c.body; return transferChords(ex.body||ex.bodyPro||'',c.body); }
 function ioDupConfirm(){ const d=IO.chunks.filter(c=>c.include&&c.dup); return `<div class="banner" style="border:2px solid var(--danger);display:grid;gap:8px"><b style="color:var(--danger)">Alto: vas a importar ${d.length} ${d.length===1?'canción que ya existe':'canciones que ya existen'}</b><ul style="margin:0;padding-left:18px">${d.map(c=>`<li>${esc(c.title)} → ${esc(dupLabel(c.dupOf))}</li>`).join('')}</ul><div class="actions"><button class="btn danger" data-act="imp-go-force">Importar de todas formas</button><button class="btn" data-act="imp-dup-off">Desmarcarlas y continuar</button></div></div>`; }
 async function ioImport(force){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
   if(!force&&sel.some(c=>c.dup&&(!c.dupOf||c.dupOf.inBatch))){ IO.confirmDup=true; ioRender(); document.getElementById('imp-list').scrollIntoView({behavior:'smooth'}); return; }
   const btn=document.querySelector('[data-act="imp-go"]'); if(btn) btn.disabled=true; const prog=$('#imp-prog');
   const writes=sel.map(c=>{ const ex=c.dup&&c.dupOf&&!c.dupOf.inBatch?c.dupOf.song:null; const act=ex?c.dupAct:'add';
-    if(ex&&(act==='pro'||act==='body')){ const d=JSON.parse(JSON.stringify(ex)); delete d.id; if(act==='pro'){ d.bodyPro=c.body; } else { d.body=c.body; if(c.key) d.key=c.key; } d.updatedAt=Date.now(); return {col:'songs',id:ex.id,data:d}; }
+    const chm=act==='cpro'||act==='cnew'; const body=chm?chordsResult(c):c.body;
+    if(ex&&(act==='pro'||act==='cpro'||act==='body')){ const d=JSON.parse(JSON.stringify(ex)); delete d.id; if(act!=='body'){ d.bodyPro=body; } else { d.body=body; if(c.key) d.key=c.key; } d.updatedAt=Date.now(); return {col:'songs',id:ex.id,data:d}; }
     const data={title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()};
-    if(ex&&act==='new'){ data.versionOf=ex.versionOf||ex.id; if(!data.author&&ex.author) data.author=ex.author; }
+    if(ex&&(act==='new'||act==='cnew')){ data.versionOf=ex.versionOf||ex.id; data.body=body; if(chm||c.dupOf.sim>=0.8) data.title=ex.title; if(!data.author&&ex.author) data.author=ex.author; }
     return {col:'songs',id:newId('c'),data}; });
   let done=0;
   for(let i=0;i<writes.length;i+=50){
@@ -305,13 +343,29 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   else if(a==='imp-only-doubts'){ IO.onlyDoubts=!IO.onlyDoubts; ioRender(); }
 });
 
-document.addEventListener('click',e=>{ const b=e.target.closest('[data-act="imp-cmp"]'); if(!b) return; const c=IO.chunks[+b.dataset.i]; if(!c) return; c.cmp=!c.cmp; ioRender(); });
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-act^="imp-"]'); if(!b) return; const a=b.dataset.act; const c=IO.chunks[+b.dataset.i];
+  if(a==='imp-cmp'&&c){ c.cmp=!c.cmp; if(c.cmp&&!c.cmpTab) c.cmpTab='ex'; ioRender(); }
+  else if(a==='imp-tab'&&c){ c.cmpTab=b.dataset.t; ioRender(); }
+  else if(a==='imp-usetitle'&&c){ c.title=c.dupOf.song.title; ioRender(); }
+  else if(a==='imp-shift'){ ioShiftApply(+b.dataset.d); } });
+/* Si los títulos quedaron corridos (la letra de cada una con el título de la vecina) */
+function ioShiftGuess(){ const C=IO.chunks; if(C.length<3) return null; const sure=C.filter(c=>c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8); if(sure.length<2) return null;
+  for(const d of [1,-1]){ let n=0; C.forEach((c,i)=>{ if(c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8&&C[i+d]&&chNorm(C[i+d].title)===chNorm(c.dupOf.song.title)) n++; }); if(n>=2&&n>=sure.length*0.4) return {d,n}; } return null; }
+function ioShiftApply(d){ const T=IO.chunks.map(c=>c.title); IO.chunks.forEach((c,i)=>{ if(T[i+d]!=null) c.title=T[i+d]; });
+  IO.chunks.forEach((c,i)=>{ const keep=c.dupAct; c.dupOf=findDuplicate(c,[...S.songs.values()]); c.dup=!!c.dupOf; if(c.dup){ c.dupAct=keep||'skip'; c.include=c.dupAct!=='skip'; } else { delete c.dupAct; c.include=!!c.body.trim(); } });
+  toast('Títulos corregidos. Revisa la lista.'); ioRender(); }
 (function(){ const st=document.createElement('style'); st.textContent=`
 .dupbar{border:1px solid var(--accent);display:grid;gap:4px}
 .dupact{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .dupact select{flex:1;min-width:220px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:inherit;font:inherit;font-size:13.5px}
 .cmp{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmp.three{grid-template-columns:1fr 1fr 1fr}
+.cmp-tabs{grid-column:1/-1;display:none;gap:4px}
+.cmp-tabs button{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:8px;padding:8px 4px;font:600 13px var(--f-ui);cursor:pointer}
+.cmp-tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tmis{grid-column:1/-1;font-size:13px;color:#e0a43a;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.shiftbar{border:1px solid #e0a43a;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .cmp h4{margin:4px 0;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .cmp pre,.cmp textarea{margin:0;max-height:320px;min-height:220px;overflow:auto;white-space:pre-wrap;font:12.5px/1.45 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;box-sizing:border-box;color:inherit}
-@media (max-width:640px){.cmp{grid-template-columns:1fr}}
+@media (max-width:760px){.cmp,.cmp.three{grid-template-columns:1fr}.cmp-tabs{display:flex}.cmp.t-ex>div:not(.p-ex),.cmp.t-pdf>div:not(.p-pdf),.cmp.t-res>div:not(.p-res){display:none}}
 `; document.head.appendChild(st); })();
