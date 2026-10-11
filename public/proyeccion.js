@@ -30,6 +30,25 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pj-wrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.pj-wrap.has-side{display:grid;grid-template-columns:300px minmax(0,1fr)}
+.pj-col{display:flex;flex-direction:column;min-height:0;min-width:0}
+.pj-side{border-right:1px solid var(--line);background:var(--surface);overflow:auto;padding:8px;display:flex;flex-direction:column;gap:4px}
+.pj-side-h{padding:6px 8px 10px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.pj-side-h b{display:block;font-family:var(--f-display);font-size:16px}
+.pj-side-h small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px;white-space:pre-line}
+.pj-it{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:none;color:inherit;border-radius:10px;padding:8px 10px;cursor:pointer;font:inherit}
+.pj-it:hover{background:var(--sunk)}
+.pj-it[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.pj-it .n{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);font:700 12px var(--f-mono);color:var(--muted)}
+.pj-it[aria-pressed="true"] .n{background:var(--accent);color:var(--accent-ink)}
+.pj-it .t{flex:1;min-width:0}
+.pj-it .t b{display:block;font-size:14.5px;line-height:1.25}
+.pj-it .t em{display:block;font-size:12.5px;color:var(--accent);font-style:normal;margin-top:2px;line-height:1.3}
+.pj-it .t em.x{color:var(--muted)}
+.pj-it .lv{color:#e05a4f;font-style:normal;font-size:12px}
+@media (max-width:760px){.pj-wrap.has-side{display:flex;flex-direction:column}.pj-side{border-right:0;border-bottom:1px solid var(--line);max-height:34vh;flex:none}}
+
 
 .pj-find{position:relative;padding:10px 16px 0}
 .pj-find input{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit}
@@ -128,6 +147,13 @@ function pjStep(d){
 }
 function pjMode(m){ const r=PJ.remote||{}; if(r.mode===m) m='text'; if(m==='text'&&!r.text){ return pjShow(0); } pjSend({...r,mode:m}); }
 
+function pjSide(r){
+  const p=PJ.programId&&S.programs.get(PJ.programId); const its=(p&&p.items||[]).filter(it=>S.songs.has(it.songId)); const used=new Set();
+  const rows=PJ.songIds.map((id,i)=>{ let k=its.findIndex((x,j)=>!used.has(j)&&x.songId===id); const it=k>=0?(used.add(k),its[k]):null; const so=S.songs.get(id); const key=it&&it.key?parseKey(it.key):songKey(so);
+    const live=r&&r.mode==='text'&&r.songId===id;
+    return `<button class="pj-it" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}"><span class="n">${i+1}</span><span class="t"><b>${esc(so?so.title:'')}</b>${it&&it.note?`<em>${esc(it.note)}</em>`:''}${!it&&p?'<em class="x">Agregada ahora</em>':''}</span>${key?`<span class="key sm"${typeof kc==='function'?kc(key):''}>${esc(keyText(key))}</span>`:''}${live?'<i class="lv" title="En pantalla">●</i>':''}</button>`; }).join('');
+  return `<aside class="pj-side"><div class="pj-side-h"><b>${esc(p?p.title||'Programa':'Lista')}</b>${p&&p.notes?`<small>${esc(p.notes)}</small>`:''}</div>${rows}</aside>`;
+}
 function pjRender(scrollTop){
   const root=$('#proj-root'); if(!PJ.open){ root.innerHTML=''; document.body.classList.remove('pj-has-mini'); return; }
   const s=pjSong(); const sl=s?pjSlides(s):[]; const r=PJ.remote||{mode:'logo'};
@@ -150,12 +176,12 @@ function pjRender(scrollTop){
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
       <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+    <div class="pj-wrap${PJ.songIds.length>1?' has-side':''}">${PJ.songIds.length>1?pjSide(r):''}<div class="pj-col">
     <div class="pj-find"><input id="pj-q" type="search" placeholder="Buscar otra canción para proyectar…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar canción"><div class="pj-res" id="pj-res">${pjResHtml()}</div></div>
-    ${PJ.songIds.length>1?`<div class="pj-songs">${PJ.songIds.map((id,i)=>`<button class="chip" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}">${i+1}. ${esc(S.songs.get(id)?.title||'')}</button>`).join('')}</div>`:''}
     <div class="pj-body" id="pj-body">
       <div class="pj-now"><div class="pj-scr">${scr}</div><div><small>En pantalla ahora</small><b>${r.mode==='black'?'Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</div></div>
       ${sl.length?`<div class="pj-grid">${sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span><p>${esc(x.text)}</p></button>`).join('')}</div>`:'<p class="pj-empty">Esta canción no tiene letra para proyectar.</p>'}
-    </div>
+    </div></div></div>
     <div class="pj-bot">
       <button class="btn" data-act="pj-mode" data-m="black" aria-pressed="${r.mode==='black'}">Negro</button>
       <button class="btn" data-act="pj-mode" data-m="logo" aria-pressed="${r.mode==='logo'}">Logo</button>

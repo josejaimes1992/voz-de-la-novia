@@ -154,7 +154,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
 const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -402,6 +402,12 @@ const SERVER = Bun.serve({
       if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
       if (p === "/proyector") return new Response(PROJ_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/ws/equipo") {
+        const t = url.searchParams.get("t") ?? ""; const u = t ? await currentUser(new Request(url, { headers: { authorization: "Bearer " + t } })) : null;
+        if (!u) return new Response("unauthorized", { status: 401 });
+        if (server.upgrade(req, { data: { team: true, uid: u.id } })) return undefined as unknown as Response;
+        return new Response("Se esperaba WebSocket", { status: 400 });
+      }
       if (p === "/ws/proyector") {
         if (server.upgrade(req)) return undefined as unknown as Response;
         return new Response("Se esperaba WebSocket", { status: 400 });
@@ -827,6 +833,23 @@ const SERVER = Bun.serve({
         catch (e: any) { if (e?.message === "forbidden") return json({ error: "forbidden" }, 403); throw e; }
         return json({ ok: true, count: writes.length });
       }
+      /* ---- Chat interno del equipo (cabina, músicos, director) ---- */
+      if (p === "/api/chat") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        if (req.method === "GET") {
+          const since = Date.now() - 3 * 86400_000;
+          const rows = await db`SELECT id, data FROM docs WHERE col = 'chat' AND updated_at > ${since} ORDER BY updated_at DESC LIMIT 80`;
+          return json({ messages: rows.map((r: any) => ({ id: r.id, ...parseJ(r.data) })).reverse() });
+        }
+        if (req.method === "POST") {
+          const b = await req.json().catch(() => ({})); const text = String(b.text ?? "").replace(/\s+/g, " ").trim().slice(0, 500); if (!text) return json({ error: "empty" }, 400);
+          const at = Date.now(); const id = `m${at}-${randomBytes(3).toString("hex")}`; const msg = { text, by: user.name, uid: user.id, at };
+          await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('chat', ${id}, ${JSON.stringify(msg)}::jsonb, ${at})`;
+          SERVER.publish("team", JSON.stringify({ _chat: { id, ...msg } }));
+          if (Math.random() < 0.05) db`DELETE FROM docs WHERE col = 'chat' AND updated_at < ${at - 14 * 86400_000}`.catch(() => {});
+          return json({ ok: true, id });
+        }
+      }
       /* ---- Compartir un programa con un enlace (WhatsApp) ---- */
       const shm = p.match(/^\/api\/shared\/([A-Za-z0-9_-]{6,40})$/);
       if (shm && req.method === "GET") {
@@ -880,9 +903,9 @@ const SERVER = Bun.serve({
   websocket: {
     idleTimeout: 60,
     sendPings: true,
-    open(ws) { ws.subscribe("proj"); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
+    open(ws) { if ((ws.data as any)?.team) { ws.subscribe("team"); return; } ws.subscribe("proj"); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
     message(ws, msg) { if (msg === "ping") ws.send("pong"); },
-    close(ws) { ws.unsubscribe("proj"); },
+    close(ws) { try { ws.unsubscribe((ws.data as any)?.team ? "team" : "proj"); } catch {} },
   },
 });
 console.log("Voz de la Novia escuchando en", Bun.env.PORT ?? 3000);

@@ -192,3 +192,8 @@ document.addEventListener('keydown',e=>{
   else if(e.key.length===1&&/[\p{L}\p{N}]/u.test(e.key)){ e.preventDefault(); MS.focusQ=true; if(MS.curId&&MS.cur){ MS.qIn=e.key; MS.inIdx=-1; render(); } else { MS.q=e.key; render(); clearTimeout(MS.t); MS.t=setTimeout(msSearch,400); } }
 });
 window.mensajeAfterRender=msAfter;
+
+/* Rueda del mouse sobre la vista previa: baja o sube el texto en pantalla */
+let msWT=0, msWA=0;
+document.addEventListener('wheel',e=>{ if(V.view!=='mensaje'||!S.canWrite) return; const box=e.target.closest&&e.target.closest('.bb-live'); if(!box) return; e.preventDefault();
+  msWA+=e.deltaY; if(Math.abs(msWA)>=60&&Date.now()-msWT>320){ msWT=Date.now(); const d=msWA>0?1:-1; msWA=0; msScrollLive(d); } },{passive:false});

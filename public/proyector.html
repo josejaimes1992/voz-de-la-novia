@@ -226,6 +226,14 @@ document.addEventListener('keydown',e=>{ if(!isFull()&&e.key!=='F11'&&e.key!=='E
   if(e.key==='ArrowRight'){ e.preventDefault(); nav(1,'item'); return; }
   if(e.key==='ArrowLeft'){ e.preventDefault(); nav(-1,'item'); return; } });
 document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); let t=null; try{ t=localStorage.getItem('vdn-token'); t=t&&JSON.parse(t); }catch{} if(t) fetch('/api/proyector/negro',{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); return; } if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
+/* Rueda del mouse: baja o sube el texto del mensaje (o la Biblia) en pantalla */
+let wAcc=0, wT=0;
+document.addEventListener('wheel',e=>{ const L=$('#L-read'); const reading=L&&L.classList.contains('on')&&$('#rd-in').textContent.trim();
+  e.preventDefault();
+  if(reading){ const max=rdMax(); const next=rdOff+e.deltaY*(e.deltaMode===1?40:1)*1.1;
+    if(next>max+2&&e.deltaY>0||next<-2&&e.deltaY<0){ wAcc+=e.deltaY; if(Math.abs(wAcc)>320&&Date.now()-wT>900){ wT=Date.now(); wAcc=0; nav(e.deltaY>0?1:-1,'item'); } return; }
+    wAcc=0; rdSet(next,false); return; }
+  wAcc+=e.deltaY; if(Math.abs(wAcc)>=120&&Date.now()-wT>350){ wT=Date.now(); const d=wAcc>0?1:-1; wAcc=0; nav(d,'item'); } },{passive:false});
 let mt; document.addEventListener('mousemove',()=>{ document.body.classList.add('cur'); clearTimeout(mt); mt=setTimeout(()=>document.body.classList.remove('cur'),2000); });
 setTimeout(()=>$('#hint').classList.add('off'),6000);
 
