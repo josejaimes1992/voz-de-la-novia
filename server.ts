@@ -95,7 +95,12 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
     }
   }
   if (before) { if (before.createdBy) data.createdBy = before.createdBy; if (before.createdAt) data.createdAt = before.createdAt; }
-  if (col === "programs") { data.ownerId = before?.ownerId ?? user.id; data.owner = before?.owner ?? user.name; }
+  if (col === "programs") {
+    if (before && before.ownerId != null && before.ownerId !== user.id && action !== "restore") throw new Error("forbidden");
+    data.ownerId = before?.ownerId ?? user.id; data.owner = before?.owner ?? user.name;
+    if (!("shareToken" in data) && before?.shareToken) data.shareToken = before.shareToken; else if (data.shareToken === null) delete data.shareToken;
+    delete data._shared;
+  }
   await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${col}, ${id}, ${JSON.stringify(data)}::jsonb, ${now})
            ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
   await logChange(tx, user, action ?? (before ? "update" : "create"), col, id, before, data);
@@ -818,8 +823,27 @@ const SERVER = Bun.serve({
         for (const w of writes) {
           if (!w || !COLS.has(w.col) || typeof w.id !== "string" || !ID_RE.test(w.id) || !w.data || typeof w.data !== "object" || Array.isArray(w.data)) return json({ error: "bad_write" }, 400);
         }
-        await db.begin(async (tx) => { for (const w of writes) await upsert(tx, user, w.col, w.id, { ...w.data }, body.restore ? "restore" : "import"); });
+        try { await db.begin(async (tx) => { for (const w of writes) await upsert(tx, user, w.col, w.id, { ...w.data }, body.restore ? "restore" : "import"); }); }
+        catch (e: any) { if (e?.message === "forbidden") return json({ error: "forbidden" }, 403); throw e; }
         return json({ ok: true, count: writes.length });
+      }
+      /* ---- Compartir un programa con un enlace (WhatsApp) ---- */
+      const shm = p.match(/^\/api\/shared\/([A-Za-z0-9_-]{6,40})$/);
+      if (shm && req.method === "GET") {
+        const rows = await db`SELECT id, data FROM docs WHERE col = 'programs'`;
+        for (const r of rows) { const d = parseJ(r.data); if (d.shareToken === shm[1]) return json({ program: { id: "sh_" + shm[1], title: d.title || "Programa", date: d.date || "", service: d.service || "", notes: d.notes || "", items: d.items || [], owner: d.owner || "", token: shm[1] } }); }
+        return json({ error: "not_found" }, 404);
+      }
+      const spm = p.match(/^\/api\/programs\/([^/]+)\/share$/);
+      if (spm && (req.method === "POST" || req.method === "DELETE")) {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const r = await db`SELECT data FROM docs WHERE col = 'programs' AND id = ${spm[1]}`; if (!r[0]) return json({ error: "not_found" }, 404);
+        const d = parseJ(r[0].data); if (d.ownerId != null && d.ownerId !== user.id) return json({ error: "forbidden" }, 403);
+        if (req.method === "POST" && !d.shareToken) d.shareToken = randomBytes(9).toString("base64url");
+        if (req.method === "DELETE") delete d.shareToken;
+        if (d.ownerId == null) { d.ownerId = user.id; d.owner = user.name; }
+        await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'programs' AND id = ${spm[1]}`;
+        return json({ token: d.shareToken || null });
       }
       const m = p.match(/^\/api\/(songs|programs)\/([^/]+)$/);
       if (m) {

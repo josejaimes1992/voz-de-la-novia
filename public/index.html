@@ -428,6 +428,19 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 .htile.ph .ph-bar{display:block;width:26px;height:3px;border-radius:2px;background:var(--c);margin-top:8px}
 .htile.ph .go{top:12px;right:12px;width:32px;height:32px;color:var(--c);border:1.5px solid var(--c);background:rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 @media (max-width:380px){.htile.ph b{font-size:18px}.htile.ph .ph-ic{width:44px;height:44px}}
+
+.vers{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px;font-size:13px;color:var(--muted)}
+.pill.ver{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+/* ---- Compartir programa ---- */
+.share-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.share-box .ic,.share-in .ic{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#25d36622;color:#1faa53;flex:none}
+.share-box .t{flex:1;min-width:180px}.share-box b,.share-in b{display:block}.share-box small,.share-in small{color:var(--muted);font-size:13px}
+.share-box.on{border-color:#25d36666}
+.share-acts{display:flex;gap:6px;flex-wrap:wrap}
+.btn.wa{background:#25d366;border-color:#25d366;color:#06321a;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn.wa svg{width:18px;height:18px}
+.share-in{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;border-radius:14px;background:#25d36614;border:1px solid #25d36655}
+.share-in>div{flex:1;min-width:180px}
 /* ---- Barra inferior (móvil) ---- */
 .bnav{display:none}
 @media (max-width:640px){
@@ -585,7 +598,7 @@ let lastSig='';
 async function loadData(){
   try{
     const d=await api('/api/data'); const sig=JSON.stringify(d); if(sig===lastSig) return; lastSig=sig;
-    S.songs=new Map(d.songs.map(x=>[x.id,x])); S.programs=new Map(d.programs.map(x=>[x.id,x])); S.error=false; S.mode='api'; onData();
+    S.songs=new Map(d.songs.map(x=>[x.id,x])); S.programs=new Map(d.programs.map(x=>[x.id,x])); for(const x of S.sharedProgs||[]) S.programs.set(x.id,x); S.error=false; S.mode='api'; onData();
   }catch(e){ if(S.mode==='loading'){ S.mode='api'; S.error=true; render(); } }
 }
 async function initStore(){
@@ -595,7 +608,7 @@ async function initStore(){
   setInterval(()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); },15000);
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && V.view!=='edit') loadData(); });
 }
-function setUser(u){ S.user=u||null; S.canWrite=!!u; S.isAdmin=!!u&&u.role==='admin'; const tp=document.getElementById('tab-programs'); if(tp) tp.hidden=!u; if(!u&&(V.tab==='programs'||V.view==='programs'||V.view==='program')){ V.tab='songs'; V.view='list'; } lastSig=''; if(S.isAdmin&&window.teamPoll) teamPoll(); if(u&&window.loadTeam) loadTeam(); if(!u) S.team=new Map(); if(S.mode!=='loading') loadData(); }
+function setUser(u){ S.user=u||null; S.canWrite=!!u; S.isAdmin=!!u&&u.role==='admin'; const tp=document.getElementById('tab-programs'); if(tp) tp.hidden=!u; if(!u&&(V.tab==='programs'||V.view==='programs'||V.view==='program')&&!((S.programs&&S.programs.get(V.programId))||{})._shared){ V.tab='songs'; V.view='list'; } lastSig=''; if(S.isAdmin&&window.teamPoll) teamPoll(); if(u&&window.loadTeam) loadTeam(); if(!u) S.team=new Map(); if(S.mode!=='loading') loadData(); }
 function lostAuth(){ setUser(null); S.token=null; lsSet('vdn-token',null); toast('Tu sesión terminó. Vuelve a ingresar para editar.'); render(); }
 async function writeDoc(col,obj){
   if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return false; }
@@ -751,7 +764,7 @@ function viewSongsInner(){
       return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
     return h;
   }
-  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
+  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${s.versionOf?'<span class="pill ver">Otra versión</span>':''}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
   if(V.group){
     const groups=new Map(); filtered.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; if(!groups.has(c)) groups.set(c,[]); groups.get(c).push(s); });
     h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"${k?kc(k):''}><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'alabanza':'alabanzas'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
@@ -869,11 +882,17 @@ function controls(key,shift,extra=''){
   <div class="tp" title="Transponer"><button data-act="shift" data-d="-1" aria-label="Bajar medio tono">−</button><output>${esc(keyText(key,shift))}${shift?` <small>${shift>0?'+':''}${shift}</small>`:''}</output><button data-act="shift" data-d="1" aria-label="Subir medio tono">+</button></div>
   <div class="tp" title="Tamaño del texto"><button data-act="size" data-d="-1" aria-label="Texto más pequeño" style="font-size:13px">A</button><button data-act="size" data-d="1" aria-label="Texto más grande" style="font-size:19px">A</button></div><div class="seg" role="group" aria-label="Notación"><button data-act="nota-set" data-v="0" aria-pressed="${!V.latin}">A–G</button><button data-act="nota-set" data-v="1" aria-pressed="${V.latin}">Do–Si</button></div>${extra}`;
 }
+function versionsStrip(s){
+  const root=s.versionOf||s.id; const sibs=[...S.songs.values()].filter(x=>(x.versionOf||x.id)===root); if(sibs.length<2) return '';
+  sibs.sort((a,b)=>(a.versionOf?1:0)-(b.versionOf?1:0)||(a.createdAt||0)-(b.createdAt||0));
+  return `<div class="vers"><span>Versiones de esta alabanza:</span>${sibs.map((x,i)=>{ const k=songKey(x); return `<button class="chip" data-act="open-song" data-id="${esc(x.id)}" aria-pressed="${x.id===s.id}">${i?'Versión '+(i+1):'Principal'}${k?`<small>${esc(keyText(k))}</small>`:''}</button>`; }).join('')}</div>`;
+}
 function viewSong(){
   const s=S.songs.get(V.songId); if(!s){ V.view='list'; return viewSongs(); }
   const k=songKey(s);
   return `<button class="btn ghost back" data-act="go-list">${ICON.back}Alabanzas</button>
   <div class="song-h"><span class="key"${kc(k?{idx:k.idx+V.shift,minor:k.minor}:null)}>${esc(keyText(k,V.shift))}</span><div class="t"><h1>${esc(s.title)}</h1><p>${esc([s.author,s.category].filter(Boolean).join(' · '))}${k?` · Tono original ${esc(keyText(k))}`:''}${s.bpm?` · ${esc(s.bpm)} BPM`:''}</p>${s.updatedBy?`<p class="edited">Última edición: ${S.user&&window.whoHtml?whoHtml(null,s.updatedBy,20):esc(s.updatedBy)} · ${esc(fmtWhen(s.updatedAt))}${s.createdBy&&s.createdBy!==s.updatedBy?` · Creada por ${S.user&&window.whoHtml?whoHtml(null,s.createdBy,20):esc(s.createdBy)}`:''}</p>`:''}</div></div>
+  ${versionsStrip(s)}
   <div class="ctrl">${controls(k,V.shift)}<span class="spacer"></span>
     <button class="btn" data-act="pdf-song" data-mode="letra">${ICON.pdf}PDF letra</button>
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
@@ -939,13 +958,30 @@ function viewPrograms(){
   const list=[...S.programs.values()].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   let h=banner()+`<div class="toolbar"><h2 style="font-family:var(--f-display);font-size:24px;flex:1">Programas de cánticos</h2>${S.canWrite?`<button class="btn pri" data-act="new-prog">${ICON.plus}Nuevo programa</button>`:''}</div>`;
   if(!list.length) return h+`<div class="empty"><b>Aún no hay programas</b>Crea el programa del próximo culto y agrega las canciones en orden, con el tono en que se cantarán.</div>`;
-  return h+`<div class="cards">${list.map(p=>{ const f=fmtDate(p.date); return `<button class="pcard" data-act="open-prog" data-id="${esc(p.id)}"><span class="cal"><small>${esc(f.m)}</small><b>${esc(f.d)}</b></span><span class="t"><b>${esc(p.title||'Sin título')}${p.ejemplo?'<span class="pill">Ejemplo</span>':''}</b><small>${esc(p.service||f.full)}</small><br><small>${(p.items||[]).length} ${(p.items||[]).length===1?'canción':'canciones'}</small></span></button>`; }).join('')}</div>`;
+  return h+`<div class="cards">${list.map(p=>{ const f=fmtDate(p.date); return `<button class="pcard" data-act="open-prog" data-id="${esc(p.id)}"><span class="cal"><small>${esc(f.m)}</small><b>${esc(f.d)}</b></span><span class="t"><b>${esc(p.title||'Sin título')}${p._shared?'<span class="pill">Compartido</span>':''}${p.ejemplo?'<span class="pill">Ejemplo</span>':''}</b><small>${esc(p.service||f.full)}</small><br><small>${(p.items||[]).length} ${(p.items||[]).length===1?'canción':'canciones'}</small></span></button>`; }).join('')}</div>`;
 }
 function itemShift(it){ const s=S.songs.get(it.songId); if(!s) return 0; const a=songKey(s), b=parseKey(it.key); return a&&b?normShift(b.idx-a.idx):0; }
+const WA_SVG='<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2.2A9.7 9.7 0 0 0 3.7 16.9L2.4 21.6l4.8-1.3A9.7 9.7 0 1 0 12 2.2zm0 17.7a8 8 0 0 1-4.1-1.1l-.3-.2-2.9.8.8-2.8-.2-.3A8 8 0 1 1 12 19.9zm4.4-6c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1l-.8.9c-.1.2-.3.2-.5.1a6.6 6.6 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.6.3 2.7 2.7 0 0 0-.9 2c0 1.2.9 2.4 1 2.5.1.2 1.7 2.7 4.2 3.8 1.6.7 2.2.7 3 .6.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.5-.3z"/></svg>';
+function shareUrl(p){ return location.origin+'/?programa='+encodeURIComponent(p.shareToken); }
+function shareText(p){ const f=fmtDate(p.date); const lines=(p.items||[]).map((it,i)=>{ const s=S.songs.get(it.songId); return s?`${i+1}. ${s.title}${it.key?' ('+keyText(parseKey(it.key))+')':''}`:null; }).filter(Boolean);
+  return `🎵 *${p.title||'Programa'}*${p.date?'\n'+f.full:''}${p.service?' · '+p.service:''}\n\n${lines.join('\n')}\n\nÁbrelo en Voz de la Novia:\n${shareUrl(p)}`; }
+function shareBox(p){
+  if(!p.shareToken) return `<div class="share-box"><span class="ic">${WA_SVG}</span><div class="t"><b>Este programa es solo tuyo</b><small>Nadie más lo ve. Si quieres, compártelo por WhatsApp con un enlace.</small></div><button class="btn wa" data-act="share-make">${WA_SVG}Compartir por WhatsApp</button></div>`;
+  return `<div class="share-box on"><span class="ic">${WA_SVG}</span><div class="t"><b>Compartido con enlace</b><small>Quien abra el enlace verá este programa (sin poder cambiarlo).</small></div>
+    <div class="share-acts"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(shareText(p))}" target="_blank" rel="noopener">${WA_SVG}Enviar por WhatsApp</a><button class="btn" data-act="share-copy">🔗 Copiar enlace</button>${navigator.share?'<button class="btn" data-act="share-native">Compartir…</button>':''}<button class="btn ghost" data-act="share-stop">Dejar de compartir</button></div></div>`;
+}
+async function loadSharedFromUrl(){
+  const t=new URLSearchParams(location.search).get('programa'); if(!t) return;
+  try{ const r=await fetch('/api/shared/'+encodeURIComponent(t)); if(!r.ok) throw 0; const d=await r.json(); const p={...d.program,_shared:true};
+    S.sharedProgs=[p]; S.programs.set(p.id,p); V.tab='programs'; V.programId=p.id; go('program'); }
+  catch{ toast('Ese programa ya no está compartido o el enlace no es válido.'); }
+  try{ history.replaceState(null,'','/'); }catch{}
+}
 function viewProgram(){
   const p=S.programs.get(V.programId); if(!p){ V.view='programs'; return viewPrograms(); }
-  const w=S.canWrite, items=p.items||[]; const f=fmtDate(p.date);
-  return `<button class="btn ghost back" data-act="go-programs">${ICON.back}Programas</button>
+  const sh=!!p._shared, w=S.canWrite&&!sh, items=p.items||[]; const f=fmtDate(p.date);
+  return `<button class="btn ghost back" data-act="${sh&&!S.user?'home':'go-programs'}">${ICON.back}${sh&&!S.user?'Inicio':'Programas'}</button>
+  ${sh?`<div class="share-in"><span class="ic">${WA_SVG}</span><div><b>Programa compartido por ${esc(p.owner||'un hermano')}</b><small>Solo lectura. Puedes verlo, ponerlo en vivo o sacar el PDF.</small></div>${S.user?`<button class="btn pri" data-act="save-shared">Guardar en mis programas</button>`:`<button class="btn" data-act="auth">Ingresar para guardarlo</button>`}</div>`:''}
   ${w?`<div class="form">
     <div class="grid2">
       <label class="f">Nombre del programa<input id="p-title" data-pf="title" value="${esc(p.title)}"></label>
@@ -963,6 +999,7 @@ function viewProgram(){
     <span class="spacer"></span>
     ${w?`<button class="btn" data-act="pick-song">${ICON.plus}Agregar canción</button>`:''}
   </div>
+  ${w?shareBox(p):''}
   <div class="items">${items.length?items.map((it,i)=>{ const s=S.songs.get(it.songId); return `<div class="item"><span class="n">${i+1}</span><div class="t"><b>${s?esc(s.title):'<em>Canción borrada</em>'}</b>
     <div class="meta">${w?`<select data-it="key" data-i="${i}" aria-label="Tono para este culto">${ALL_KEYS.map(k=>`<option value="${k}" ${keyMatch(it.key,k)?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select><input data-it="note" data-i="${i}" value="${esc(it.note||'')}" placeholder="Indicación (ej. coro 2 veces)">`:`<span class="key sm"${kc(parseKey(it.key))}>${esc(keyText(parseKey(it.key)))}</span><span style="color:var(--muted);font-size:13px">${esc(it.note||'')}</span>`}
     ${s&&songKey(s)&&itemShift(it)?`<span style="font-size:12px;color:var(--muted)">original ${esc(keyText(songKey(s)))}</span>`:''}</div></div>
@@ -1203,6 +1240,14 @@ document.addEventListener('click',async ev=>{
     case 'key': V.key=ds.k; render(); break;
     case 'go-list': V.tab='songs'; go('list'); break;
     case 'theme-set': setTheme(ds.t); break;
+    case 'share-make': { const p=S.programs.get(V.programId); if(!p) break; const wa=window.open('','_blank');
+      try{ const r=await api('/api/programs/'+encodeURIComponent(p.id)+'/share',{method:'POST'}); p.shareToken=r.token; }catch(e){ if(wa) wa.close(); toast('No se pudo crear el enlace. Revisa el internet.'); break; }
+      const link='https://wa.me/?text='+encodeURIComponent(shareText(p)); if(wa){ try{ wa.location.href=link; }catch{ wa.close(); } } render(); if(!wa) toast('Enlace listo. Toca “Enviar por WhatsApp”.'); break; }
+    case 'share-copy': { const p=S.programs.get(V.programId); try{ await navigator.clipboard.writeText(shareUrl(p)); toast('Enlace copiado.'); }catch{ prompt('Copia este enlace:',shareUrl(p)); } break; }
+    case 'share-native': { const p=S.programs.get(V.programId); try{ await navigator.share({title:p.title||'Programa',text:shareText(p).replace(/\n\nÁbrelo[\s\S]*$/,''),url:shareUrl(p)}); }catch{} break; }
+    case 'share-stop': { const p=S.programs.get(V.programId); try{ await api('/api/programs/'+encodeURIComponent(p.id)+'/share',{method:'DELETE'}); delete p.shareToken; render(); toast('Listo: el enlace ya no funciona. El programa vuelve a ser solo tuyo.'); }catch{ toast('No se pudo cambiar. Revisa el internet.'); } break; }
+    case 'save-shared': { const o=S.programs.get(V.programId); if(!o||!S.user) break; const np={id:newId('p'),title:o.title,date:o.date,service:o.service||'',notes:o.notes||'',items:JSON.parse(JSON.stringify(o.items||[]))};
+      await writeDoc('programs',np); S.sharedProgs=(S.sharedProgs||[]).filter(x=>x.id!==o.id); S.programs.delete(o.id); V.programId=np.id; render(); toast('Guardado en tus programas. Ahora puedes cambiarlo a tu gusto.'); break; }
     case 'theme-next': { const i=THEMES.findIndex(x=>x[0]===curTheme()); setTheme(THEMES[(i+1)%THEMES.length][0]); toast('Tema: '+THEMES[(i+1)%THEMES.length][1]); break; }
     case 'home': ev.preventDefault(); closeModal(); if(IS_MOBILE()){ V.tab='home'; go('home'); break; } V.tab='songs'; V.q=''; V.key='all'; V.missingOnly=false; V.lastSongId=null; V.listY=null; go('list'); window.scrollTo(0,0); break;
     case 'go-programs': V.tab='programs'; go('programs'); break;
@@ -1269,10 +1314,10 @@ document.addEventListener('change',async ev=>{
   if(el.dataset.pf){ const p={...S.programs.get(V.programId)}; p[el.dataset.pf]=el.value; delete p.ejemplo; await writeDoc('programs',p); }
   if(el.dataset.it){ const p=JSON.parse(JSON.stringify(S.programs.get(V.programId))); p.items[+el.dataset.i][el.dataset.it]=el.value; await writeDoc('programs',p); if(el.dataset.it==='key') render(); }
 });
-render(); initStore(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
+render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
 </script>
 <script src="/himnario.js?v=3"></script>
-<script src="/io.js?v=6"></script>
+<script src="/io.js?v=7"></script>
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>

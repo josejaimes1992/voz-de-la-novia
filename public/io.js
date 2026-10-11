@@ -121,7 +121,7 @@ function finishSong(s){
   if(!k){ const m=/\[([^\]]+)\]/.exec(s.body); const c=m&&parseChord(m[1]); if(c) k={idx:c.root,minor:/^m(?!aj)/.test(c.suf)}; }
   s.key=k?keyCanon(k.idx,k.minor):'';
   s.dupOf=findDuplicate(s,[...S.songs.values()]); s.dup=!!s.dupOf;
-  s.include=!s.dup && !!s.body.trim(); return s;
+  s.include=!s.dup && !!s.body.trim(); if(s.dup) s.dupAct='skip'; return s;
 }
 
 /* ---------- Ventana de importación ---------- */
@@ -188,7 +188,8 @@ function ioRender(){
   $('#imp-mode').addEventListener('change',e=>{ IO.mode=e.target.value; ioBuild(); });
   $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
-  const nd=IO.chunks.filter(c=>c.dup).length; list.innerHTML=errs+(nd?`<div class="banner" style="color:var(--danger);border:1px solid var(--danger)"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra, y las desmarqué para evitar duplicados.</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
+  const nd=IO.chunks.filter(c=>c.dup).length; const nsys=IO.chunks.filter(c=>c.dup&&c.dupOf&&!c.dupOf.inBatch).length;
+  list.innerHTML=errs+(nd?`<div class="banner dupbar"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra. Elige qué hacer con cada una (o con todas a la vez). Toca “Comparar” para ver la que ya tienes junto a la del PDF.${nsys>1?`<label class="f" style="margin-top:8px">A todas las que ya existen:<select id="imp-dupall"><option value="">Elegir…</option>${DUP_OPTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label>`:''}</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
     ${ioDoubtBanner()}
     <div class="imp-rows">${IO.chunks.map((c,i)=>IO.onlyDoubts&&!(c.doubts&&c.doubts.length)?'':`<div class="imp-row${c.doubts&&c.doubts.length?' doubt':''}">
       <input type="checkbox" data-imp="include" data-i="${i}" ${c.include?'checked':''} aria-label="Incluir">
@@ -197,6 +198,8 @@ function ioRender(){
       <button class="btn ghost" data-act="imp-view" data-i="${i}">Ver</button>
       ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
       ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
+      ${c.dup&&c.dupOf&&!c.dupOf.inBatch?`<div class="dupact"><select data-imp="dupact" data-i="${i}" aria-label="Qué hacer con esta canción">${DUP_OPTS.map(([v,t])=>`<option value="${v}" ${c.dupAct===v?'selected':''}>${t}${v==='pro'&&c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?' (reemplaza la que tiene)':''}</option>`).join('')}</select><button class="btn ghost" data-act="imp-cmp" data-i="${i}">${c.cmp?'Cerrar comparación':'Comparar'}</button></div>`:''}
+      ${c.cmp&&c.dupOf?`<div class="cmp"><div><h4>Ya en el sistema · ${esc(c.dupOf.song.title)}${c.dupOf.song.key?' · '+esc(keyText(parseKey(c.dupOf.song.key))):''}</h4><pre>${esc(c.dupOf.song.body||'')}</pre>${c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?`<h4>Su versión Original</h4><pre>${esc(c.dupOf.song.bodyPro)}</pre>`:''}</div><div><h4>Del PDF${c.key?' · '+esc(keyText(parseKey(c.key))):''}</h4><textarea data-imp="body" data-i="${i}" class="body">${esc(c.body)}</textarea></div></div>`:''}
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.doubts&&c.doubts.length?`<div class="ask"><b>Tengo una duda${c.num?` con la n.º ${c.num}`:''}:</b> ${esc(c.doubts.join(' '))}
         <div class="ask-snip">${esc(c.body.split('\n').filter(l=>l.trim()&&!/^#/.test(l)).slice(0,3).join(' / ').replace(/\[[^\]]*\]/g,'').slice(0,160))}…</div>
@@ -207,20 +210,27 @@ function ioRender(){
 }
 document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
-  if(el.dataset.imp==='include'){ c.include=el.checked; if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value; });
+  if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:'new'):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value;
+  else if(el.dataset.imp==='dupact'){ c.dupAct=el.value; c.include=el.value!=='skip'; ioRender(); } });
+document.addEventListener('change',e=>{ if(e.target.id!=='imp-dupall'||!e.target.value) return; const v=e.target.value; IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=v; c.include=v!=='skip'; } }); ioRender(); });
+const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],['pro','Guardarla como versión “Original” de la que ya tengo'],['body','Reemplazar la versión “Básica” de la que ya tengo'],['new','Guardarla aparte como otra versión (otros acordes)']];
 function ioDupConfirm(){ const d=IO.chunks.filter(c=>c.include&&c.dup); return `<div class="banner" style="border:2px solid var(--danger);display:grid;gap:8px"><b style="color:var(--danger)">Alto: vas a importar ${d.length} ${d.length===1?'canción que ya existe':'canciones que ya existen'}</b><ul style="margin:0;padding-left:18px">${d.map(c=>`<li>${esc(c.title)} → ${esc(dupLabel(c.dupOf))}</li>`).join('')}</ul><div class="actions"><button class="btn danger" data-act="imp-go-force">Importar de todas formas</button><button class="btn" data-act="imp-dup-off">Desmarcarlas y continuar</button></div></div>`; }
 async function ioImport(force){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
-  if(!force&&sel.some(c=>c.dup)){ IO.confirmDup=true; ioRender(); document.getElementById('imp-list').scrollIntoView({behavior:'smooth'}); return; }
+  if(!force&&sel.some(c=>c.dup&&(!c.dupOf||c.dupOf.inBatch))){ IO.confirmDup=true; ioRender(); document.getElementById('imp-list').scrollIntoView({behavior:'smooth'}); return; }
   const btn=document.querySelector('[data-act="imp-go"]'); if(btn) btn.disabled=true; const prog=$('#imp-prog');
-  const writes=sel.map(c=>({col:'songs',id:newId('c'),data:{title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()}}));
+  const writes=sel.map(c=>{ const ex=c.dup&&c.dupOf&&!c.dupOf.inBatch?c.dupOf.song:null; const act=ex?c.dupAct:'add';
+    if(ex&&(act==='pro'||act==='body')){ const d=JSON.parse(JSON.stringify(ex)); delete d.id; if(act==='pro'){ d.bodyPro=c.body; } else { d.body=c.body; if(c.key) d.key=c.key; } d.updatedAt=Date.now(); return {col:'songs',id:ex.id,data:d}; }
+    const data={title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()};
+    if(ex&&act==='new'){ data.versionOf=ex.versionOf||ex.id; if(!data.author&&ex.author) data.author=ex.author; }
+    return {col:'songs',id:newId('c'),data}; });
   let done=0;
   for(let i=0;i<writes.length;i+=50){
     const part=writes.slice(i,i+50);
     try{ const r=await api('/api/batch',{method:'POST',body:JSON.stringify({writes:part})}); done+=part.length; if(prog) prog.textContent=`Guardadas ${done} de ${writes.length}…`; }
     catch(e){ if(e.code===401){ lostAuth(); return; } toast(`Se guardaron ${done} canciones; el resto falló. Inténtalo de nuevo.`); if(btn) btn.disabled=false; await loadData(); return; }
   }
-  closeModal(); lastSig=''; await loadData(); toast(`${done} ${done===1?'canción importada':'canciones importadas'}.`);
+  closeModal(); lastSig=''; await loadData(); const nUp=writes.filter(w=>S.songs.has(w.id)&&sel.some(c=>c.dupOf&&c.dupOf.song&&c.dupOf.song.id===w.id)).length; toast(`${done} ${done===1?'canción guardada':'canciones guardadas'}${nUp?` (${nUp} ${nUp===1?'actualizada':'actualizadas'})`:''}.`);
 }
 async function ioBackup(file){
   let d; try{ d=JSON.parse(await file.text()); }catch{ toast('El archivo .json no es una copia válida.'); return; }
@@ -294,3 +304,14 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   else if(a==='imp-merge'&&c&&i>0){ const p=IO.chunks[i-1]; p.body=(p.body+'\n\n'+(c.title?'# '+c.title+'\n':'')+c.body).trim(); IO.chunks.splice(i,1); ioRender(); toast('Unida con “'+p.title+'”.'); }
   else if(a==='imp-only-doubts'){ IO.onlyDoubts=!IO.onlyDoubts; ioRender(); }
 });
+
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-act="imp-cmp"]'); if(!b) return; const c=IO.chunks[+b.dataset.i]; if(!c) return; c.cmp=!c.cmp; ioRender(); });
+(function(){ const st=document.createElement('style'); st.textContent=`
+.dupbar{border:1px solid var(--accent);display:grid;gap:4px}
+.dupact{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.dupact select{flex:1;min-width:220px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:inherit;font:inherit;font-size:13.5px}
+.cmp{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmp h4{margin:4px 0;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.cmp pre,.cmp textarea{margin:0;max-height:320px;min-height:220px;overflow:auto;white-space:pre-wrap;font:12.5px/1.45 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;box-sizing:border-box;color:inherit}
+@media (max-width:640px){.cmp{grid-template-columns:1fr}}
+`; document.head.appendChild(st); })();
