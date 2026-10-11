@@ -321,7 +321,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
       <span class="ttl">${esc(s?s.title:'')}${k?` <small class="muted">· ${esc(keyText(k))}</small>`:''}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para usar el resto de la app">${ICON.search}Seguir en la app</button>
-      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open">📡 OBS</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjw-grid side${PJ.tab==='bible'?' bbmode':''}">
       <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
         ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():pjMsgLib()}</section>
@@ -398,7 +398,7 @@ function pjRender(scrollTop){
       <span class="ttl">${esc(s?s.title:'')}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
-      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open">📡 OBS</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjm-now"><i class="${r.mode==='text'?'on':''}"></i><span><small>En pantalla</small> ${r.mode==='black'?'■ Negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1}/${r.total}`:''))}</span></div>
     <div class="pj-body pjm-body" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza abajo para empezar.'}</p>`}</div>
     ${PJ.songIds.length?`<div class="pjm-prog" id="pjm-prog">${PJ.songIds.map((id,i)=>{ const so=S.songs.get(id); const k=so?songKey(so):null; const live=r.mode==='text'&&r.songId===id; return `<button class="pjm-it${isSung(id)?' sung':''}" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}"><span class="n">${i+1}${live?' <i>●</i>':''}</span><b>${esc(so?so.title:'')}</b>${k?`<small>${esc(keyText(k))}${isSung(id)?' · ✓':''}</small>`:(isSung(id)?'<small>✓ Cantada</small>':'')}</button>`; }).join('')}</div>`:''}
@@ -607,3 +607,92 @@ document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-
 .pj-sug-h{margin:8px 2px 4px;font-size:12.5px;color:var(--muted);font-weight:600}
 .sung-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 4px;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,#f3cf4a 16%,var(--surface));border:1px solid color-mix(in srgb,#e2b72c 50%,transparent);font-size:13.5px}
 `; document.head.appendChild(st); })();
+
+/* ===== OBS: letra abajo en 2 líneas para la transmisión + exportar PNG ===== */
+const OBS_FONTS=['Barlow Semi Condensed','Oswald','Montserrat','Figtree'];
+function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',...o}; }
+function obsSave(o){ try{ localStorage.setItem('vdn-obs',JSON.stringify(o)); }catch{} }
+function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
+function obsTwo(text){
+  const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean);
+  if(!L.length) return [];
+  if(L.length===1){ const w=L[0].split(/\s+/); if(L[0].length<34||w.length<4) return L; let best=1,bd=1e9; for(let k=1;k<w.length;k++){ const d=Math.abs(w.slice(0,k).join(' ').length-w.slice(k).join(' ').length); if(d<bd){bd=d;best=k;} } return [w.slice(0,best).join(' '),w.slice(best).join(' ')]; }
+  if(L.length===2) return L;
+  let best=1,bm=1e9; for(let k=1;k<L.length;k++){ const a=L.slice(0,k).join(' ').length,b=L.slice(k).join(' ').length,m=Math.max(a,b); if(m<bm){bm=m;best=k;} }
+  return [L.slice(0,best).join(' '),L.slice(best).join(' ')];
+}
+function obsFontsCss(){ if(document.getElementById('obs-font-css')) return; const l=document.createElement('link'); l.id='obs-font-css'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@700&family=Oswald:wght@600&family=Montserrat:wght@700&family=Figtree:wght@700&display=swap'; document.head.appendChild(l); }
+/* Dibuja una diapositiva en un lienzo transparente 1920×1080, igual que la pantalla de OBS */
+function obsDraw(cv,lines,o,checker){
+  const W=cv.width,H=cv.height,c=cv.getContext('2d'); c.clearRect(0,0,W,H);
+  if(checker){ c.fillStyle='#3a3f47'; c.fillRect(0,0,W,H); c.fillStyle='#2c3036'; const q=W/32; for(let y=0;y<H;y+=q) for(let x=(y/q)%2?q:0;x<W;x+=2*q) c.fillRect(x,y,q,q); }
+  if(!lines.length) return;
+  const txt=lines.map(l=>o.may?l.toLocaleUpperCase('es'):l); const fam=`"${o.fuente}", "Arial Narrow", Arial, sans-serif`;
+  let fs=Math.round(Math.min(W*.052,H*.095)*o.t); const maxW=W*.92;
+  c.font=`700 ${fs}px ${fam}`; const widest=Math.max(...txt.map(t=>c.measureText(t).width)); if(widest>maxW) fs=Math.floor(fs*maxW/widest*.98);
+  c.font=`700 ${fs}px ${fam}`; c.textAlign='center'; c.textBaseline='alphabetic';
+  const lh=fs*1.12, n=txt.length, blockH=lh*n, pad=fs*.35;
+  const yTop=o.pos==='arriba'?H*.06:H-H*.06-blockH;
+  if(o.franja){ const g=c.createLinearGradient(0,0,W,0); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(.12,'rgba(0,0,0,.62)'); g.addColorStop(.88,'rgba(0,0,0,.62)'); g.addColorStop(1,'rgba(0,0,0,0)'); c.fillStyle=g; c.fillRect(0,yTop-pad,W,blockH+pad*2); }
+  txt.forEach((t,i)=>{ const y=yTop+lh*i+fs*.9;
+    c.save(); c.shadowColor='rgba(0,0,0,.85)'; c.shadowBlur=fs*.14; c.shadowOffsetY=fs*.05; c.lineJoin='round'; c.lineWidth=Math.max(2,fs*.06); c.strokeStyle='rgba(0,0,0,.55)'; c.strokeText(t,W/2,y); c.restore();
+    c.fillStyle='#ffffff'; c.fillText(t,W/2,y); });
+}
+function obsPrevLines(){ const s=typeof pjSong==='function'?pjSong():null; const sl=s?pjSlides(s):[]; const r=PJ&&PJ.remote; const i=r&&r.songId===(s&&s.id)?r.idx:0; return obsTwo((sl[i]||sl[0]||{text:'Y yo soy feliz en alabarle\nY lo hago con el alma'}).text); }
+function obsOpen(){
+  obsFontsCss(); const o=obsOpt(); const s=typeof pjSong==='function'?pjSong():null;
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Letra para OBS" data-stop style="width:min(680px,100%)">
+    <header><h3>📡 Letra para la transmisión (OBS)</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:14px">
+      <canvas id="obs-cv" width="1920" height="1080" style="width:100%;aspect-ratio:16/9;border-radius:10px;border:1px solid var(--line)"></canvas>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 16px;font-size:14px">
+        <label style="display:grid;gap:4px">Tamaño de letra <input type="range" id="obs-t" min="0.6" max="1.6" step="0.05" value="${o.t}"></label>
+        <label style="display:grid;gap:4px">Tipo de letra <select id="obs-f" class="input">${OBS_FONTS.map(f=>`<option ${f===o.fuente?'selected':''}>${f}</option>`).join('')}</select></label>
+        <label style="display:grid;gap:4px">Posición <select id="obs-pos" class="input"><option value="abajo" ${o.pos!=='arriba'?'selected':''}>Abajo</option><option value="arriba" ${o.pos==='arriba'?'selected':''}>Arriba</option></select></label>
+        <div style="display:grid;gap:6px;align-content:end">
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-may" ${o.may?'checked':''}> MAYÚSCULAS</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-fr" ${o.franja?'checked':''}> Franja oscura detrás</label></div>
+        <div style="display:grid;gap:6px;align-content:end">
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-bb" ${o.biblia?'checked':''}> Mostrar también la Biblia</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-ms" ${o.mensaje?'checked':''}> Mostrar también el Mensaje</label></div>
+      </div>
+      <div style="display:grid;gap:6px"><b style="font-size:14px">1) Dirección para OBS</b>
+        <div style="display:flex;gap:8px"><input id="obs-url" class="input" readonly value="${esc(obsUrl(o))}" style="flex:1;min-width:0;font-family:var(--f-mono);font-size:12px"><button class="btn pri" data-act="obs-copy">Copiar</button></div>
+        <ol style="margin:4px 0 0;padding-left:20px;font-size:13px;color:var(--muted);line-height:1.55">
+          <li>En OBS, en <b>Fuentes</b> pulsa <b>+</b> → <b>Navegador</b> (Browser).</li>
+          <li>Pega la dirección. Ancho <b>1920</b>, alto <b>1080</b>. Acepta.</li>
+          <li>Ponla <b>encima</b> de la cámara. El fondo ya es transparente.</li>
+          <li>Listo: cada vez que proyectes una estrofa desde aquí, en la transmisión sale en 2 líneas. Con <b>Negro</b> o <b>Logo</b> la letra desaparece.</li>
+        </ol></div>
+      <div style="display:grid;gap:6px"><b style="font-size:14px">2) Imágenes PNG (opcional)</b>
+        <span style="font-size:13px;color:var(--muted)">Una imagen transparente por estrofa, con este mismo estilo. Sirve para editar videos o para OBS sin internet.</span>
+        <div>${s?`<button class="btn" data-act="obs-png" data-id="${esc(s.id)}">🖼 Descargar PNG de «${esc(s.title)}»</button>`:'<span style="font-size:13px">Abre una alabanza para descargar sus PNG.</span>'}</div></div>
+    </div></div></div>`;
+  const redraw=()=>{ const cv=$('#obs-cv'); if(cv) obsDraw(cv,obsPrevLines(),obsOpt(),true); };
+  const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
+  const set=ch=>{ const n={...obsOpt(),...ch}; obsSave(n); const u=$('#obs-url'); if(u) u.value=obsUrl(n); redraw(); };
+  on('#obs-t','input',e=>set({t:+e.target.value})); on('#obs-f','change',e=>set({fuente:e.target.value})); on('#obs-pos','change',e=>set({pos:e.target.value}));
+  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>set({mensaje:e.target.checked}));
+  redraw(); document.fonts&&document.fonts.load('700 40px "Barlow Semi Condensed"').then(redraw).catch(()=>{}); document.fonts&&document.fonts.ready.then(redraw);
+}
+async function obsPng(id){
+  try{
+    obsFontsCss(); const o=obsOpt(); toast('Preparando imágenes…');
+    let song=S.songs&&S.songs.get?S.songs.get(id):null; let texts=[];
+    try{ const d=await (await fetch('/api/proyector/slides?song='+encodeURIComponent(id))).json(); texts=d.texts||[]; }catch{}
+    if(!texts.length&&song) texts=pjSlides(song).map(x=>x.text);
+    if(!texts.length) return toast('Esta alabanza no tiene letra.');
+    try{ await document.fonts.load(`700 60px "${o.fuente}"`); }catch{}
+    if(!window.JSZip){ await new Promise((ok,ko)=>{ const sc=document.createElement('script'); sc.src='/jszip.min.js'; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
+    const zip=new JSZip(); const cv=document.createElement('canvas'); cv.width=1920; cv.height=1080;
+    for(let i=0;i<texts.length;i++){ obsDraw(cv,obsTwo(texts[i]),o,false); const b=await new Promise(r=>cv.toBlob(r,'image/png')); zip.file(String(i+1).padStart(2,'0')+'.png',b); }
+    const name=((song&&song.title)||'alabanza').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'alabanza';
+    const blob=await zip.generateAsync({type:'blob'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'-OBS.zip'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },2000);
+    toast(`Listo: ${texts.length} imágenes PNG.`);
+  }catch(e){ console.error(e); toast('No se pudieron crear las imágenes.'); }
+}
+document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act;
+  if(a==='obs-open'){ ev.preventDefault(); obsOpen(); }
+  else if(a==='obs-copy'){ const u=$('#obs-url'); if(!u) return; u.select(); (navigator.clipboard?navigator.clipboard.writeText(u.value):Promise.reject()).then(()=>toast('Dirección copiada. Pégala en OBS.')).catch(()=>{ try{ document.execCommand('copy'); toast('Dirección copiada.'); }catch{} }); }
+  else if(a==='obs-png'){ ev.preventDefault(); obsPng(el.dataset.id); }
+});

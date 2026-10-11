@@ -416,6 +416,7 @@ const SERVER = Bun.serve({
       if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(Bun.file(new URL("./public/instalar.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
+      if (p === "/obs") return new Response(Bun.file(new URL("./public/obs.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/proyector") return new Response(PROJ_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/ws/equipo") {
         const t = url.searchParams.get("t") ?? ""; const u = t ? await currentUser(new Request(url, { headers: { authorization: "Bearer " + t } })) : null;

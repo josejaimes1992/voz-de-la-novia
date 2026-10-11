@@ -910,7 +910,7 @@ function viewSong(){
     <button class="btn" data-act="pdf-song" data-mode="acordes">${ICON.pdf}PDF acordes</button>
     <button class="btn" data-act="live-song">${ICON.play}En vivo</button>
     ${S.canWrite?(typeof PJ!=="undefined"&&PJ.open?`<button class="btn pri" data-act="proj-song" title="Mientras proyectas: pásala a la pantalla ya (o doble toque en la lista)">${ICON.screen}Proyectar ahora</button>`:`<button class="btn" data-act="proj-song">${ICON.screen}Proyectar</button>`):''}
-    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎙 Sacar la letra del audio</button>`:''}`:''}
+    ${S.canWrite?`<button class="btn" data-act="add-to-prog">${ICON.list}A programa</button><button class="btn" data-act="edit-song">${ICON.edit}Editar</button><button class="btn" data-act="obs-png" data-id="${esc(s.id)}" title="Imágenes transparentes de cada estrofa para OBS o videos">🖼 PNG</button><button class="btn ghost" data-act="history" data-id="${esc(s.id)}">Historial</button>${(s.audio||[]).length?`<button class="btn" data-act="cif-open" data-id="${esc(s.id)}">🎙 Sacar la letra del audio</button>`:''}`:''}
   </div>
   ${(s.audio||[]).length&&window.audioSection?audioSection(s):''}
   ${V.chords?verBar(s):''}
@@ -1337,7 +1337,7 @@ render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().th
 <script src="/afinador.js?v=1"></script>
 <script src="/audios.js?v=2"></script>
 <script src="/seleccion.js?v=1"></script>
-<script src="/proyeccion.js?v=21"></script>
+<script src="/proyeccion.js?v=22"></script>
 <script src="/biblia.js?v=10"></script>
 <script src="/mensaje.js?v=14"></script>
 <script src="/chat.js?v=3"></script>

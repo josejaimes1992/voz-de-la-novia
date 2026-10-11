@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voz de la Novia — OBS</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Oswald:wght@500;600&family=Montserrat:wght@700&family=Figtree:wght@700&display=swap">
+<style>
+/* Pantalla para OBS: fondo transparente, letra abajo en 2 líneas (como subtítulos de transmisión) */
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+body{--fs:64px;--col:#fff;--font:'Barlow Semi Condensed';font-family:var(--font),'Arial Narrow',Arial,sans-serif}
+#box{position:absolute;left:4%;right:4%;bottom:6%;display:flex;flex-direction:column;align-items:center;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .28s ease,transform .28s ease}
+body.top #box{bottom:auto;top:6%}
+#box.on{opacity:1;transform:none}
+#box .ln{display:block;white-space:nowrap;color:var(--col);font-weight:700;font-size:var(--fs);line-height:1.12;letter-spacing:.01em;
+  text-shadow:0 0 2px #000,0 0 2px #000,0 3px 8px rgba(0,0,0,.85),0 0 18px rgba(0,0,0,.5);-webkit-text-stroke:1px rgba(0,0,0,.35)}
+#box .rf{color:#f2c94c;font-weight:700;font-size:calc(var(--fs)*.55);margin-bottom:.15em;text-shadow:0 2px 6px rgba(0,0,0,.9)}
+#box .wr{white-space:normal;max-width:100%}
+body.band #box{left:0;right:0;bottom:4%;padding:.35em 4% .45em;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.62) 12%,rgba(0,0,0,.62) 88%,rgba(0,0,0,0))}
+body.band.top #box{top:4%;bottom:auto}
+body.up #box .ln{text-transform:uppercase}
+#dot{position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#e5484d;display:none}
+#dot.show{display:block}
+</style>
+</head>
+<body>
+<div id="box"></div>
+<div id="dot" class="show" title="Sin conexión con la app"></div>
+<script>
+/* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
+const Q=new URLSearchParams(location.search);
+const OPT={t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
+document.body.classList.toggle('top',OPT.top); document.body.classList.toggle('up',OPT.up); document.body.classList.toggle('band',OPT.band);
+document.body.style.setProperty('--font',`'${OPT.font}'`); document.body.style.setProperty('--col',OPT.color);
+const box=document.getElementById('box');
+const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Junta las líneas de la diapositiva en 2 líneas lo más parejas posible */
+function twoLines(text){
+  const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean);
+  if(!L.length) return [];
+  if(L.length===1){ const w=L[0].split(/\s+/); if(L[0].length<34||w.length<4) return L; let best=1,bd=1e9; for(let k=1;k<w.length;k++){ const d=Math.abs(w.slice(0,k).join(' ').length-w.slice(k).join(' ').length); if(d<bd){bd=d;best=k;} } return [w.slice(0,best).join(' '),w.slice(best).join(' ')]; }
+  if(L.length===2) return L;
+  let best=1,bm=1e9; for(let k=1;k<L.length;k++){ const a=L.slice(0,k).join(' ').length,b=L.slice(k).join(' ').length,m=Math.max(a,b); if(m<bm){bm=m;best=k;} }
+  return [L.slice(0,best).join(' '),L.slice(best).join(' ')];
+}
+function base(){ return Math.round(Math.min(innerWidth*0.052,innerHeight*0.095)*OPT.t); }
+function fitLines(){ const els=[...box.querySelectorAll('.ln:not(.wr)')]; if(!els.length) return; els.forEach(el=>el.style.fontSize=''); const max=box.clientWidth||innerWidth*.92; const w=Math.max(...els.map(el=>el.scrollWidth)); if(w>max){ const fs=Math.floor(parseFloat(getComputedStyle(els[0]).fontSize)*max/w*0.98)+'px'; els.forEach(el=>el.style.fontSize=fs); } }
+function fitWrap(){ const el=box.querySelector('.wr'); if(!el) return; let fs=base(); el.style.fontSize=fs+'px'; const lh=()=>parseFloat(getComputedStyle(el).lineHeight)||fs*1.12; let n=0; while(el.scrollHeight>lh()*3.1&&fs>14&&n++<40){ fs=Math.floor(fs*.94); el.style.fontSize=fs+'px'; } }
+let cur='';
+function show(st){
+  let html='';
+  if(st&&st.mode==='text'){
+    if(st.sermon){ if(OPT.msg) html=`<span class="ln wr">${esc(st.text)}</span>`; }
+    else if(st.ref||st.bible){ if(OPT.bible) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
+    else html=twoLines(st.text).map(l=>`<span class="ln">${esc(l)}</span>`).join('');
+  }
+  if(html===cur) return; cur=html;
+  box.classList.remove('on');
+  clearTimeout(show.t); show.t=setTimeout(()=>{ document.body.style.setProperty('--fs',base()+'px'); box.innerHTML=html; fitLines(); fitWrap(); if(html) requestAnimationFrame(()=>box.classList.add('on')); }, html&&box.innerHTML?180:0);
+}
+addEventListener('resize',()=>{ document.body.style.setProperty('--fs',base()+'px'); fitLines(); fitWrap(); });
+document.fonts&&document.fonts.ready.then(()=>{ fitLines(); fitWrap(); });
+let ws,retry=0;
+function connect(){
+  try{ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'); }catch{ return later(); }
+  ws.onopen=()=>{ retry=0; document.getElementById('dot').classList.remove('show'); };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver) location.reload(); return; } if(d._sung||d._style) return; show(d); }catch{} };
+  ws.onclose=()=>{ document.getElementById('dot').classList.add('show'); later(); };
+  ws.onerror=()=>{ try{ ws.close(); }catch{} };
+}
+function later(){ retry=Math.min(retry+1,6); setTimeout(connect,500*2**retry); }
+setInterval(()=>{ if(ws&&ws.readyState===1) ws.send('ping'); },25000);
+connect();
+</script>
+</body>
+</html>
