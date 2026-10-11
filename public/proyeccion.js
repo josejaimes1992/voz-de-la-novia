@@ -290,7 +290,7 @@ function styleDraw(){
         ${x.img?`<label class="f" style="margin-top:8px">Oscurecer la imagen (para que se lea mejor): ${Math.round(x.dim*100)}%<input type="range" min="0" max="0.85" step="0.05" value="${x.dim}" id="pjs-dim"></label>`:''}</div>
       <div class="grid2">
         <label class="f">Tipo de letra<select id="pjs-font">${PJ_FONTS.map(f=>`<option ${f===x.font?'selected':''} style="font-family:'${f}'">${f}</option>`).join('')}</select></label>
-        <label class="f">Tamaño de la letra: ${Math.round(x.size*100)}%<input type="range" min="0.6" max="1.3" step="0.05" value="${x.size}" id="pjs-size"></label>
+        <label class="f">Tamaño de la letra: ${Math.round(x.size*100)}%<input type="range" min="0.6" max="1.8" step="0.05" value="${x.size}" id="pjs-size"></label>
       </div>
       <div><b style="font-size:14px">Color de la letra</b><div style="display:flex;gap:6px;margin-top:6px;align-items:center">${PJ_COLORS.map(c=>sw(c,x.color===c,'pjs-color',`data-c="${c}"`)).join('')}<span class="muted" style="font-size:13px;margin-left:8px">Cita:</span>${['#e9c45a','#ffffff','#9fd3ff'].map(c=>sw(c,x.ref===c,'pjs-ref',`data-c="${c}"`)).join('')}</div></div>
       <div class="grid2">

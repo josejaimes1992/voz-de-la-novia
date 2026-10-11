@@ -85,32 +85,33 @@ const $=s=>document.querySelector(s);
 let cur=null, front='a', ws=null, retry=0, lastKey='';
 
 let ST={size:1};
+/* Tamaño automático (el más grande que cabe) y luego el control "Tamaño de la letra" lo agranda o achica */
 function fitMode(p,W,H,wrap){
   p.style.whiteSpace=wrap?'pre-line':'pre';
-  let lo=14, hi=Math.min(H*0.2, W*0.11)*(ST.size||1);
+  let lo=14, hi=Math.min(H*0.2, W*0.11);
   const ok=()=>p.scrollWidth<=W+1 && p.offsetHeight<=H;
   p.style.fontSize=hi+'px'; if(ok()) return hi;
   for(let i=0;i<14;i++){ const mid=(lo+hi)/2; p.style.fontSize=mid+'px'; if(ok()) lo=mid; else hi=mid; }
   return lo;
 }
+function baseSize(p,W,H){ const a=fitMode(p,W,H,false); if(a>=H*0.075) return a; return Math.max(a,fitMode(p,W,H,true)); }
 /* Un solo tamaño para toda la alabanza: el más grande en que caben todas sus diapositivas */
 let SL={id:null,texts:null,size:0,k:''};
 function songSize(p,W,H){
   if(!cur||!cur.songId||SL.id!==cur.songId||!SL.texts||!SL.texts.length) return 0;
-  const k=W+'x'+H+'|'+(ST.size||1)+'|'+(!!ST.upper)+'|'+(ST.font||'')+'|'+(p.parentElement.parentElement.classList.contains('has-ref')?1:0);
+  const k=W+'x'+H+'|'+(!!ST.upper)+'|'+(ST.font||'')+'|'+(p.parentElement.parentElement.classList.contains('has-ref')?1:0);
   if(SL.size&&SL.k===k) return SL.size;
   const keep=p.textContent; let m=Infinity;
-  for(const t of SL.texts){ if(!t||!t.trim()) continue; p.textContent=t; let s=fitMode(p,W,H,false); if(s<H*0.075) s=fitMode(p,W,H,true); if(s<m) m=s; }
+  for(const t of SL.texts){ if(!t||!t.trim()) continue; p.textContent=t; const s=baseSize(p,W,H); if(s<m) m=s; }
   p.textContent=keep; if(!isFinite(m)) return 0; SL.size=m; SL.k=k; return m;
 }
 function fit(p){
   const box=p.parentElement; const W=box.clientWidth, H=box.clientHeight; if(!W||!H) return;
-  const u=songSize(p,W,H);
-  if(u){ p.style.fontSize=u+'px'; p.style.whiteSpace='pre'; if(p.scrollWidth>W+1||p.offsetHeight>H) p.style.whiteSpace='pre-line'; return; }
-  // Primero sin partir líneas; si queda muy chico, se permite partirlas
-  let s=fitMode(p,W,H,false);
-  if(s<H*0.075){ s=fitMode(p,W,H,true); } else p.style.whiteSpace='pre';
-  p.style.fontSize=s+'px';
+  const base=songSize(p,W,H)||baseSize(p,W,H); const t=base*(ST.size||1);
+  const ok=()=>p.scrollWidth<=W+1&&p.offsetHeight<=H;
+  p.style.fontSize=t+'px'; p.style.whiteSpace='pre'; if(ok()) return;
+  p.style.whiteSpace='pre-line'; if(ok()) return;
+  let lo=14, hi=t; for(let i=0;i<14;i++){ const mid=(lo+hi)/2; p.style.fontSize=mid+'px'; if(ok()) lo=mid; else hi=mid; } p.style.fontSize=lo+'px';
 }
 function applyStyle(x){
   ST=x||ST; const bg=$('#bg');

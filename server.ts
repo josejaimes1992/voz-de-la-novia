@@ -181,7 +181,7 @@ function cleanStyle(b: any) {
   const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
   const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
-    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.3, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
 }
 /* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
 let BIBLES: Record<string, any> = {};
