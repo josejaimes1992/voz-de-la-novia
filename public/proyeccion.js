@@ -34,8 +34,10 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pjm-now{display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line);background:var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pjm-now small{color:var(--muted);font-weight:500;margin-right:4px}
 .pjm-now i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}.pjm-now i.on{background:#e05a4f}
-.pjm-body{display:grid;gap:8px;align-content:start;padding:10px 12px 14px}
-.pjm-body .pj-sl{min-height:0;padding:12px 14px}
+.pjm-body{display:block;padding:10px 12px 14px;-webkit-overflow-scrolling:touch}
+.pjm-body .pj-sl{display:block;width:100%;height:auto;min-height:0;margin:0 0 8px;padding:12px 14px;overflow:visible;-webkit-appearance:none;appearance:none;font:inherit;color:inherit}
+.pjm-body .pj-sl .h{margin-bottom:6px}
+.pjm-body .pj-sl p{display:block;overflow-wrap:anywhere}
 .pjm-body .pj-sl p{font-size:clamp(19px,5vw,26px);line-height:1.38;font-weight:500}
 .pjm-body .pj-sl[aria-current="true"]{background:#2b5f93;border-color:#3d8fd6;color:#fff}.pjm-body .pj-sl[aria-current="true"] .h span{color:#d6ecff}
 .pjm-prog{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface);scrollbar-width:none;flex:none}

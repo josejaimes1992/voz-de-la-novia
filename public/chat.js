@@ -8,6 +8,7 @@ const CH_QUICK=['Más lento','Más rápido','Repetir el coro','Siguiente alabanz
 .ch-fab b{position:absolute;top:-3px;right:-3px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#e0453a;color:#fff;font:700 11.5px/20px var(--f-ui);box-shadow:0 0 0 2px var(--bg)}
 @media (max-width:640px){.ch-fab{bottom:calc(96px + env(safe-area-inset-bottom,0px));width:50px;height:50px}body:has(.pj) .ch-fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 body:has(.pj-mini) .ch-fab,body:has(.pj) .ch-fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body:has(.pjm-body) .ch-fab{bottom:calc(250px + env(safe-area-inset-bottom,0px));right:10px;width:44px;height:44px;opacity:.9}
 body:has(.pj) .ch-panel{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 .ch-panel{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:63;width:min(380px,calc(100vw - 24px));height:min(560px,calc(100vh - 140px));display:flex;flex-direction:column;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden}
 @media (max-width:640px){.ch-panel{right:12px;left:12px;width:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));height:min(78vh,620px)}}
