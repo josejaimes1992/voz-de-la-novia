@@ -228,6 +228,12 @@ function numberedParse(rawPages,fileName){
   lines.forEach((L,i)=>{ const t=L.t.trim(); const m=NUM_HEAD.exec(t); if(!m) return; const title=m[2].trim();
     if(!isUpperish(title)&&!m[3]) return; if(!validTitle(title)) return; if(hymIsChordLine(title)) return;
     heads.push({i,num:+m[1],title,code:m[3]?m[3]+'/'+m[4]:'',key:keyFromCode(m[4]),pi:L.pi}); });
+  /* Encabezados en minúsculas que se escaparon entre dos números (p. ej. "421. Mi iglesia" entre la 420 y la 422) */
+  { const extra=[]; for(let n=0;n+1<heads.length;n++){ const A=heads[n], Bh=heads[n+1]; if(Bh.num<=A.num+1) continue;
+      for(let j=A.i+2;j<Bh.i;j++){ const t=lines[j].t.trim(); const m=NUM_HEAD.exec(t); if(!m) continue; const num=+m[1]; if(num<=A.num||num>=Bh.num) continue;
+        const title=m[2].trim(); if(hymIsChordLine(title)||!/\p{L}{4}/u.test(title)||title.length>70) continue;
+        extra.push({i:j,num,title,code:m[3]?m[3]+'/'+m[4]:'',key:keyFromCode(m[4]),pi:lines[j].pi}); } }
+    if(extra.length) heads=heads.concat(extra).sort((a,b)=>a.i-b.i); }
   /* Un encabezado solo cuenta si debajo hay forma de canción (estrofa o coro con letra).
      Si no la hay, no es una canción: sus líneas se quedan con la canción anterior y luego se limpian. */
   for(let pass=0;pass<6;pass++){

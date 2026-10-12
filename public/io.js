@@ -116,9 +116,31 @@ function makeSong(text,fallbackTitle){
     if(/tono|key|clave/.test(k)) meta.key=v; else if(/bpm|tempo/.test(k)) meta.bpm=parseInt(v)||''; else if(k==='capo') meta.capo=parseInt(v)||0; else meta.author=v; }
   return finishSong({title:niceCase(title||fallbackTitle||'Sin título'),author:meta.author||'',key:meta.key||'',bpm:meta.bpm||'',capo:meta.capo||0,body:(b=>IO.lower?lyricCase(b):b)(convertChordsOverLyrics(lines.join('\n')).replace(/\n{3,}/g,'\n\n').trim())});
 }
+/* Autor: líneas como "Intérprete: hno. Juan Espinoza", "Autor: …", "Letra y música: …" → ficha del autor (y se quitan de la letra) */
+const AUTHOR_RE=/^\s*(?:#\s*)?(int[eé]rpretes?|autor(?:a|es)?|letra\s+y\s+m[uú]sica|m[uú]sica\s+y\s+letra|compositor(?:a)?|compuesto\s+por|escrito\s+por|cantante|canta|artista|letra|m[uú]sica)\s*[:\-–]\s*(.{2,80}?)\s*$/i;
+function ioTakeAuthor(s){
+  const L=String(s.body||'').split('\n'); let found='';
+  const out=L.filter((l,i)=>{ const m=AUTHOR_RE.exec(l.replace(/\[[^\]]*\]/g,'')); if(!m) return true; const v=m[2].replace(/\s+/g,' ').trim(); if(!v||v.split(' ').length>9) return true; if(!found) found=v; return false; });
+  if(found){ s.body=out.join('\n').replace(/^\s*\n+/,'').replace(/\n{3,}/g,'\n\n'); if(!s.author) s.author=found; }
+  return s;
+}
+/* Tono por la armonía: compara los acordes con las 24 escalas (acordes de cada grado, el primero y el último pesan más) */
+function ioGuessKey(body){
+  const ch=[]; String(body||'').replace(/\[([^\]]+)\]/g,(_,x)=>{ const c=parseChord(x); if(c) ch.push({r:c.root,q:/dim|°|m7b5|ø/.test(c.suf)?'d':/^m(?!aj)/.test(c.suf)?'m':'M'}); return ''; });
+  if(ch.length<2) return null;
+  const MAJ=[[0,'M'],[2,'m'],[4,'m'],[5,'M'],[7,'M'],[9,'m'],[11,'d']], MIN=[[0,'m'],[2,'d'],[3,'M'],[5,'m'],[7,'m'],[7,'M'],[8,'M'],[10,'M']];
+  let best=null;
+  for(let t=0;t<12;t++) for(const minor of [false,true]){ const deg=minor?MIN:MAJ; let sc=0;
+    ch.forEach((c,i)=>{ const off=((c.r-t)%12+12)%12; const fit=deg.some(([o,q])=>o===off&&q===c.q); const w=(i===0?2:1)+(i===ch.length-1?3:0);
+      if(fit) sc+=w; else if(deg.some(([o])=>o===off)) sc+=w*.3; else sc-=w*.8;
+      if(off===0&&c.q===(minor?'m':'M')) sc+=w*1.2; });
+    if(!best||sc>best.sc) best={idx:t,minor,sc}; }
+  return best;
+}
 function finishSong(s){
-  let k=parseKey(s.key);
-  if(!k){ const m=/\[([^\]]+)\]/.exec(s.body); const c=m&&parseChord(m[1]); if(c) k={idx:c.root,minor:/^m(?!aj)/.test(c.suf)}; }
+  ioTakeAuthor(s);
+  let k=parseKey(s.key); s.keyAuto=false;
+  if(!k){ const g=ioGuessKey(s.body); if(g){ k=g; s.keyAuto=true; } }
   s.key=k?keyCanon(k.idx,k.minor):'';
   s.dupOf=findDuplicate(s,[...S.songs.values()]); s.dup=!!s.dupOf;
   s.include=!s.dup && !!s.body.trim(); if(s.dup) s.dupAct='skip'; return s;
@@ -197,6 +219,7 @@ function ioRender(){
       <input data-imp="title" data-i="${i}" value="${esc(c.title)}" aria-label="Título">
       <select data-imp="key" data-i="${i}" aria-label="Tono"><option value="">Tono</option>${ALL_KEYS.map(k=>`<option value="${k}" ${c.key===k?'selected':''}>${esc(keyText(parseKey(k)))}</option>`).join('')}</select>
       <button class="btn ghost" data-act="imp-view" data-i="${i}">Ver</button>
+      <div class="imp-meta"><label>Autor <input data-imp="author" data-i="${i}" value="${esc(c.author||'')}" placeholder="—" aria-label="Autor"></label>${c.keyAuto&&c.key?`<span class="pill" title="No venía el tono: lo calculé por los acordes">🎼 Tono por los acordes: ${esc(keyText(parseKey(c.key)))}</span>`:''}</div>
       ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
       ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch?`<div class="dupact"><select data-imp="dupact" data-i="${i}" aria-label="Qué hacer con esta canción">${DUP_OPTS.map(([v,t])=>`<option value="${v}" ${c.dupAct===v?'selected':''}>${t}${v==='pro'&&c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?' (reemplaza la que tiene)':''}</option>`).join('')}</select><button class="btn ghost" data-act="imp-cmp" data-i="${i}">${c.cmp?'Cerrar comparación':'Comparar'}</button></div>`:''}
@@ -209,14 +232,16 @@ function ioRender(){
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.doubts&&c.doubts.length?`<div class="ask"><b>Tengo una duda${c.num?` con la n.º ${c.num}`:''}:</b> ${esc(c.doubts.join(' '))}
         <div class="ask-snip">${esc(c.body.split('\n').filter(l=>l.trim()&&!/^#/.test(l)).slice(0,3).join(' / ').replace(/\[[^\]]*\]/g,'').slice(0,160))}…</div>
-        <div class="actions"><button class="btn pri" data-act="imp-ok" data-i="${i}">Sí, es una canción</button>${i>0?`<button class="btn" data-act="imp-merge" data-i="${i}">Unir con la anterior</button>`:''}<button class="btn danger" data-act="imp-drop" data-i="${i}">No es una canción</button></div></div>`:''}
+        <div class="actions"><button class="btn pri" data-act="imp-ok" data-i="${i}">Sí, es una canción</button>${i>0?`<button class="btn" data-act="imp-merge" data-i="${i}">Unir con la anterior</button>`:''}<button class="btn danger" data-act="imp-drop" data-i="${i}">No es una canción</button></div>
+        <div class="actions imp-split">${ioSplitCands(c).map(k=>`<button class="btn" data-act="imp-split" data-i="${i}" data-l="${k.l}">✂ Separar: crear «${esc(k.label)}» aparte</button>`).join('')}<button class="btn ghost" data-act="imp-pick" data-i="${i}">${c.pick?'Cancelar':'✂ Separar en otra línea…'}</button></div>
+        ${c.pick?`<div class="imp-pick"><small>Toca la línea donde <b>empieza la otra canción</b>:</small>${String(c.body).split('\n').map((l,n)=>n>0&&l.trim()&&!/^\s*(\[[^\]]*\]\s*)+$/.test(l)?`<button data-act="imp-split" data-i="${i}" data-l="${n}">${esc(l.replace(/\[[^\]]*\]/g,'').trim().slice(0,90))||'·'}</button>`:'').join('')}</div>`:''}</div>`:''}
       ${c.open?`<textarea data-imp="body" data-i="${i}" class="body" style="grid-column:1/-1;min-height:220px">${esc(c.body)}</textarea>`:''}
     </div>`).join('')}</div>
     <div class="actions" style="position:sticky;bottom:-12px;background:var(--surface);padding-block:10px"><button class="btn pri" data-act="imp-go" ${n?'':'disabled'}>Importar ${n} ${n===1?'canción':'canciones'}</button><span id="imp-prog" style="font-size:13px;color:var(--muted)"></span></div>`;
 }
-document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
+document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return; if(el.dataset.imp==='title') c.title=el.value; else if(el.dataset.imp==='author') c.author=el.value; else if(el.dataset.imp==='body') c.body=el.value; });
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
-  if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:(c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?'cnew':'cpro')):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key') c.key=el.value;
+  if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:(c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?'cnew':'cpro')):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key'){ c.key=el.value; c.keyAuto=false; }
   else if(el.dataset.imp==='dupact'){ c.dupAct=el.value; c.include=el.value!=='skip'; ioRender(); } });
 document.addEventListener('change',e=>{ if(e.target.id!=='imp-dupall'||!e.target.value) return; const v=e.target.value; IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=v; c.include=v!=='skip'; } }); ioRender(); });
 const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],
@@ -340,6 +365,8 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   if(a==='imp-ok'&&c){ c.doubts=[]; c.include=!c.dup; ioRender(); }
   else if(a==='imp-drop'&&c){ IO.chunks.splice(i,1); ioRender(); }
   else if(a==='imp-merge'&&c&&i>0){ const p=IO.chunks[i-1]; p.body=(p.body+'\n\n'+(c.title?'# '+c.title+'\n':'')+c.body).trim(); IO.chunks.splice(i,1); ioRender(); toast('Unida con “'+p.title+'”.'); }
+  else if(a==='imp-pick'&&c){ c.pick=!c.pick; ioRender(); }
+  else if(a==='imp-split'&&c){ const nc=ioSplitAt(c,+el.dataset.l); if(nc){ IO.chunks.splice(i+1,0,nc); ioRender(); toast(`Separadas: «${c.title}» y «${nc.title}».`); } }
   else if(a==='imp-only-doubts'){ IO.onlyDoubts=!IO.onlyDoubts; ioRender(); }
 });
 
@@ -369,3 +396,24 @@ function ioShiftApply(d){ const T=IO.chunks.map(c=>c.title); IO.chunks.forEach((
 .cmp pre,.cmp textarea{margin:0;max-height:320px;min-height:220px;overflow:auto;white-space:pre-wrap;font:12.5px/1.45 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;box-sizing:border-box;color:inherit}
 @media (max-width:760px){.cmp,.cmp.three{grid-template-columns:1fr}.cmp-tabs{display:flex}.cmp.t-ex>div:not(.p-ex),.cmp.t-pdf>div:not(.p-pdf),.cmp.t-res>div:not(.p-res){display:none}}
 `; document.head.appendChild(st); })();
+
+/* ===== Separar una canción que trae otra pegada ===== */
+const SPLIT_HEAD=/^\s*(\d{1,4})\s*[.)\-–]?\s+([^\d\[].{1,90}?)\s*$/;
+function ioSplitCands(c){ const L=String(c.body||'').split('\n'), out=[];
+  L.forEach((l,n)=>{ if(n<2||out.length>=3) return; const t=l.replace(/\[[^\]]*\]/g,'').trim(); const m=SPLIT_HEAD.exec(t); if(!m) return; const num=+m[1]; if(c.num&&num<=c.num) return; if(!/\p{L}{3}/u.test(m[2])) return; out.push({l:n,label:num+'. '+m[2].trim()}); });
+  return out; }
+function ioSplitAt(c,n){
+  const L=String(c.body||'').split('\n'); if(!(n>0&&n<L.length)) return null;
+  const before=L.slice(0,n).join('\n').replace(/\s+$/,''), after=L.slice(n);
+  const head=after[0].replace(/\[[^\]]*\]/g,'').trim(); const m=SPLIT_HEAD.exec(head);
+  let title, num=null;
+  if(m&&/\p{L}{3}/u.test(m[2])){ num=+m[1]; title=m[2].trim(); after.shift(); }
+  else title=head.replace(/^#\s*/,'');
+  if(!before.trim()||!after.join('').trim()) return null;
+  c.body=before; c.doubts=[]; c.pick=false; if(c.keyAuto){ c.key=''; finishSong(c); }
+  c.include=!c.dup;
+  const nc=finishSong({title:niceCase(title.slice(0,90))||'Sin título',num,author:'',key:'',bpm:'',capo:0,body:after.join('\n').replace(/^\s*\n+/,'').trim(),notes:num?`N.º ${num} · Separada al importar.`:'Separada al importar.',hasChords:/\[/.test(after.join('\n')),doubts:[]});
+  if(!nc.dup){ const d=findDuplicate(nc,IO.chunks.filter(x=>x!==c)); if(d){ nc.dup=true; nc.dupOf={...d,inBatch:true}; nc.include=false; } }
+  if(nc.dup&&nc.dupOf&&!nc.dupOf.inBatch){ nc.dupAct='skip'; nc.include=false; }
+  return nc;
+}
