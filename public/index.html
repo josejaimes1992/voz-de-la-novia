@@ -769,7 +769,7 @@ function viewSongsInner(){
       <details class="more"><summary class="btn">Más <span aria-hidden="true">▾</span></summary><div class="more-menu">
         <button class="btn ghost" data-act="sel-start">☑ Seleccionar varias</button>
         <button class="btn ghost" data-act="open-import">⬆ Importar</button>
-        <button class="btn ghost" data-act="open-audit">🩺 Auditoría</button>
+        <button class="btn ghost" data-act="open-audit">🩺 Auditoría</button>${S.isAdmin?'<button class="btn ghost" data-act="open-bulkdel">🗑 Borrar en bloque</button>':''}
         <button class="btn ghost" data-act="open-export" data-scope="songs">⬇ Exportar</button>
         <button class="btn ghost" data-act="open-excel">▦ Excel</button>
         ${S.isAdmin?'<button class="btn ghost" data-act="go-trash">🗑 Papelera</button>':''}</div></details></div>`:''}
@@ -1340,7 +1340,7 @@ render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().th
 </script>
 <script src="/himnario.js?v=5"></script>
 <script src="/io.js?v=11"></script>
-<script src="/auditoria.js?v=1"></script>
+<script src="/auditoria.js?v=2"></script>
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>

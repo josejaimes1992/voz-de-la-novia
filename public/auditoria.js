@@ -118,4 +118,52 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act^="
   else if(a==='au-key-all'){ const w=r.key.map(x=>{ const o=docOf(x.s); o.key=x.key; return {col:'songs',id:x.s.id,data:o}; }); save(w,`Listo: ${w.length} alabanzas con tono.`); }
 });
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act="open-audit"]'); if(!el) return; ev.preventDefault(); const det=el.closest('details'); if(det) det.open=false; openAudit(); });
+
+/* ---------- Borrar en bloque (solo administrador). Nunca borra las que tienen audio. ---------- */
+const BB={keepGroup:true,keepProg:true,onlyImported:false,busy:false};
+function bulkPlan(){
+  const songs=[...S.songs.values()].filter(s=>s&&s.id);
+  const hasAud=s=>Array.isArray(s.audio)&&s.audio.length>0;
+  const audioGroups=new Set(songs.filter(hasAud).map(groupOf));
+  const inProg=new Set(); for(const p of (S.programs?S.programs.values():[])) for(const it of (p.items||[])) if(it&&it.songId) inProg.add(it.songId);
+  const keep={audio:0,group:0,prog:0,manual:0}, del=[];
+  for(const s of songs){
+    if(hasAud(s)){ keep.audio++; continue; }
+    if(BB.keepGroup&&audioGroups.has(groupOf(s))){ keep.group++; continue; }
+    if(BB.keepProg&&inProg.has(s.id)){ keep.prog++; continue; }
+    if(BB.onlyImported&&!/Importad[oa] de|Separada/i.test(s.notes||'')){ keep.manual++; continue; }
+    del.push(s);
+  }
+  return {total:songs.length,keep,del};
+}
+function bulkDraw(){
+  const root=document.getElementById('bb-body'); if(!root) return; const P=bulkPlan(); const k=P.keep; const nk=k.audio+k.group+k.prog+k.manual;
+  root.innerHTML=`<div class="au-sum"><div><b>${P.total}</b>Alabanzas en total</div><div><b style="color:#2fa36b">${nk}</b>Se conservan</div><div><b style="color:var(--danger)">${P.del.length}</b>Se borran</div></div>
+    <div class="au-it"><b>Se conservan siempre</b>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" checked disabled> 🎧 Las que tienen audio <small style="color:var(--muted)">(${k.audio})</small></label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bb-g" ${BB.keepGroup?'checked':''}> Las otras versiones de una alabanza que tiene audio <small style="color:var(--muted)">(${k.group})</small></label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bb-p" ${BB.keepProg?'checked':''}> Las que están en tus programas <small style="color:var(--muted)">(${k.prog})</small></label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bb-i" ${BB.onlyImported?'checked':''}> Borrar solo las que se subieron desde archivos (PDF/Word) y conservar las que se crearon a mano <small style="color:var(--muted)">(${k.manual} a mano)</small></label></div>
+    ${P.del.length?`<details class="au-it"><summary style="cursor:pointer">Ver las ${P.del.length} que se borran</summary><div style="max-height:220px;overflow:auto;font-size:13px;columns:2;column-gap:18px">${P.del.slice(0,800).map(s=>`<div>${esc(s.title||'Sin título')}${s.key?` <small style="color:var(--muted)">${esc(s.key)}</small>`:''}</div>`).join('')}${P.del.length>800?'<div>…</div>':''}</div></details>
+    <div class="au-it" style="border-color:var(--danger)"><b style="color:var(--danger)">Confirmar</b><span style="font-size:13px;color:var(--muted)">Van a la <b>Papelera</b> y puedes rescatarlas durante 60 días. Escribe <b>BORRAR</b> para confirmar.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="bb-ok" class="input" placeholder="BORRAR" autocomplete="off" style="flex:1;min-width:140px"><button class="btn danger" data-act="bb-go" ${BB.busy?'disabled':''}>🗑 Borrar ${P.del.length}</button></div><span id="bb-prog" style="font-size:13px;color:var(--muted)"></span></div>`:'<p style="color:var(--muted)">No hay nada que borrar con estas opciones.</p>'}`;
+  const on=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',fn); };
+  on('bb-g',e=>{ BB.keepGroup=e.target.checked; bulkDraw(); }); on('bb-p',e=>{ BB.keepProg=e.target.checked; bulkDraw(); }); on('bb-i',e=>{ BB.onlyImported=e.target.checked; bulkDraw(); });
+}
+window.openBulkDelete=function(){
+  if(!S.isAdmin){ toast('Solo el administrador puede borrar en bloque.'); return; }
+  addCss(); BB.busy=false;
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Borrar en bloque" data-stop style="width:min(720px,100%)">
+    <header><h3>🗑 Borrar alabanzas en bloque</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" id="bb-body" style="display:grid;gap:12px"></div></div></div>`;
+  bulkDraw();
+};
+document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-act="bb-go"],[data-act="open-bulkdel"]'); if(!el) return; ev.preventDefault();
+  if(el.dataset.act==='open-bulkdel'){ const det=el.closest('details'); if(det) det.open=false; openBulkDelete(); return; }
+  if(BB.busy) return; const inp=document.getElementById('bb-ok'); if(!inp||inp.value.trim().toUpperCase()!=='BORRAR'){ toast('Escribe BORRAR para confirmar.'); if(inp) inp.focus(); return; }
+  const ids=bulkPlan().del.map(s=>s.id); BB.busy=true; el.disabled=true; const prog=document.getElementById('bb-prog'); let done=0, kept=0;
+  try{ for(let i=0;i<ids.length;i+=200){ const r=await api('/api/trash',{method:'POST',body:JSON.stringify({ids:ids.slice(i,i+200),keepAudio:true})}); done+=r.count||0; kept+=r.kept||0; if(prog) prog.textContent=`Borradas ${done} de ${ids.length}…`; } }
+  catch(e){ BB.busy=false; if(e.code===401) lostAuth(); else toast(`Se borraron ${done}; el resto falló. Inténtalo de nuevo.`); lastSig=''; await loadData(); bulkDraw(); return; }
+  BB.busy=false; lastSig=''; await loadData(); closeModal(); render(); toast(`Listo: ${done} alabanzas a la Papelera${kept?` (${kept} con audio se conservaron)`:''}. Puedes rescatarlas 60 días.`);
+});
 })();

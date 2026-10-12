@@ -819,8 +819,10 @@ const SERVER = Bun.serve({
         const b = await req.json().catch(() => ({}));
         const ids: string[] = Array.isArray(b.ids) ? b.ids.filter((x: unknown) => typeof x === "string").slice(0, 500) : [];
         if (p === "/api/trash" && req.method === "POST") {
-          let n = 0; await db.begin(async (tx) => { for (const id of ids) if (ID_RE.test(id) && await moveToTrash(tx, user, "songs", id)) n++; });
-          return json({ ok: true, count: n });
+          let n = 0, kept = 0; await db.begin(async (tx) => { for (const id of ids) { if (!ID_RE.test(id)) continue;
+            if (b.keepAudio) { const r = await tx`SELECT data FROM docs WHERE col = 'songs' AND id = ${id}`; const it = r[0] ? parseJ(r[0].data) : null; if (it && Array.isArray(it.audio) && it.audio.length) { kept++; continue; } }
+            if (await moveToTrash(tx, user, "songs", id)) n++; } });
+          return json({ ok: true, count: n, kept });
         }
         if (p === "/api/trash/restore" && req.method === "POST") {
           let n = 0; const conflicts: string[] = [];
