@@ -203,6 +203,9 @@ main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:18px 60px}
 .imp-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface)}
 .imp-row input:not([type=checkbox]),.imp-row select{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:5px 8px;min-width:0;font-size:14px}
 .imp-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.dupgrps{display:grid;gap:8px;margin-top:10px}.dupgrp{display:grid!important;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface)}.dupgrp.g-t{border-color:#3d8fd6}.dupgrp.g-c{border-color:var(--accent)}.dupgrp span{font-size:14px}.dupgrp select{width:100%}
+.dupall{margin-top:8px;font-size:13px}.dupall summary{cursor:pointer;color:var(--muted)}.dupall select{margin-top:6px;width:100%}
+.chtag{display:inline-block;border-radius:999px;padding:0 7px;font-size:11px;font-weight:700}.chtag.y{background:color-mix(in srgb,#2fa36b 22%,transparent);color:#2fa36b}.chtag.n{background:color-mix(in srgb,var(--muted) 20%,transparent)}
 .imp-meta{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--muted)}.imp-meta label{display:flex;gap:6px;align-items:center}.imp-meta input{width:min(260px,60vw);font-size:13px!important;padding:3px 8px!important}
 .imp-split{margin-top:6px;flex-wrap:wrap}.imp-pick{display:grid;gap:3px;max-height:260px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--bg)}.imp-pick small{color:var(--muted);padding:2px 4px}.imp-pick button{text-align:left;border:0;background:transparent;color:inherit;font:inherit;font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer}.imp-pick button:hover{background:var(--accent-soft);color:var(--accent)}
 @media (max-width:560px){.imp-row{grid-template-columns:auto minmax(0,1fr) auto}.imp-row select{grid-column:2}}
@@ -740,7 +743,9 @@ function banner(){
 
 function viewSongs(){ return window.selWrap?selWrap(viewSongsInner()):viewSongsInner(); }
 function viewSongsInner(){
-  const songs=sortedSongs();
+  /* Las versiones viven dentro de su canción: en la lista sale una sola fila (con "+N versiones"); al buscar sí aparecen */
+  const allSongs=sortedSongs(); const VC=new Map(); for(const x of allSongs) if(x.versionOf&&S.songs.has(x.versionOf)) VC.set(x.versionOf,(VC.get(x.versionOf)||0)+1);
+  const songs=V.q?allSongs:allSongs.filter(x=>!(x.versionOf&&S.songs.has(x.versionOf)));
   const counts=new Map();
   songs.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; counts.set(c,(counts.get(c)||0)+1); });
   const order=ALL_KEYS.filter(k=>counts.has(k)); if(counts.has('?')) order.push('?');
@@ -779,7 +784,7 @@ function viewSongsInner(){
       return `<button class="row${window.isSung&&isSung(s.id)?' sung':''}" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
     return h;
   }
-  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${window.isSung&&isSung(s.id)?'<span class="pill sung-pill">✓ Cantada</span>':''}${s.versionOf?'<span class="pill ver">Otra versión</span>':''}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}${(s.audio||[]).length?'<span class="pill hasaud" title="Tiene audio">🎧</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
+  const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${window.isSung&&isSung(s.id)?'<span class="pill sung-pill">✓ Cantada</span>':''}${s.versionOf?'<span class="pill ver">Otra versión</span>':''}${VC.get(s.id)?`<span class="pill ver" title="Tiene otras versiones dentro">+${VC.get(s.id)} ${VC.get(s.id)===1?'versión':'versiones'}</span>`:''}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}${(s.audio||[]).length?'<span class="pill hasaud" title="Tiene audio">🎧</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
   if(V.group){
     const groups=new Map(); filtered.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; if(!groups.has(c)) groups.set(c,[]); groups.get(c).push(s); });
     h+=order.filter(c=>groups.has(c)).map(c=>{ const k=c==='?'?null:parseKey(c); return `<section class="group"${k?kc(k):''}><div class="group-h"><b>${esc(disp(c))}</b><span>${k?esc(keyLong(k.idx,k.minor)):''} · ${groups.get(c).length} ${groups.get(c).length===1?'alabanza':'alabanzas'}</span></div><div class="list">${groups.get(c).map(row).join('')}</div></section>`; }).join('');
@@ -1334,7 +1339,7 @@ document.addEventListener('change',async ev=>{
 render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().then(()=>{ if(V.view==='song') render(); if(V.live) renderLive(); });
 </script>
 <script src="/himnario.js?v=4"></script>
-<script src="/io.js?v=9"></script>
+<script src="/io.js?v=10"></script>
 <script src="/auditoria.js?v=1"></script>
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>

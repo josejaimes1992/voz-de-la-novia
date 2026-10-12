@@ -148,7 +148,7 @@ function finishSong(s){
 
 /* ---------- Ventana de importación ---------- */
 function openImport(){
-  IO.files=[]; IO.chunks=[]; IO.mode='auto'; IO.pages={};
+  IO.grpSel={}; IO.files=[]; IO.chunks=[]; IO.mode='auto'; IO.pages={};
   $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Importar canciones" data-stop style="width:min(760px,100%)">
     <header><h3>Importar canciones</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" id="imp-body" style="display:grid;gap:12px">
@@ -210,9 +210,12 @@ function ioRender(){
   $('#imp-mode').addEventListener('change',e=>{ IO.mode=e.target.value; ioBuild(); });
   $('#imp-lower').addEventListener('change',e=>{ IO.lower=e.target.checked; ioBuild(); });
   const n=IO.chunks.filter(c=>c.include).length;
+  IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch&&c.exCh==null) c.exCh=ioExCh(c.dupOf.song); });
   const nd=IO.chunks.filter(c=>c.dup).length; const nsys=IO.chunks.filter(c=>c.dup&&c.dupOf&&!c.dupOf.inBatch).length;
   const sh=ioShiftGuess();
-  list.innerHTML=errs+(sh?`<div class="banner shiftbar"><b>Los títulos parecen corridos un lugar.</b> En ${sh.n} canciones, la letra corresponde al título de la ${sh.d>0?'siguiente':'anterior'}. <button class="btn pri" data-act="imp-shift" data-d="${sh.d}">Corregir títulos</button></div>`:'')+(nd?`<div class="banner dupbar"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra. Elige qué hacer con cada una (o con todas a la vez). Toca “Comparar” para ver la que ya tienes junto a la del PDF.${nsys>1?`<label class="f" style="margin-top:8px">A todas las que ya existen:<select id="imp-dupall"><option value="">Elegir…</option>${DUP_OPTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label>`:''}</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
+  list.innerHTML=errs+(sh?`<div class="banner shiftbar"><b>Los títulos parecen corridos un lugar.</b> En ${sh.n} canciones, la letra corresponde al título de la ${sh.d>0?'siguiente':'anterior'}. <button class="btn pri" data-act="imp-shift" data-d="${sh.d}">Corregir títulos</button></div>`:'')+(nd?`<div class="banner dupbar"><b>${nd} ${nd===1?'canción ya está':'canciones ya están'} en el sistema o ${nd===1?'está repetida':'están repetidas'}.</b> Las comparé por título y por letra. Elige qué hacer con cada una (o con todas a la vez). Toca “Comparar” para ver la que ya tienes junto a la del PDF.${nsys?(()=>{ const sys=IO.chunks.filter(c=>c.dup&&c.dupOf&&!c.dupOf.inBatch); sys.forEach(c=>{ if(c.exCh==null) c.exCh=ioExCh(c.dupOf.song); });
+      return `<div class="dupgrps">${Object.entries(DUP_GROUPS).map(([g,G])=>{ const n=sys.filter(c=>dupGroup(c)===g).length; if(!n) return ''; return `<label class="f dupgrp g-${g}"><span><b>${n}</b> · ${G.title}</span><select data-dupgrp="${g}"><option value="">Elegir para estas ${n}…</option>${G.opts.map(([v,t])=>`<option value="${v}" ${(IO.grpSel||{})[g]===v?'selected':''}>${t}</option>`).join('')}</select></label>`; }).join('')}</div>
+      ${nsys>1?`<details class="dupall"><summary>Aplicar lo mismo a todas (${nsys})</summary><select id="imp-dupall"><option value="">Elegir…</option>${DUP_OPTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></details>`:''}`; })():''}</div>`:'')+(IO.confirmDup?ioDupConfirm():'')+`<p style="margin:0;color:var(--muted);font-size:13px">Se encontraron ${IO.chunks.length} canciones. Revisa títulos y tonos; pulsa “Ver” para corregir la letra antes de importar.</p>
     ${ioDoubtBanner()}
     <div class="imp-rows">${IO.chunks.map((c,i)=>IO.onlyDoubts&&!(c.doubts&&c.doubts.length)?'':`<div class="imp-row${c.doubts&&c.doubts.length?' doubt':''}">
       <input type="checkbox" data-imp="include" data-i="${i}" ${c.include?'checked':''} aria-label="Incluir">
@@ -221,7 +224,7 @@ function ioRender(){
       <button class="btn ghost" data-act="imp-view" data-i="${i}">Ver</button>
       <div class="imp-meta"><label>Autor <input data-imp="author" data-i="${i}" value="${esc(c.author||'')}" placeholder="—" aria-label="Autor"></label>${c.keyAuto&&c.key?`<span class="pill" title="No venía el tono: lo calculé por los acordes">🎼 Tono por los acordes: ${esc(keyText(parseKey(c.key)))}</span>`:''}</div>
       ${c.dup?`<span class="pill dup" title="${esc((c.dupOf&&c.dupOf.inBatch?'Repetida en este mismo archivo: ':'Ya está en el sistema: ')+(c.dupOf?dupLabel(c.dupOf):''))}">${c.dupOf&&c.dupOf.inBatch?'Repetida en el archivo':'Ya existe'}</span>`:''}
-      ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}</small>`:''}
+      ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}${!c.dupOf.inBatch?` · <span class="chtag ${c.exCh?'y':'n'}">La tuya: ${c.exCh?'con acordes':'solo texto'}</span> <span class="chtag ${HAS_CH(c.body)?'y':'n'}">PDF: ${HAS_CH(c.body)?'con acordes':'solo texto'}</span>`:''}</small>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch?`<div class="dupact"><select data-imp="dupact" data-i="${i}" aria-label="Qué hacer con esta canción">${DUP_OPTS.map(([v,t])=>`<option value="${v}" ${c.dupAct===v?'selected':''}>${t}${v==='pro'&&c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?' (reemplaza la que tiene)':''}</option>`).join('')}</select><button class="btn ghost" data-act="imp-cmp" data-i="${i}">${c.cmp?'Cerrar comparación':'Comparar'}</button></div>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8&&chNorm(c.title)!==chNorm(c.dupOf.song.title)?`<div class="tmis">⚠ El título del PDF («${esc(c.title)}») no coincide con su letra: esa letra es «${esc(c.dupOf.song.title)}». <button class="btn ghost" data-act="imp-usetitle" data-i="${i}">Usar «${esc(c.dupOf.song.title)}»</button></div>`:''}
       ${c.cmp&&c.dupOf?(()=>{ const ex=c.dupOf.song, chm=c.dupAct==='cpro'||c.dupAct==='cnew', tab=c.cmpTab||'ex';
@@ -243,12 +246,21 @@ document.addEventListener('input',e=>{ const el=e.target; if(!el.dataset||!el.da
 document.addEventListener('change',e=>{ const el=e.target; if(!el.dataset||!el.dataset.imp) return; const c=IO.chunks[+el.dataset.i]; if(!c) return;
   if(el.dataset.imp==='include'){ c.include=el.checked; if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=el.checked?(c.dupAct&&c.dupAct!=='skip'?c.dupAct:(c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?'cnew':'cpro')):'skip'; } if(el.checked&&c.doubts) c.doubts=[]; ioRender(); } else if(el.dataset.imp==='key'){ c.key=el.value; c.keyAuto=false; }
   else if(el.dataset.imp==='dupact'){ c.dupAct=el.value; c.include=el.value!=='skip'; ioRender(); } });
+document.addEventListener('change',e=>{ const g=e.target.dataset&&e.target.dataset.dupgrp; if(!g||!e.target.value) return; const v=e.target.value; IO.grpSel={...(IO.grpSel||{}),[g]:v}; let n=0; IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch&&dupGroup(c)===g){ c.dupAct=v; c.include=v!=='skip'; n++; } }); ioRender(); toast(`Listo para ${n} ${n===1?'canción':'canciones'}.`); });
 document.addEventListener('change',e=>{ if(e.target.id!=='imp-dupall'||!e.target.value) return; const v=e.target.value; IO.chunks.forEach(c=>{ if(c.dup&&c.dupOf&&!c.dupOf.inBatch){ c.dupAct=v; c.include=v!=='skip'; } }); ioRender(); });
+/* ¿La canción que ya tengo (o alguna de sus versiones) tiene acordes? */
+const HAS_CH=t=>/\[[^\]\s]{1,12}\]/.test(t||'');
+function ioExCh(song){ if(!song) return false; const g=song.versionOf||song.id; for(const x of S.songs.values()) if((x.id===g||x.versionOf===g)&&(HAS_CH(x.body)||HAS_CH(x.bodyPro))) return true; return false; }
+const DUP_GROUPS={
+  t:{title:'Ya las tienes SOLO CON TEXTO y el PDF trae acordes',opts:[['body','Usar la del PDF con acordes (se actualiza la misma canción)'],['cpro','Solo pasar los acordes del PDF sobre mi letra (misma canción, versión “Original”)'],['skip','No subir']]},
+  c:{title:'Ya las tienes CON ACORDES',opts:[['skip','No subir: me quedo con la mía'],['new','Guardar la del PDF como otra versión dentro de la misma canción'],['pro','La del PDF reemplaza mi versión “Original”']]},
+  n:{title:'El PDF solo trae texto (sin acordes)',opts:[['skip','No subir: me quedo con la mía'],['body','Reemplazar mi letra por la del PDF']]}};
+const dupGroup=c=>!HAS_CH(c.body)?'n':(c.exCh?'c':'t');
 const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],
   ['cpro','Solo los acordes del PDF sobre MI letra → versión “Original”'],
-  ['cnew','Solo los acordes del PDF sobre MI letra → otra versión aparte'],
+  ['cnew','Solo los acordes del PDF sobre MI letra → otra versión dentro de la misma canción'],
   ['pro','PDF completo (su letra y acordes) → versión “Original”'],
-  ['new','PDF completo (su letra y acordes) → otra versión aparte'],
+  ['new','PDF completo (su letra y acordes) → otra versión dentro de la misma canción'],
   ['body','PDF completo → reemplaza mi versión “Básica”']];
 /* ---------- Pasar solo los acordes de una letra a otra (sin tocar la letra) ---------- */
 const chStrip=l=>l.replace(/\[[^\]]*\]/g,'');
@@ -379,7 +391,7 @@ document.addEventListener('click',e=>{ const b=e.target.closest('[data-act^="imp
 function ioShiftGuess(){ const C=IO.chunks; if(C.length<3) return null; const sure=C.filter(c=>c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8); if(sure.length<2) return null;
   for(const d of [1,-1]){ let n=0; C.forEach((c,i)=>{ if(c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8&&C[i+d]&&chNorm(C[i+d].title)===chNorm(c.dupOf.song.title)) n++; }); if(n>=2&&n>=sure.length*0.4) return {d,n}; } return null; }
 function ioShiftApply(d){ const T=IO.chunks.map(c=>c.title); IO.chunks.forEach((c,i)=>{ if(T[i+d]!=null) c.title=T[i+d]; });
-  IO.chunks.forEach((c,i)=>{ const keep=c.dupAct; c.dupOf=findDuplicate(c,[...S.songs.values()]); c.dup=!!c.dupOf; if(c.dup){ c.dupAct=keep||'skip'; c.include=c.dupAct!=='skip'; } else { delete c.dupAct; c.include=!!c.body.trim(); } });
+  IO.chunks.forEach((c,i)=>{ const keep=c.dupAct; c.exCh=null; c.dupOf=findDuplicate(c,[...S.songs.values()]); c.dup=!!c.dupOf; if(c.dup){ c.dupAct=keep||'skip'; c.include=c.dupAct!=='skip'; } else { delete c.dupAct; c.include=!!c.body.trim(); } });
   toast('Títulos corregidos. Revisa la lista.'); ioRender(); }
 (function(){ const st=document.createElement('style'); st.textContent=`
 .dupbar{border:1px solid var(--accent);display:grid;gap:4px}
