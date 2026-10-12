@@ -171,7 +171,7 @@ async function ioRead(files){
       if(ext==='docx') pages=await readDocx(f); else if(ext==='pdf') pages=await readPdf(f); else if(['txt','cho','chopro','chordpro','pro','crd'].includes(ext)) pages=await readText(f);
       else if(ext==='doc'){ errors.push(`${f.name}: es Word antiguo (.doc). Ábrelo en Word y guárdalo como .docx.`); continue; }
       else { errors.push(`${f.name}: formato no compatible.`); continue; }
-      IO.files.push({name:f.name.replace(/\.[^.]+$/,''),ext,pages});
+      IO.files.push({name:f.name.replace(/\.[^.]+$/,''),ext,pages:pages.map(p=>typeof p==='string'?hymNormChordText(p):p)});
     }catch(e){ errors.push(`${f.name}: ${e.message||'no se pudo leer.'}`); }
   }
   IO.errors=errors; IO.hymnal=IO.files.some(f=>hymFindIndex(f.pages).entries.length>=3); if(IO.lower===undefined) IO.lower=true;

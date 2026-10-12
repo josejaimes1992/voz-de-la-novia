@@ -17,6 +17,30 @@ function hymChordPart(line){
   if(left.trim()&&hymIsChordLine(left)) return left.replace(/[–—~]/g,' ').replace(/(^|\s)-(?=\s|$)/g,'$1 ').replace(/\s+$/,'');
   return null;
 }
+/* Notación de algunos himnarios: minúscula = menor ("b" = Bm, "f#" = F#m), "C-a" = dos acordes seguidos (C y Am),
+   "7" suelto = el acorde anterior con séptima ("D 7" = D y D7). Reescribe la línea con acordes normales en el mismo lugar. */
+function hymExtPart(p,prev){
+  if(parseChord(p)) return p;
+  let m=/^([a-g])(#|♯|b|♭)?(.*)$/.exec(p);
+  if(m){ const c=m[1].toUpperCase()+(m[2]||'')+'m'+m[3].replace(/^m(?!aj)/,''); if(parseChord(c)) return c; }
+  if(prev&&/^(7|9|11|13|maj7|m7|6|sus2|sus4|add9|dim|aug|\+)$/.test(p)){ const r=/^([A-G](?:#|b)?)(m(?!aj))?/.exec(prev); if(r){ const c=r[1]+(r[2]&&!/^m/.test(p)?'m':'')+p; if(parseChord(c)) return c; } }
+  return null;
+}
+function hymNormChordLine(line){
+  if(!line.trim()) return line;
+  const toks=[...line.matchAll(/\S+/g)]; const out=[]; let prev=null, ext=false;
+  for(const m of toks){ const t=m[0];
+    if(hymSep(t)||/^(x\d+|\(x?\d+\)|\d+x|\|)$/i.test(t)){ continue; }
+    const clean=t.replace(/^\(|\)$/g,'').replace(/[,;.]$/,'');
+    const parts=clean.includes('-')&&!/^-|-$/.test(clean)?clean.split('-'):[clean]; let off=m.index+(t.startsWith('(')?1:0);
+    if(parts.length>1) ext=true;
+    for(const p of parts){ const c=hymExtPart(p,prev); if(!c) return line; if(c!==p) ext=true; out.push({pos:off,c}); prev=c; off+=p.length+1; }
+  }
+  if(!out.length||!ext) return line;
+  let s=''; for(const o of out){ if(s.length<o.pos) s=s.padEnd(o.pos,' '); else if(s.length) s+=' '; s+=o.c; }
+  return s;
+}
+function hymNormChordText(text){ return String(text||'').split('\n').map(hymNormChordLine).join('\n'); }
 function hymHeader(t){
   const s=t.trim(); if(!s) return null;
   let m;
