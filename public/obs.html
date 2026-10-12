@@ -43,6 +43,11 @@ function twoLines(text){
   let best=1,bm=1e9; for(let k=1;k<L.length;k++){ const a=L.slice(0,k).join(' ').length,b=L.slice(k).join(' ').length,m=Math.max(a,b); if(m<bm){bm=m;best=k;} }
   return [L.slice(0,best).join(' '),L.slice(best).join(' ')];
 }
+function chunks(text){
+  const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean); const out=[]; let c=[];
+  for(const l of L){ if(l.length>44){ if(c.length){ out.push(c); c=[]; } out.push(twoLines(l)); continue; } c.push(l); if(c.length===2){ out.push(c); c=[]; } }
+  if(c.length) out.push(c); return out.length?out:[[]];
+}
 function base(){ return Math.round(Math.min(innerWidth*0.052,innerHeight*0.095)*OPT.t); }
 function fitLines(){ const els=[...box.querySelectorAll('.ln:not(.wr)')]; if(!els.length) return; els.forEach(el=>el.style.fontSize=''); const max=box.clientWidth||innerWidth*.92; const w=Math.max(...els.map(el=>el.scrollWidth)); if(w>max){ const fs=Math.floor(parseFloat(getComputedStyle(els[0]).fontSize)*max/w*0.98)+'px'; els.forEach(el=>el.style.fontSize=fs); } }
 function fitWrap(){ const el=box.querySelector('.wr'); if(!el) return; let fs=base(); el.style.fontSize=fs+'px'; const lh=()=>parseFloat(getComputedStyle(el).lineHeight)||fs*1.12; let n=0; while(el.scrollHeight>lh()*3.1&&fs>14&&n++<40){ fs=Math.floor(fs*.94); el.style.fontSize=fs+'px'; } }
@@ -52,7 +57,7 @@ function show(st){
   if(st&&st.mode==='text'){
     if(st.sermon){ if(OPT.msg) html=`<span class="ln wr">${esc(st.text)}</span>`; }
     else if(st.ref||st.bible){ if(OPT.bible) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
-    else html=twoLines(st.text).map(l=>`<span class="ln">${esc(l)}</span>`).join('');
+    else { let L; if(st.subs>0){ const ch=chunks(st.text); L=ch[Math.min(st.sub||0,ch.length-1)]; } else L=twoLines(st.text); html=L.map(l=>`<span class="ln">${esc(l)}</span>`).join(''); }
   }
   if(html===cur) return; cur=html;
   box.classList.remove('on');

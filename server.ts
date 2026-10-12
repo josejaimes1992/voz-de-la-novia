@@ -157,7 +157,7 @@ const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
 const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
-type Proj = { mode: "text" | "black" | "logo"; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
+type Proj = { mode: "text" | "black" | "logo"; sub?: number; subs?: number; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ_PREV: Proj | null = null;
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
 /* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
@@ -594,7 +594,7 @@ const SERVER = Bun.serve({
         PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0 } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
-          idx: Number(b.idx) || 0, total: Number(b.total) || 0, by: user.name, at: Date.now() };
+          idx: Number(b.idx) || 0, total: Number(b.total) || 0, sub: Math.min(30, Math.max(0, Number(b.sub) || 0)), subs: Math.min(30, Math.max(0, Number(b.subs) || 0)), by: user.name, at: Date.now() };
         if (mode !== "black") PROJ_PREV = null; else if (BEFORE.mode !== "black") PROJ_PREV = BEFORE;
         pubProj();
         return json(PROJ);

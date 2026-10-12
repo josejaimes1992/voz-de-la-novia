@@ -30,6 +30,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.obs-ch{display:grid;gap:2px}.obs-ch .ch{display:block;white-space:pre-line;border-radius:6px;padding:1px 6px;margin:0 -6px}.obs-ch .ch+.ch{border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent)}[aria-current="true"] .obs-ch .ch.on{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:2px solid var(--accent)}
 /* ---- Consola en el celular: letra grande primero, luego el programa y al final el buscador ---- */
 .pjm-now{display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line);background:var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pjm-now small{color:var(--muted);font-weight:500;margin-right:4px}
@@ -241,18 +242,20 @@ async function pjSend(st){
   try{ const r=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); PJ.remote=r; pjRender(); }
   catch(e){ PJ.remote=prev; pjRender(); if(e.message==='auth'){ closeProj(); lostAuth(); } else toast('No se pudo cambiar la pantalla. Revisa el internet.'); }
 }
-function pjShow(i){
+function pjShow(i,sub){
   const s=pjSong(); if(!s) return; const sl=pjSlides(s); if(!sl[i]) return;
-  pjSend({mode:'text',title:s.title,text:sl[i].text,label:sl[i].label,songId:s.id,programId:PJ.programId,idx:i,total:sl.length});
+  const st=obsStepOn(); const n=st?obsChunks(sl[i].text).length:1; const k=sub==null?0:sub<0?n-1:Math.min(sub,n-1);
+  pjSend({mode:'text',title:s.title,text:sl[i].text,label:sl[i].label,songId:s.id,programId:PJ.programId,idx:i,total:sl.length,sub:k,subs:st?n:0});
 }
 function pjStep(d){
   const r=PJ.remote, s=pjSong(); if(!s) return; const n=pjSlides(s).length;
   const here=r&&r.mode==='text'&&r.songId===s.id;
-  if(!here){ return pjShow(d>0?0:Math.max(0,n-1)); }
+  if(!here){ return pjShow(d>0?0:Math.max(0,n-1),d>0?0:-1); }
+  if(obsStepOn()){ const cur=pjSlides(s)[r.idx]; const cn=cur?obsChunks(cur.text).length:1; const k=(r.sub||0)+d; if(k>=0&&k<cn) return pjSend({...r,sub:k,subs:cn}); }
   const i=r.idx+d;
-  if(i>=0&&i<n) return pjShow(i);
+  if(i>=0&&i<n) return pjShow(i,d>0?0:-1);
   const j=PJ.si+(d>0?1:-1);
-  if(j>=0&&j<PJ.songIds.length){ PJ.si=j; const m=pjSlides(pjSong()).length; pjRender(true); return pjShow(d>0?0:Math.max(0,m-1)); }
+  if(j>=0&&j<PJ.songIds.length){ PJ.si=j; const m=pjSlides(pjSong()).length; pjRender(true); return pjShow(d>0?0:Math.max(0,m-1),d>0?0:-1); }
 }
 async function pjNav(d){ const r=PJ.remote||{};
   if(r.mode==='text'&&(r.bible||r.sermon)){ try{ PJ.remote=await api('/api/proyector/nav',{method:'POST',body:JSON.stringify({d,kind:r.bible?'item':'scroll'})}); if(r.bible&&PJ.remote.bible&&typeof BB!=='undefined'){ BB.b=PJ.remote.bible.b; BB.c=PJ.remote.bible.c; BB.v=PJ.remote.bible.v; } if(r.sermon&&PJ.remote.sermon&&typeof MS!=='undefined'){ MS.p=PJ.remote.sermon.p; MS.part=PJ.remote.sermon.part||0; } pjRender(); }catch{ toast('No se pudo cambiar.'); } return; }
@@ -321,12 +324,12 @@ function pjRenderWide(r,qf,qpos,scrollTop){
       <span class="ttl">${esc(s?s.title:'')}${k?` <small class="muted">· ${esc(keyText(k))}</small>`:''}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para usar el resto de la app">${ICON.search}Seguir en la app</button>
-      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open">📡 OBS</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open" aria-pressed="${obsStepOn()}" title="${obsStepOn()?'Transmisión: avanza de 2 en 2 líneas':'Letra para OBS'}">📡 OBS${obsStepOn()?' · 2 en 2':''}</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjw-grid side${PJ.tab==='bible'?' bbmode':''}">
       <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
         ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():pjMsgLib()}</section>
       ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
-        <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
+        <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span>${pjSlP(x,onSong&&r.idx===i,r)}</button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
       <section class="pjw-live"><div class="pjw-h">En directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
         <p class="pjw-now"><b>${r.mode==='black'?'■ Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</p>
@@ -398,9 +401,9 @@ function pjRender(scrollTop){
       <span class="ttl">${esc(s?s.title:'')}</span>
       <span class="pj-st ${PJ.online?'on':''}">${PJ.online?'Conectado':'Reconectando…'}</span>
       <button class="btn" data-act="pj-min" title="Esconder el control para buscar en el cancionero">${ICON.search}Seguir buscando</button>
-      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open">📡 OBS</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
+      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open" aria-pressed="${obsStepOn()}" title="${obsStepOn()?'Transmisión: avanza de 2 en 2 líneas':'Letra para OBS'}">📡 OBS${obsStepOn()?' · 2 en 2':''}</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjm-now"><i class="${r.mode==='text'?'on':''}"></i><span><small>En pantalla</small> ${r.mode==='black'?'■ Negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1}/${r.total}`:''))}</span></div>
-    <div class="pj-body pjm-body" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span><p>${esc(x.text)}</p></button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza abajo para empezar.'}</p>`}</div>
+    <div class="pj-body pjm-body" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pj-sl" data-act="pj-show" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h"><span>${esc(x.label||'')}</span><span>${i+1}</span></span>${pjSlP(x,onSong&&r.idx===i,r)}</button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza abajo para empezar.'}</p>`}</div>
     ${PJ.songIds.length?`<div class="pjm-prog" id="pjm-prog">${PJ.songIds.map((id,i)=>{ const so=S.songs.get(id); const k=so?songKey(so):null; const live=r.mode==='text'&&r.songId===id; return `<button class="pjm-it${isSung(id)?' sung':''}" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}"><span class="n">${i+1}${live?' <i>●</i>':''}</span><b>${esc(so?so.title:'')}</b>${k?`<small>${esc(keyText(k))}${isSung(id)?' · ✓':''}</small>`:(isSung(id)?'<small>✓ Cantada</small>':'')}</button>`; }).join('')}</div>`:''}
     <div class="pjm-find"><div class="pjm-res" id="pj-res">${pjResHtml(PJ.sug)}</div><input id="pj-q" type="search" placeholder="🎵 Buscar la siguiente (mismo acorde primero)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div>
     <div class="pj-bot">
@@ -426,7 +429,7 @@ document.addEventListener('click',ev=>{
     case 'pj-go': pjAdd(ds.id,true); PJ.q=''; pjRender(true); break;
     case 'proj-prog': openProj({programId:V.programId}); break;
     case 'pj-close': closeProj(); break;
-    case 'pj-show': pjShow(+ds.i); break;
+    case 'pj-show': { const sb=ev.target.closest('[data-sub]'); pjShow(+ds.i,sb?+sb.dataset.sub:0); break; }
     case 'pj-step': pjStep(+ds.d); break;
     case 'pj-mode': pjMode(ds.m); break;
     case 'pj-song': { const i=+ds.i; if(!PJ.sel) PJ.sel=new Set();
@@ -610,7 +613,7 @@ document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-
 
 /* ===== OBS: letra abajo en 2 líneas para la transmisión + exportar PNG ===== */
 const OBS_FONTS=['Barlow Semi Condensed','Oswald','Montserrat','Figtree'];
-function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',...o}; }
+function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',pasos:true,used:false,...o}; }
 function obsSave(o){ try{ localStorage.setItem('vdn-obs',JSON.stringify(o)); }catch{} }
 function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
 function obsTwo(text){
@@ -621,6 +624,15 @@ function obsTwo(text){
   let best=1,bm=1e9; for(let k=1;k<L.length;k++){ const a=L.slice(0,k).join(' ').length,b=L.slice(k).join(' ').length,m=Math.max(a,b); if(m<bm){bm=m;best=k;} }
   return [L.slice(0,best).join(' '),L.slice(best).join(' ')];
 }
+/* Divide la estrofa en partes de 2 líneas para la transmisión (una línea muy larga va sola, partida en 2) */
+function obsChunks(text){
+  const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean); const out=[]; let c=[];
+  for(const l of L){ if(l.length>44){ if(c.length){ out.push(c); c=[]; } out.push(obsTwo(l)); continue; } c.push(l); if(c.length===2){ out.push(c); c=[]; } }
+  if(c.length) out.push(c); return out.length?out:[[]];
+}
+function obsStepOn(){ const o=obsOpt(); return !!(o.used&&o.pasos); }
+function pjSlP(x,cur,r){ if(!obsStepOn()) return `<p>${esc(x.text)}</p>`; const ch=obsChunks(x.text); if(ch.length<2) return `<p>${esc(x.text)}</p>`;
+  return `<p class="obs-ch">${ch.map((c,k)=>`<span class="ch${cur&&(r.sub||0)===k?' on':''}" data-sub="${k}">${esc(c.join('\n'))}</span>`).join('')}</p>`; }
 function obsFontsCss(){ if(document.getElementById('obs-font-css')) return; const l=document.createElement('link'); l.id='obs-font-css'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@700&family=Oswald:wght@600&family=Montserrat:wght@700&family=Figtree:wght@700&display=swap'; document.head.appendChild(l); }
 /* Dibuja una diapositiva en un lienzo transparente 1920×1080, igual que la pantalla de OBS */
 function obsDraw(cv,lines,o,checker){
@@ -638,9 +650,9 @@ function obsDraw(cv,lines,o,checker){
     c.save(); c.shadowColor='rgba(0,0,0,.85)'; c.shadowBlur=fs*.14; c.shadowOffsetY=fs*.05; c.lineJoin='round'; c.lineWidth=Math.max(2,fs*.06); c.strokeStyle='rgba(0,0,0,.55)'; c.strokeText(t,W/2,y); c.restore();
     c.fillStyle='#ffffff'; c.fillText(t,W/2,y); });
 }
-function obsPrevLines(){ const s=typeof pjSong==='function'?pjSong():null; const sl=s?pjSlides(s):[]; const r=PJ&&PJ.remote; const i=r&&r.songId===(s&&s.id)?r.idx:0; return obsTwo((sl[i]||sl[0]||{text:'Y yo soy feliz en alabarle\nY lo hago con el alma'}).text); }
+function obsPrevLines(){ const s=typeof pjSong==='function'?pjSong():null; const sl=s?pjSlides(s):[]; const r=PJ&&PJ.remote; const i=r&&r.songId===(s&&s.id)?r.idx:0; const t=(sl[i]||sl[0]||{text:'Y yo soy feliz en alabarle\nY lo hago con el alma'}).text; if(obsOpt().pasos){ const ch=obsChunks(t); return ch[Math.min((r&&r.sub)||0,ch.length-1)]; } return obsTwo(t); }
 function obsOpen(){
-  obsFontsCss(); const o=obsOpt(); const s=typeof pjSong==='function'?pjSong():null;
+  obsFontsCss(); if(!obsOpt().used){ obsSave({...obsOpt(),used:true}); if(typeof pjRender==='function') try{ pjRender(); }catch{} } const o=obsOpt(); const s=typeof pjSong==='function'?pjSong():null;
   $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Letra para OBS" data-stop style="width:min(680px,100%)">
     <header><h3>📡 Letra para la transmisión (OBS)</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" style="display:grid;gap:14px">
@@ -656,6 +668,7 @@ function obsOpen(){
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-bb" ${o.biblia?'checked':''}> Mostrar también la Biblia</label>
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-ms" ${o.mensaje?'checked':''}> Mostrar también el Mensaje</label></div>
       </div>
+      <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-soft)"><input type="checkbox" id="obs-pasos" ${o.pasos?'checked':''} style="margin-top:3px"><span><b>Transmisión de 2 en 2 líneas</b><br><small style="color:var(--muted)">Una estrofa de 4 líneas sale en 2 partes. Con <b>Siguiente</b> pasas primero las partes en la transmisión; la pantalla del templo sigue mostrando la estrofa completa. También puedes tocar cada parte en la estrofa.</small></span></label>
       <div style="display:grid;gap:6px"><b style="font-size:14px">1) Dirección para OBS</b>
         <div style="display:flex;gap:8px"><input id="obs-url" class="input" readonly value="${esc(obsUrl(o))}" style="flex:1;min-width:0;font-family:var(--f-mono);font-size:12px"><button class="btn pri" data-act="obs-copy">Copiar</button></div>
         <ol style="margin:4px 0 0;padding-left:20px;font-size:13px;color:var(--muted);line-height:1.55">
@@ -672,7 +685,7 @@ function obsOpen(){
   const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
   const set=ch=>{ const n={...obsOpt(),...ch}; obsSave(n); const u=$('#obs-url'); if(u) u.value=obsUrl(n); redraw(); };
   on('#obs-t','input',e=>set({t:+e.target.value})); on('#obs-f','change',e=>set({fuente:e.target.value})); on('#obs-pos','change',e=>set({pos:e.target.value}));
-  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>set({mensaje:e.target.checked}));
+  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-pasos','change',e=>{ set({pasos:e.target.checked}); try{ pjRender(); }catch{} }); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>set({mensaje:e.target.checked}));
   redraw(); document.fonts&&document.fonts.load('700 40px "Barlow Semi Condensed"').then(redraw).catch(()=>{}); document.fonts&&document.fonts.ready.then(redraw);
 }
 async function obsPng(id){
@@ -685,10 +698,10 @@ async function obsPng(id){
     try{ await document.fonts.load(`700 60px "${o.fuente}"`); }catch{}
     if(!window.JSZip){ await new Promise((ok,ko)=>{ const sc=document.createElement('script'); sc.src='/jszip.min.js'; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
     const zip=new JSZip(); const cv=document.createElement('canvas'); cv.width=1920; cv.height=1080;
-    for(let i=0;i<texts.length;i++){ obsDraw(cv,obsTwo(texts[i]),o,false); const b=await new Promise(r=>cv.toBlob(r,'image/png')); zip.file(String(i+1).padStart(2,'0')+'.png',b); }
+    let nI=0; for(let i=0;i<texts.length;i++){ const parts=o.pasos?obsChunks(texts[i]):[obsTwo(texts[i])]; for(let k=0;k<parts.length;k++){ obsDraw(cv,parts[k],o,false); const b=await new Promise(r=>cv.toBlob(r,'image/png')); nI++; zip.file(String(i+1).padStart(2,'0')+(parts.length>1?String.fromCharCode(97+k):'')+'.png',b); } }
     const name=((song&&song.title)||'alabanza').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'alabanza';
     const blob=await zip.generateAsync({type:'blob'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'-OBS.zip'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },2000);
-    toast(`Listo: ${texts.length} imágenes PNG.`);
+    toast(`Listo: ${nI} imágenes PNG.`);
   }catch(e){ console.error(e); toast('No se pudieron crear las imágenes.'); }
 }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act;
