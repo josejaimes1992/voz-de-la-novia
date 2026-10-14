@@ -744,8 +744,9 @@ function banner(){
 function viewSongs(){ return window.selWrap?selWrap(viewSongsInner()):viewSongsInner(); }
 function viewSongsInner(){
   /* Las versiones viven dentro de su canción: en la lista sale una sola fila (con "+N versiones"); al buscar sí aparecen */
-  const allSongs=sortedSongs(); const VC=new Map(); for(const x of allSongs) if(x.versionOf&&S.songs.has(x.versionOf)) VC.set(x.versionOf,(VC.get(x.versionOf)||0)+1);
-  const songs=V.q?allSongs:allSongs.filter(x=>!(x.versionOf&&S.songs.has(x.versionOf)));
+  const allSongs=sortedSongs(); const VC=new Map(), VERS=new Map(); for(const x of allSongs) if(x.versionOf&&S.songs.has(x.versionOf)){ VC.set(x.versionOf,(VC.get(x.versionOf)||0)+1); let a=VERS.get(x.versionOf); if(!a) VERS.set(x.versionOf,a=[]); a.push(x); }
+  /* También al buscar: una sola fila por canción (si solo coincide una versión, sale la canción principal) */
+  const songs=allSongs.filter(x=>!(x.versionOf&&S.songs.has(x.versionOf)));
   const counts=new Map();
   songs.forEach(s=>{ const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?'; counts.set(c,(counts.get(c)||0)+1); });
   const order=ALL_KEYS.filter(k=>counts.has(k)); if(counts.has('?')) order.push('?');
@@ -754,8 +755,8 @@ function viewSongsInner(){
     const k=songKey(s); const c=k?keyCanon(k.idx,k.minor):'?';
     if(V.key!=='all' && c!==V.key) return false;
     if(V.missingOnly && s.bodyPro && s.bodyPro.trim()) return false;
-    if(V.audioOnly && !(s.audio||[]).length) return false;
-    if(toks.length){ const m=matchSong(s,toks,V.qmode||'all'); if(!m) return false; hits.set(s.id,m); }
+    if(V.audioOnly && !(s.audio||[]).length && !(VERS.get(s.id)||[]).some(v=>(v.audio||[]).length)) return false;
+    if(toks.length){ let m=matchSong(s,toks,V.qmode||'all'); if(!m) for(const v of (VERS.get(s.id)||[])){ m=matchSong(v,toks,V.qmode||'all'); if(m) break; } if(!m) return false; hits.set(s.id,m); }
     return true;
   });
   V._visible=filtered.map(s=>s.id);
@@ -781,7 +782,7 @@ function viewSongsInner(){
   if(toks.length){
     const MAXR=120, shown=filtered.length>MAXR?filtered.slice(0,MAXR):filtered;
     h+=`<p class="muted" style="margin:0 0 8px;font-size:13px">${filtered.length} ${filtered.length===1?'cántico encontrado':'cánticos encontrados'}${filtered.length>MAXR?` · se muestran los ${MAXR} más parecidos; escribe más para afinar`:''}</p><div class="list">`+shown.map(s=>{ const m=hits.get(s.id); const k=songKey(s);
-      return `<button class="row${window.isSung&&isSung(s.id)?' sung':''}" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
+      return `<button class="row${window.isSung&&isSung(s.id)?' sung':''}" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${m.inTitle?markText(s.title,toks):esc(s.title)}${VC.get(s.id)?` <span class="pill ver">+${VC.get(s.id)} ${VC.get(s.id)===1?'versión':'versiones'}</span>`:''}</b>${m.line?`<span class="snip">${m.sec?`<em>${esc(m.sec)}:</em> `:''}${markText(m.line,toks)}</span>`:`<small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'')}</small>`}</span></button>`; }).join('')+'</div></div>';
     return h;
   }
   const row=s=>{ const k=songKey(s); return `<button class="row" data-act="open-song" data-id="${esc(s.id)}"><span class="key"${kc(k)}>${esc(keyText(k))}</span><span class="t"><b>${esc(s.title)}${window.isSung&&isSung(s.id)?'<span class="pill sung-pill">✓ Cantada</span>':''}${s.versionOf?'<span class="pill ver">Otra versión</span>':''}${VC.get(s.id)?`<span class="pill ver" title="Tiene otras versiones dentro">+${VC.get(s.id)} ${VC.get(s.id)===1?'versión':'versiones'}</span>`:''}${s.ejemplo?'<span class="pill">Ejemplo</span>':''}${s.bodyPro&&s.bodyPro.trim()?'<span class="pill ok">Original</span>':''}${(s.audio||[]).length?'<span class="pill hasaud" title="Tiene audio">🎧</span>':''}</b><small>${esc([s.author,s.category].filter(Boolean).join(' · ')||'Sin autor')}</small></span></button>`; };
@@ -1340,7 +1341,7 @@ render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().th
 </script>
 <script src="/himnario.js?v=5"></script>
 <script src="/io.js?v=13"></script>
-<script src="/auditoria.js?v=4"></script>
+<script src="/auditoria.js?v=5"></script>
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>

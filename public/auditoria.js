@@ -155,6 +155,7 @@ function wbDraw(){
         ${hasPro&&hasB?`<div class="fld"><button data-act="wb-fld" data-f="body" aria-pressed="${f==='body'}">Básica</button><button data-act="wb-fld" data-f="bodyPro" aria-pressed="${f==='bodyPro'}">Original</button></div>`:''}
         <textarea data-wb="text" spellcheck="false">${esc(wbVal(s,'text'))}</textarea>
         ${WB.cut&&WB.cut.id===s.id?`<div class="wb-cut"><b style="font-size:13px">Nueva canción con ${WB.cut.lines} líneas seleccionadas</b><input id="wb-cut-t" value="${esc(WB.cut.title)}" placeholder="Título de la nueva canción"><label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="wb-cut-rm" checked style="width:auto"> Quitar esas líneas de «${esc(s.title)}»</label><div class="acts"><button class="btn pri" data-act="wb-cut-go">Crear</button><button class="btn ghost" data-act="wb-cut-no">Cancelar</button></div></div>`:''}
+        ${others.length?`<button class="btn" data-act="wb-keep" style="border-color:var(--accent);font-weight:700" title="Las demás se borran (o quedan como versión si tienen audio o están en un programa)">★ Quedarme con esta</button>`:''}
         <div class="acts"><button class="btn pri" data-act="wb-save">💾 Guardar</button><button class="btn" data-act="wb-cut">✂ Crear canción nueva</button>
           ${others.length?`<select data-wb="ver" style="font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;padding:4px"><option value="">🔗 Hacer versión de…</option>${others.map(o=>`<option value="${esc(o.id)}">${esc(o.title)}</option>`).join('')}</select>`:''}
           ${others.length?`<button class="btn ghost" data-act="wb-notdup" title="No es la misma que las demás">≠ Distinta</button>`:''}
@@ -168,6 +169,18 @@ document.addEventListener('change',async e=>{ const t=e.target; if(!(t.dataset&&
   const o=docOf(s); o.versionOf=groupOf(main); if(await wbWrite([{col:'songs',id:s.id,data:o}],`«${s.title}» ahora es versión de «${main.title}».`)) wbDraw(); });
 document.addEventListener('click',async e=>{ const el=e.target.closest('[data-act^="wb-"]'); if(!el) return; e.preventDefault(); const a=el.dataset.act; const c=el.closest('.wb-c'); const s=c&&S.songs.get(c.dataset.id);
   if(a==='wb-back') return wbBack();
+  if(a==='wb-keep'&&s){ if(el.dataset.sure!=='1'){ el.dataset.sure='1'; el.textContent='★ ¿Seguro? Toca otra vez'; return; }
+    const inProg=new Set(); for(const p of (S.programs?S.programs.values():[])) for(const it of (p.items||[])) if(it&&it.songId) inProg.add(it.songId);
+    const main=docOf(s); const d=WB.draft[s.id]||{}; if(d.title!=null&&d.title.trim()) main.title=d.title.trim(); if(d.author!=null) main.author=d.author.trim(); if(d.key!=null) main.key=d.key.trim(); if(d.text!=null) main[wbField(s)]=d.text.replace(/\s+$/,''); delete main.versionOf;
+    const writes=[{col:'songs',id:s.id,data:main}], del=[]; let asVer=0;
+    for(const id of WB.ids){ if(id===s.id) continue; const x=S.songs.get(id); if(!x) continue;
+      if(S.isAdmin&&!(x.audio||[]).length&&!inProg.has(id)) del.push(id);
+      else { const o=docOf(x); o.versionOf=s.id; writes.push({col:'songs',id,data:o}); asVer++; } }
+    for(const y of S.songs.values()) if(y.versionOf&&del.includes(y.versionOf)&&!del.includes(y.id)&&y.id!==s.id&&!writes.some(w=>w.id===y.id)){ const o=docOf(y); o.versionOf=s.id; writes.push({col:'songs',id:y.id,data:o}); asVer++; }
+    try{ await batch(writes); if(del.length) await api('/api/trash',{method:'POST',body:JSON.stringify({ids:del,keepAudio:true})}); lastSig=''; await loadData();
+      toast(`Te quedaste con «${main.title}»${del.length?` · ${del.length} a la Papelera`:''}${asVer?` · ${asVer} como versión (tienen audio, están en un programa o tienen versiones)`:''}.`); WB.draft={}; wbBack(); }
+    catch(err){ if(err.code===401) lostAuth(); else toast('No se pudo completar. Revisa el internet.'); }
+    return; }
   if(a==='wb-done'){ const ids=WB.ids.filter(id=>S.songs.has(id)); const w=ids.map(id=>{ const x=S.songs.get(id); const o=docOf(x); const d=WB.draft[id]||{}; if(d.title!=null&&d.title.trim()) o.title=d.title.trim(); if(d.author!=null) o.author=d.author.trim(); if(d.key!=null) o.key=d.key.trim(); if(d.text!=null) o[wbField(x)]=d.text.replace(/\s+$/,'');
       o.notDup=[...new Set([...(x.notDup||[]),...ids.filter(j=>j!==id&&groupOf(S.songs.get(j))!==groupOf(x))])]; o.auditOk=[...new Set([...(x.auditOk||[]),'merge'])]; return {col:'songs',id,data:o}; });
     if(await wbWrite(w,'Listo: ya no vuelven a salir en la auditoría.')){ WB.draft={}; wbBack(); } return; }
