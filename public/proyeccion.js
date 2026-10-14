@@ -620,9 +620,9 @@ document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-
 
 /* ===== OBS: letra abajo en 2 líneas para la transmisión + exportar PNG ===== */
 const OBS_FONTS=['Barlow Semi Condensed','Oswald','Montserrat','Figtree'];
-function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',pasos:true,used:false,...o}; }
+function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',pasos:true,used:false,ml:3,mt:1,...o}; }
 function obsSave(o){ try{ localStorage.setItem('vdn-obs',JSON.stringify(o)); }catch{} }
-function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
+function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); if(o.mensaje){ if(o.ml!==3) q.set('ml',String(o.ml)); if(o.mt!==1) q.set('mt',String(o.mt)); } const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
 function obsTwo(text){
   const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean);
   if(!L.length) return [];
@@ -674,6 +674,8 @@ function obsOpen(){
         <div style="display:grid;gap:6px;align-content:end">
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-bb" ${o.biblia?'checked':''}> Mostrar también la Biblia</label>
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-ms" ${o.mensaje?'checked':''}> Mostrar también el Mensaje</label></div>
+        ${o.mensaje?`<label style="display:grid;gap:4px">Mensaje · tamaño de letra <input type="range" id="obs-mt" min="0.6" max="1.8" step="0.05" value="${o.mt}"></label>
+        <label style="display:grid;gap:4px">Mensaje · líneas a la vista: <b id="obs-mlv">${o.ml}</b><input type="range" id="obs-ml" min="2" max="6" step="1" value="${o.ml}"></label>`:''}
       </div>
       <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-soft)"><input type="checkbox" id="obs-pasos" ${o.pasos?'checked':''} style="margin-top:3px"><span><b>Transmisión de 2 en 2 líneas</b><br><small style="color:var(--muted)">Una estrofa de 4 líneas sale en 2 partes. Con <b>Siguiente</b> pasas primero las partes en la transmisión; la pantalla del templo sigue mostrando la estrofa completa. También puedes tocar cada parte en la estrofa.</small></span></label>
       <div style="display:grid;gap:6px"><b style="font-size:14px">1) Dirección para OBS</b>
@@ -692,7 +694,7 @@ function obsOpen(){
   const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
   const set=ch=>{ const n={...obsOpt(),...ch}; obsSave(n); const u=$('#obs-url'); if(u) u.value=obsUrl(n); redraw(); };
   on('#obs-t','input',e=>set({t:+e.target.value})); on('#obs-f','change',e=>set({fuente:e.target.value})); on('#obs-pos','change',e=>set({pos:e.target.value}));
-  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-pasos','change',e=>{ set({pasos:e.target.checked}); try{ pjRender(); }catch{} }); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>set({mensaje:e.target.checked}));
+  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-pasos','change',e=>{ set({pasos:e.target.checked}); try{ pjRender(); }catch{} }); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>{ set({mensaje:e.target.checked}); obsOpen(); }); on('#obs-mt','input',e=>set({mt:+e.target.value})); on('#obs-ml','input',e=>{ set({ml:+e.target.value}); const v=$('#obs-mlv'); if(v) v.textContent=e.target.value; });
   redraw(); document.fonts&&document.fonts.load('700 40px "Barlow Semi Condensed"').then(redraw).catch(()=>{}); document.fonts&&document.fonts.ready.then(redraw);
 }
 async function obsPng(id){

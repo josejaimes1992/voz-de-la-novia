@@ -19,17 +19,27 @@ body.top #box{bottom:auto;top:6%}
 body.band #box{left:0;right:0;bottom:4%;padding:.35em 4% .45em;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.62) 12%,rgba(0,0,0,.62) 88%,rgba(0,0,0,0))}
 body.band.top #box{top:4%;bottom:auto}
 body.up #box .ln{text-transform:uppercase}
+/* Mensaje: ventana de lectura con letra grande que baja suave (como la pantalla del templo), solo letras */
+#rd{position:absolute;left:5%;right:5%;bottom:5%;height:calc(var(--rfs) * 1.25 * var(--rl) + .3em);overflow:hidden;opacity:0;transition:opacity .35s ease;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14%,#000 86%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 14%,#000 86%,transparent 100%)}
+body.top #rd{bottom:auto;top:5%}
+#rd.on{opacity:1}
+#rdi{position:absolute;left:0;right:0;top:0;padding:calc(var(--rfs)*.35) 0;color:var(--col);font-weight:700;font-size:var(--rfs);line-height:1.25;text-align:center;will-change:transform;
+  transition:transform 1.4s cubic-bezier(.3,.1,.3,1);text-shadow:0 0 2px #000,0 0 2px #000,0 3px 8px rgba(0,0,0,.85),0 0 18px rgba(0,0,0,.5);-webkit-text-stroke:1px rgba(0,0,0,.35)}
+body.up #rdi{text-transform:uppercase}
+#rdi sup{font-size:.55em;color:#f2c94c;margin-right:.25em}
 #dot{position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#e5484d;display:none}
 #dot.show{display:block}
 </style>
 </head>
 <body>
 <div id="box"></div>
+<div id="rd"><div id="rdi"></div></div>
 <div id="dot" class="show" title="Sin conexión con la app"></div>
 <script>
 /* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
 const Q=new URLSearchParams(location.search);
-const OPT={t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
+const OPT={ml:Math.min(6,Math.max(2,+Q.get('ml')||3)),mt:Math.min(2,Math.max(.5,+Q.get('mt')||1)),t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
 document.body.classList.toggle('top',OPT.top); document.body.classList.toggle('up',OPT.up); document.body.classList.toggle('band',OPT.band);
 document.body.style.setProperty('--font',`'${OPT.font}'`); document.body.style.setProperty('--col',OPT.color);
 const box=document.getElementById('box');
@@ -52,10 +62,26 @@ function base(){ return Math.round(Math.min(innerWidth*0.052,innerHeight*0.095)*
 function fitLines(){ const els=[...box.querySelectorAll('.ln:not(.wr)')]; if(!els.length) return; els.forEach(el=>el.style.fontSize=''); const max=box.clientWidth||innerWidth*.92; const w=Math.max(...els.map(el=>el.scrollWidth)); if(w>max){ const fs=Math.floor(parseFloat(getComputedStyle(els[0]).fontSize)*max/w*0.98)+'px'; els.forEach(el=>el.style.fontSize=fs); } }
 function fitWrap(){ const el=box.querySelector('.wr'); if(!el) return; let fs=base(); el.style.fontSize=fs+'px'; const lh=()=>parseFloat(getComputedStyle(el).lineHeight)||fs*1.12; let n=0; while(el.scrollHeight>lh()*3.1&&fs>14&&n++<40){ fs=Math.floor(fs*.94); el.style.fontSize=fs+'px'; } }
 let cur='';
+/* ---- Mensaje en modo lectura ---- */
+const rd=document.getElementById('rd'), rdi=document.getElementById('rdi'); let rdKey='', rdAuto=null, rdOff=0;
+function rdFs(){ return Math.round(Math.min(innerWidth*0.046,innerHeight*0.085)*OPT.mt); }
+function rdMax(){ return Math.max(0,rdi.scrollHeight-rd.clientHeight); }
+function rdSet(px,anim){ rdOff=Math.max(0,Math.min(rdMax(),px)); rdi.style.transition=anim===false?'none':''; rdi.style.transform=`translateY(${-rdOff}px)`; }
+function rdShow(st){
+  document.body.style.setProperty('--rfs',rdFs()+'px'); document.body.style.setProperty('--rl',OPT.ml);
+  const key=st.text+'|'+(st.num||'');
+  if(key!==rdKey){ rdKey=key; rdi.innerHTML=(st.num?`<sup>${esc(st.num)}</sup>`:'')+esc(st.text); rdSet(0,false); rd.classList.add('on'); }
+  cancelAnimationFrame(rdAuto); rdAuto=null;
+  if(st.auto>0){ let last=performance.now(); const sp=st.auto*rdFs()*0.6; const step=t=>{ const dt=(t-last)/1000; last=t; rdSet(rdOff+sp*dt,false); if(rdOff<rdMax()) rdAuto=requestAnimationFrame(step); }; rdAuto=requestAnimationFrame(step); }
+  else requestAnimationFrame(()=>rdSet((st.sc||0)*rdMax()));
+}
+function rdHide(){ if(!rdKey) return; rdKey=''; cancelAnimationFrame(rdAuto); rd.classList.remove('on'); }
 function show(st){
   let html='';
+  if(st&&st.mode==='text'&&st.sermon&&OPT.msg){ if(cur){ cur=''; box.classList.remove('on'); } rdShow(st); return; }
+  rdHide();
   if(st&&st.mode==='text'){
-    if(st.sermon){ if(OPT.msg) html=`<span class="ln wr">${esc(st.text)}</span>`; }
+    if(st.sermon){ /* el Mensaje se muestra en la ventana de lectura */ }
     else if(st.ref||st.bible){ if(OPT.bible) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
     else { let L; if(st.subs>0){ const ch=chunks(st.text); L=ch[Math.min(st.sub||0,ch.length-1)]; } else L=twoLines(st.text); html=L.map(l=>`<span class="ln">${esc(l)}</span>`).join(''); }
   }
