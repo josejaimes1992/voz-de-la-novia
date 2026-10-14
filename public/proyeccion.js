@@ -525,7 +525,11 @@ function styleDraw(){
         ${x.img?`<label class="f" style="margin-top:8px">Oscurecer la imagen (para que se lea mejor): ${Math.round(x.dim*100)}%<input type="range" min="0" max="0.85" step="0.05" value="${x.dim}" id="pjs-dim"></label>`:''}</div>
       <div class="grid2">
         <label class="f">Tipo de letra<select id="pjs-font">${PJ_FONTS.map(f=>`<option ${f===x.font?'selected':''} style="font-family:'${f}'">${f}</option>`).join('')}</select></label>
-        <label class="f">Tamaño de la letra: ${Math.round(x.size*100)}%<input type="range" min="0.6" max="1.8" step="0.05" value="${x.size}" id="pjs-size"></label>
+        <label class="f">Tamaño · Alabanzas: ${Math.round(x.size*100)}%<input type="range" min="0.6" max="1.8" step="0.05" value="${x.size}" id="pjs-size"></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Tamaño · Biblia: ${Math.round((x.sizeBible||1)*100)}%<input type="range" min="0.5" max="2.2" step="0.05" value="${x.sizeBible||1}" id="pjs-sizeb"></label>
+        <label class="f">Tamaño · Mensaje: ${Math.round((x.sizeMsg||1)*100)}%<input type="range" min="0.5" max="2.2" step="0.05" value="${x.sizeMsg||1}" id="pjs-sizem"></label>
       </div>
       <div><b style="font-size:14px">Color de la letra</b><div style="display:flex;gap:6px;margin-top:6px;align-items:center">${PJ_COLORS.map(c=>sw(c,x.color===c,'pjs-color',`data-c="${c}"`)).join('')}<span class="muted" style="font-size:13px;margin-left:8px">Cita:</span>${['#e9c45a','#ffffff','#9fd3ff'].map(c=>sw(c,x.ref===c,'pjs-ref',`data-c="${c}"`)).join('')}</div></div>
       <div class="grid2">
@@ -537,6 +541,8 @@ function styleDraw(){
   const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
   on('#pjs-font','change',e=>styleSet({font:e.target.value}));
   on('#pjs-size','input',e=>styleSet({size:+e.target.value},true));
+  on('#pjs-sizeb','input',e=>styleSet({sizeBible:+e.target.value},true));
+  on('#pjs-sizem','input',e=>styleSet({sizeMsg:+e.target.value},true));
   on('#pjs-margin','input',e=>styleSet({margin:+e.target.value},true));
   on('#pjs-dim','input',e=>styleSet({dim:+e.target.value},true));
   on('#pjs-upper','change',e=>styleSet({upper:e.target.checked}));
@@ -546,7 +552,7 @@ function styleDraw(){
     try{ const r=await fetch('/api/fondos',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJF.unshift({url:d.url}); styleSet({img:d.url}); }catch{ toast('No se pudo subir esa imagen.'); } });
 }
 let PJS_T=null;
-function styleSet(ch,soft){ Object.assign(PJS,ch); if(typeof BB!=='undefined') BB.style={...PJS}; if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
+function styleSet(ch,soft){ Object.assign(PJS,ch); if(typeof BB!=='undefined') BB.style={...PJS}; if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[({'pjs-sizeb':'sizeBible','pjs-sizem':'sizeMsg'})[k]||k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
   clearTimeout(PJS_T); PJS_T=setTimeout(async()=>{ try{ PJS=await api('/api/proyector/estilo',{method:'POST',body:JSON.stringify(PJS)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar el estilo.'); } },soft?250:0); }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
   if(a==='proj-style') styleOpen();

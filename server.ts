@@ -172,7 +172,7 @@ const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
 const VOZ_LIMIT = new Map<string, { n: number; t: number }>();
-const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, upperRead: false, size: 1, margin: 4, shadow: true };
+const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, upperRead: false, size: 1, sizeBible: 1, sizeMsg: 1, margin: 4, shadow: true };
 let STYLE: any = { ...STYLE_DEFAULT };
 try { const r = await db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) STYLE = { ...STYLE_DEFAULT, ...parseJ(r[0].data) }; } catch {}
 function cleanStyle(b: any) {
@@ -181,7 +181,7 @@ function cleanStyle(b: any) {
   const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
   const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
-    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), sizeBible: num(b.sizeBible, 0.5, 2.2, STYLE.sizeBible ?? 1), sizeMsg: num(b.sizeMsg, 0.5, 2.2, STYLE.sizeMsg ?? 1), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow };
 }
 /* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
 let BIBLES: Record<string, any> = {};
@@ -205,7 +205,7 @@ async function sungLoad() { if (SUNG_LOADED) return; SUNG_LOADED = true; try { c
 function sungNow() { if (SUNG.date !== limaDay()) SUNG = { date: limaDay(), ids: [] }; return SUNG; }
 function sungSave() { const S2 = sungNow(); db`INSERT INTO docs (col, id, data, updated_at) VALUES ('sung', ${S2.date}, ${JSON.stringify(S2)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`.catch(() => {}); SERVER.publish("proj", JSON.stringify({ _sung: S2 })); SERVER.publish("team", JSON.stringify({ _sung: S2 })); }
 function pubProj() { SERVER.publish("proj", JSON.stringify(PROJ)); const P: any = PROJ; if (P.mode === "text" && P.songId) { const S2 = sungNow(); if (!S2.ids.includes(P.songId)) { S2.ids.push(P.songId); sungSave(); } } }
-function msStepsSrv(t: string) { const z = +STYLE.size || 1; const per = Math.max(12, Math.round(40 / (z * z) * (STYLE.upperRead ? 0.82 : 1))); return Math.max(0, Math.ceil(String(t).split(/\s+/).length / per) - 1); }
+function msStepsSrv(t: string) { const z = +(STYLE as any).sizeMsg || 1; const per = Math.max(12, Math.round(40 / (z * z) * (STYLE.upperRead ? 0.82 : 1))); return Math.max(0, Math.ceil(String(t).split(/\s+/).length / per) - 1); }
 const CHORD_TOK = /^\(?((?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b|♯|♭)?(?:m|maj|min|dim|aug|sus|add|M)?\d*(?:\([^)]*\))?(?:\/(?:[A-G]|Do|Re|Mi|Fa|Sol|La|Si)(?:#|b)?)?)\)?$/;
 function songSlides(song: any) {
   const body = (song?.body && String(song.body).trim()) ? song.body : (song?.bodyPro || ""); const out: { label: string; text: string }[] = []; let label = "", block: string[] = [];

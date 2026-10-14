@@ -105,9 +105,11 @@ function songSize(p,W,H){
   for(const t of SL.texts){ if(!t||!t.trim()) continue; p.textContent=t; const s=baseSize(p,W,H); if(s<m) m=s; }
   p.textContent=keep; if(!isFinite(m)) return 0; SL.size=m; SL.k=k; return m;
 }
+/* Tamaño aparte para Alabanzas, Biblia y Mensaje */
+function szMult(st){ if(st&&st.sermon) return +ST.sizeMsg||1; if(st&&(st.bible||st.ref)) return +ST.sizeBible||1; return +ST.size||1; }
 function fit(p){
   const box=p.parentElement; const W=box.clientWidth, H=box.clientHeight; if(!W||!H) return;
-  const base=songSize(p,W,H)||baseSize(p,W,H); const t=base*(ST.size||1);
+  const base=songSize(p,W,H)||baseSize(p,W,H); const t=base*szMult(cur);
   const ok=()=>p.scrollWidth<=W+1&&p.offsetHeight<=H;
   p.style.fontSize=t+'px'; p.style.whiteSpace='pre'; if(ok()) return;
   p.style.whiteSpace='pre-line'; if(ok()) return;
@@ -138,7 +140,7 @@ function show(st){
   const A=$('#L-a'), B=$('#L-b'), R=$('#L-read');
   if(st.mode==='text'&&st.read){ A.classList.remove('on'); B.classList.remove('on');
     const inn=$('#rd-in'); inn.innerHTML=(st.num?`<sup>${String(st.num).replace(/[<>&]/g,'')}</sup>`:'')+String(st.text).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-    inn.style.fontSize=(7.4*(ST.size||1))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upperRead?'uppercase':'none';
+    inn.style.fontSize=(7.4*szMult(st))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upperRead?'uppercase':'none';
     const rf=$('#rd-ref'); rf.textContent=st.ref||''; rf.style.color=ST.ref||'#e9c45a'; rf.style.fontFamily=inn.style.fontFamily;
     document.documentElement.style.setProperty('--rdm',(ST.margin!=null?Math.max(3,ST.margin+2):6)+'vw');
     rdSet(0,false); R.classList.add('on'); requestAnimationFrame(()=>rdApply(st)); return; }

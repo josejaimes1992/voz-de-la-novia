@@ -146,7 +146,7 @@ function wbVal(s,k){ const d=WB.draft[s.id]; if(d&&d[k]!=null) return d[k]; retu
 function wbDraw(){
   const root=document.getElementById('au-body'); if(!root) return;
   const songs=WB.ids.map(id=>S.songs.get(id)).filter(Boolean);
-  root.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" data-act="wb-back">← Volver a la auditoría</button><span style="font-size:13px;color:var(--muted)">Edita cualquiera y guarda. Para separar una canción pegada: <b>selecciona sus líneas</b> en la letra y toca <b>✂ Crear canción nueva</b>.</span></div>
+  root.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" data-act="wb-back">← Volver a la auditoría</button><button class="btn pri" data-act="wb-done" title="Estas canciones no vuelven a salir juntas en la auditoría">✓ Ya las revisé</button><span style="font-size:13px;color:var(--muted)">Edita cualquiera y guarda. Para separar una canción pegada: <b>selecciona sus líneas</b> en la letra y toca <b>✂ Crear canción nueva</b>.</span></div>
     <div class="wb">${songs.map(s=>{ const f=wbField(s), hasPro=!!(s.bodyPro&&s.bodyPro.trim()), hasB=!!(s.body&&s.body.trim()); const others=songs.filter(o=>o!==s);
       return `<div class="wb-c${WB.fresh.has(s.id)?' new':''}" data-id="${esc(s.id)}">
         ${WB.fresh.has(s.id)?'<small style="color:#2fa36b;font-weight:700">✓ Canción nueva</small>':''}
@@ -168,6 +168,9 @@ document.addEventListener('change',async e=>{ const t=e.target; if(!(t.dataset&&
   const o=docOf(s); o.versionOf=groupOf(main); if(await wbWrite([{col:'songs',id:s.id,data:o}],`«${s.title}» ahora es versión de «${main.title}».`)) wbDraw(); });
 document.addEventListener('click',async e=>{ const el=e.target.closest('[data-act^="wb-"]'); if(!el) return; e.preventDefault(); const a=el.dataset.act; const c=el.closest('.wb-c'); const s=c&&S.songs.get(c.dataset.id);
   if(a==='wb-back') return wbBack();
+  if(a==='wb-done'){ const ids=WB.ids.filter(id=>S.songs.has(id)); const w=ids.map(id=>{ const x=S.songs.get(id); const o=docOf(x); const d=WB.draft[id]||{}; if(d.title!=null&&d.title.trim()) o.title=d.title.trim(); if(d.author!=null) o.author=d.author.trim(); if(d.key!=null) o.key=d.key.trim(); if(d.text!=null) o[wbField(x)]=d.text.replace(/\s+$/,'');
+      o.notDup=[...new Set([...(x.notDup||[]),...ids.filter(j=>j!==id&&groupOf(S.songs.get(j))!==groupOf(x))])]; o.auditOk=[...new Set([...(x.auditOk||[]),'merge'])]; return {col:'songs',id,data:o}; });
+    if(await wbWrite(w,'Listo: ya no vuelven a salir en la auditoría.')){ WB.draft={}; wbBack(); } return; }
   if(a==='wb-fld'&&s){ const d=WB.draft[s.id]; if(d) delete d.text; WB.field[s.id]=el.dataset.f; return wbDraw(); }
   if(a==='wb-save'&&s){ const d=WB.draft[s.id]||{}; const o=docOf(s); if(d.title!=null&&d.title.trim()) o.title=d.title.trim(); if(d.author!=null) o.author=d.author.trim(); if(d.key!=null) o.key=d.key.trim(); if(d.text!=null) o[wbField(s)]=d.text.replace(/\s+$/,'');
     if(await wbWrite([{col:'songs',id:s.id,data:o}],`Guardada «${o.title}».`)){ delete WB.draft[s.id]; wbDraw(); } return; }
@@ -180,7 +183,8 @@ document.addEventListener('click',async e=>{ const el=e.target.closest('[data-ac
     let body=X.text.split('\n').filter(l=>!/^\s*t[ií]tulo\s*:/i.test(l)).join('\n').replace(/^\s*\n+/,'').trim();
     const nw={title,author:'',key:'',category:src.category||'',bpm:'',capo:0,body,notes:`Separada de «${src.title}» en la auditoría.`,updatedAt:Date.now()}; ioTakeAuthor(nw); const g=ioGuessKey(nw.body); if(g) nw.key=keyCanon(g.idx,g.minor);
     const nid=newId('c'); const writes=[{col:'songs',id:nid,data:nw}];
-    if(rm){ const o=docOf(src); const rest=(X.full.slice(0,X.a)+X.full.slice(X.b)).replace(/\n{3,}/g,'\n\n').trim(); o[wbField(src)]=rest; writes.push({col:'songs',id:src.id,data:o}); }
+    nw.notDup=[src.id]; { const o0=docOf(src); o0.auditOk=[...new Set([...(src.auditOk||[]),'merge'])]; o0.notDup=[...new Set([...(src.notDup||[]),nid])]; if(!rm) writes.push({col:'songs',id:src.id,data:o0}); }
+    if(rm){ const o=docOf(src); o.auditOk=[...new Set([...(src.auditOk||[]),'merge'])]; o.notDup=[...new Set([...(src.notDup||[]),nid])]; const rest=(X.full.slice(0,X.a)+X.full.slice(X.b)).replace(/\n{3,}/g,'\n\n').trim(); o[wbField(src)]=rest; writes.push({col:'songs',id:src.id,data:o}); }
     if(await wbWrite(writes,`Creada «${title}»${rm?` y quitada de «${src.title}»`:''}.`)){ WB.cut=null; if(rm&&WB.draft[src.id]) delete WB.draft[src.id].text; WB.fresh.add(nid); WB.ids.splice(WB.ids.indexOf(src.id)+1,0,nid); wbDraw(); } return; }
   if(a==='wb-notdup'&&s){ const others=WB.ids.filter(id=>id!==s.id); const o=docOf(s); o.notDup=[...new Set([...(s.notDup||[]),...others])]; if(await wbWrite([{col:'songs',id:s.id,data:o}],`«${s.title}» marcada como distinta.`)) wbDraw(); return; }
   if(a==='wb-del'&&s){ if(el.dataset.sure!=='1'){ el.dataset.sure='1'; el.textContent='¿Seguro? Toca otra vez'; el.classList.add('danger'); return; } await removeDoc('songs',s.id); toast(`«${s.title}» a la papelera (se puede rescatar 60 días).`); WB.ids=WB.ids.filter(id=>id!==s.id); lastSig=''; await loadData(); if(WB.ids.length) wbDraw(); else wbBack(); return; }
