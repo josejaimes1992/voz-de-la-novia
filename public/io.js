@@ -153,7 +153,7 @@ function openImport(){
     <header><h3>Importar canciones</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" id="imp-body" style="display:grid;gap:12px">
       <label class="drop" id="imp-drop"><input id="imp-file" type="file" multiple accept=".docx,.pdf,.txt,.cho,.chopro,.chordpro,.pro,.crd,.json" hidden>
-        <b>Elige o arrastra archivos aquí</b><span>Word (.docx), PDF, texto (.txt), ChordPro / OnSong (.cho, .chopro) o una copia de Voz de la Novia (.json). Puedes elegir varios a la vez.</span></label>
+        <b>Elige o arrastra archivos aquí</b><span>Word (.docx), PDF, texto (.txt), ChordPro / OnSong (.cho, .chopro) JSON de Holyrics o una copia de Voz de la Novia (.json). Puedes elegir varios a la vez.</span></label>
       <div id="imp-opts"></div><div id="imp-list"></div>
     </div></div></div>`;
   const inp=$('#imp-file'), drop=$('#imp-drop');
@@ -164,7 +164,19 @@ function openImport(){
 }
 async function ioRead(files){
   if(!files.length) return; const list=$('#imp-list'); list.innerHTML='<p class="muted">Leyendo archivos…</p>';
-  const jsons=files.filter(f=>ioExt(f.name)==='json'); if(jsons.length){ if(!S.isAdmin){ list.innerHTML='<div class="banner">Solo el administrador puede restaurar una copia de seguridad.</div>'; return; } return ioBackup(jsons[0]); }
+  const jsons=files.filter(f=>ioExt(f.name)==='json');
+  if(jsons.length){
+    /* ¿Es una copia de Voz de la Novia o canciones de otro programa (Holyrics, etc.)? */
+    const docs=[]; for(const f of jsons){ try{ docs.push({f,d:JSON.parse((await f.text()).replace(/^\uFEFF/,''))}); }catch{ list.innerHTML=`<div class="banner" style="color:var(--danger)">${esc(f.name)}: no es un archivo JSON válido.</div>`; return; } }
+    const ours=docs.find(x=>x.d&&(x.d.app==='voz-de-la-novia'||(Array.isArray(x.d.songs)&&Array.isArray(x.d.programs))));
+    if(ours){ if(!S.isAdmin){ list.innerHTML='<div class="banner">Solo el administrador puede restaurar una copia de seguridad.</div>'; return; } return ioBackup(ours.f); }
+    const songs=[]; for(const x of docs) songs.push(...(ioForeignSongs(x.d)||[]));
+    if(!songs.length){ const keys=docs.map(x=>Array.isArray(x.d)?'lista de '+x.d.length+(x.d[0]&&typeof x.d[0]==='object'?' con: '+Object.keys(x.d[0]).slice(0,8).join(', '):''):Object.keys(x.d||{}).slice(0,10).join(', ')).join(' · ');
+      list.innerHTML=`<div class="banner" style="color:var(--danger)">No encontré canciones en el JSON. Lo que trae: ${esc(keys)}.</div>`; return; }
+    IO.files=songs.map(x=>({name:x.title,ext:'cho',pages:[x.text]})); IO.errors=[]; IO.hymnal=false; IO.numbered=false; IO.mode='file'; IO.fromJson=docs.map(x=>x.f.name).join(', ');
+    if(IO.lower===undefined) IO.lower=true; toast(`Encontré ${songs.length} ${songs.length===1?'canción':'canciones'} en el JSON.`); return ioBuild();
+  }
+  IO.fromJson='';
   IO.files=[]; const errors=[];
   for(const f of files){ const ext=ioExt(f.name);
     try{ let pages;
@@ -428,4 +440,32 @@ function ioSplitAt(c,n){
   if(!nc.dup){ const d=findDuplicate(nc,IO.chunks.filter(x=>x!==c)); if(d){ nc.dup=true; nc.dupOf={...d,inBatch:true}; nc.include=false; } }
   if(nc.dup&&nc.dupOf&&!nc.dupOf.inBatch){ nc.dupAct='skip'; nc.include=false; }
   return nc;
+}
+
+/* ===== Canciones en JSON de otros programas (Holyrics y parecidos) ===== */
+function ioDeHtml(t){ return String(t??'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/(p|div)>/gi,'\n').replace(/<[^>]+>/g,'').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\r/g,''); }
+function ioForeignSongs(d){
+  const titleOf=o=>o&&typeof o==='object'&&!Array.isArray(o)?(o.title??o.titulo??o.Title??o.name??o.nome??o.nombre):null;
+  const isSong=o=>titleOf(o)!=null&&(o.paragraphs||o.slides||o.verses||o.lyrics||o.letra||o.text||o.content||o.full_text||o.body||o.paragrafos||o.estrofas);
+  const find=(x,depth)=>{ if(!x||depth>4) return null;
+    if(Array.isArray(x)){ if(x.some(isSong)) return x.filter(isSong); for(const y of x){ const r=find(y,depth+1); if(r) return r; } return null; }
+    if(typeof x==='object'){ if(isSong(x)) return [x]; for(const k of ['songs','musics','music','musicas','canciones','lyrics','items','data','result','list']) if(x[k]){ const r=find(x[k],depth+1); if(r) return r; }
+      for(const v of Object.values(x)){ if(v&&typeof v==='object'){ const r=find(v,depth+1); if(r) return r; } } }
+    return null; };
+  const list=find(d,0); if(!list) return null;
+  const parText=p=>typeof p==='string'?p:(p&&(p.text??p.texto??p.content??p.lyrics??p.letra??p.text_with_comment))||'';
+  const parDesc=p=>p&&typeof p==='object'?String(p.description??p.descricao??p.descripcion??p.name??p.label??p.type??'').trim():'';
+  return list.map(o=>{
+    const title=ioDeHtml(titleOf(o)).trim()||'Sin título';
+    const author=ioDeHtml(o.artist??o.author??o.autor??o.artista??o.interprete??'').trim();
+    const key=String(o.key??o.tom??o.tono??o.tonalidade??'').trim();
+    const bpm=o.bpm??o.tempo??'';
+    let pars=o.paragraphs??o.slides??o.verses??o.paragrafos??o.estrofas??(o.lyrics&&typeof o.lyrics==='object'?(o.lyrics.paragraphs??o.lyrics.slides):null);
+    let body='';
+    if(Array.isArray(pars)&&pars.length){ body=pars.map(p=>{ const t=ioDeHtml(parText(p)).replace(/\s+$/,''); if(!t.trim()) return ''; const ds=parDesc(p); return (ds&&!/^\d+$/.test(ds)?`{comment: ${ds}}\n`:'')+t; }).filter(Boolean).join('\n\n'); }
+    else { const raw=o.lyrics&&typeof o.lyrics==='object'?(o.lyrics.full_text??o.lyrics.text??''):(o.lyrics??o.letra??o.full_text??o.text??o.content??o.body??''); body=ioDeHtml(raw); }
+    body=convertChordsOverLyrics(hymNormChordText(body.replace(/\n{3,}/g,'\n\n').trim()));
+    const head=[`{title: ${title}}`]; if(author) head.push(`{artist: ${author}}`); if(key) head.push(`{key: ${key}}`); if(bpm) head.push(`{tempo: ${bpm}}`);
+    return {title,text:head.join('\n')+'\n\n'+body};
+  }).filter(x=>x.text.split('\n\n').slice(1).join('').trim());
 }
