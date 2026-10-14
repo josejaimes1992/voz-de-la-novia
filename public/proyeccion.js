@@ -466,6 +466,7 @@ document.addEventListener('keydown',e=>{
     if(k==='Enter'&&BB.v!=null){ e.preventDefault(); BB.live=true; bbProject(); return; }
     if(k.length===1&&/[\p{L}\p{N}]/u.test(k)){ e.preventDefault(); qkOpen(k); return; } }
   if(PJ.min){ if(k==='PageDown'){ e.preventDefault(); pjStep(1); } else if(k==='PageUp'){ e.preventDefault(); pjStep(-1); } return; }
+  if(k==='F2'&&PJ.tab!=='bible'&&PJ.tab!=='msg'){ e.preventDefault(); pjEditOpen(e.shiftKey?'all':'one'); return; }
   if(k==='ArrowRight'||k==='ArrowDown'||k==='PageDown'||k===' '){ e.preventDefault(); pjNav(1); }
   else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'){ e.preventDefault(); pjNav(-1); }
   else if(k==='b'||k==='B'||k==='.') pjMode('black');
@@ -709,3 +710,64 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   else if(a==='obs-copy'){ const u=$('#obs-url'); if(!u) return; u.select(); (navigator.clipboard?navigator.clipboard.writeText(u.value):Promise.reject()).then(()=>toast('Dirección copiada. Pégala en OBS.')).catch(()=>{ try{ document.execCommand('copy'); toast('Dirección copiada.'); }catch{} }); }
   else if(a==='obs-png'){ ev.preventDefault(); obsPng(el.dataset.id); }
 });
+
+
+/* ===== Editar desde la consola: clic derecho en una estrofa (o F2 / Mayús+F2) ===== */
+function pjShownSong(){ return pjWide()&&typeof pjCenter==='function'?pjCenter():pjSong(); }
+function pjBodyField(song){ return (song&&song.body&&song.body.trim())?'body':'bodyPro'; }
+/* Las mismas estrofas que pjSlides, pero recordando de qué líneas de la letra salió cada una */
+function pjSlideLines(song){
+  const body=song[pjBodyField(song)]||''; const P=parseSong(body); const out=[]; let block=[];
+  const flush=()=>{ if(!block.length) return; const n=Math.ceil(block.length/4), size=Math.ceil(block.length/n);
+    for(let i=0;i<block.length;i+=size){ const part=block.slice(i,i+size); out.push({from:part[0],to:part[part.length-1]}); } block=[]; };
+  P.forEach((L,i)=>{ if(L.type==='sec'||L.type==='gap'){ flush(); return; } if(L.chordOnly) return; if(L.lyric.replace(/\s+/g,' ').trim()) block.push(i); });
+  flush(); return out;
+}
+function pjEditIdx(){ const s=pjShownSong(); const r=PJ.remote||{}; return s&&r.songId===s.id?r.idx||0:0; }
+function pjEditOpen(mode,i){
+  if(!S.canWrite){ toast('Ingresa con tu usuario para editar.'); return; }
+  const s=pjShownSong(); if(!s){ toast('Abre una alabanza primero.'); return; }
+  const f=pjBodyField(s), L=String(s[f]||'').split('\n'); const idx=i!=null?i:pjEditIdx(); const map=pjSlideLines(s);
+  let from=0,to=L.length-1, title='Editar toda la canción';
+  if(mode==='one'){ const m=map[idx]; if(!m){ mode='all'; } else { from=m.from; to=m.to; title=`Editar estrofa ${idx+1}`; } }
+  PJ.edit={id:s.id,f,from,to,mode,idx};
+  const txt=L.slice(from,to+1).join('\n');
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><form class="modal" id="pje-form" role="dialog" aria-label="${esc(title)}" data-stop style="width:min(${mode==='all'?760:620}px,100%)">
+    <header><h3>✏ ${esc(title)} · ${esc(s.title)}</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:10px">
+      ${mode==='all'?`<label class="f">Título<input id="pje-title" class="input" value="${esc(s.title||'')}"></label>`:''}
+      <textarea id="pje-txt" spellcheck="true" style="width:100%;min-height:${mode==='all'?'52vh':'190px'};font:15px/1.5 var(--f-mono,monospace);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;resize:vertical">${esc(txt)}</textarea>
+      <small style="color:var(--muted)">Los acordes van entre corchetes, por ejemplo <code>[G]Dale la gloria</code>. ${mode==='all'?'Deja una línea en blanco entre estrofas; <code># Coro</code> pone un título de sección.':'Una línea en blanco la divide en dos estrofas.'} · <b>Ctrl+Enter</b> guarda.</small>
+      <div class="actions" style="justify-content:space-between"><span>${mode==='one'?`<button type="button" class="btn ghost" data-act="pje-all">Editar toda la canción</button>`:''}</span><span style="display:flex;gap:8px"><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn pri" type="submit">Guardar</button></span></div>
+    </div></form></div>`;
+  const ta=$('#pje-txt'); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); $('#pje-form').requestSubmit(); } }); }
+  $('#pje-form').addEventListener('submit',async e=>{ e.preventDefault(); await pjEditSave(); });
+}
+async function pjEditSave(){
+  const E=PJ.edit; if(!E) return; const s=S.songs.get(E.id); if(!s) return;
+  const L=String(s[E.f]||'').split('\n'); const nv=$('#pje-txt').value.replace(/\r/g,'').replace(/\s+$/,'');
+  const body=E.mode==='all'?nv:[...L.slice(0,E.from),...nv.split('\n'),...L.slice(E.to+1)].join('\n');
+  const d=JSON.parse(JSON.stringify(s)); d[E.f]=body; if(E.mode==='all'){ const t=$('#pje-title'); if(t&&t.value.trim()) d.title=t.value.trim(); }
+  const ok=await writeDoc('songs',d); if(!ok) return;
+  closeModal(); PJ.edit=null; PJ.ctxI=null; toast('Guardado.');
+  const r=PJ.remote||{}; if(r.mode==='text'&&r.songId===s.id&&pjSong()&&pjSong().id===s.id){ const n=pjSlides(S.songs.get(s.id)).length; pjShow(Math.min(r.idx||0,Math.max(0,n-1)),r.sub||0); }
+  pjRender();
+}
+/* Menú del clic derecho */
+function pjCtxClose(){ const m=document.getElementById('pj-ctx'); if(m) m.remove(); }
+document.addEventListener('contextmenu',e=>{
+  if(!PJ.open) return; const sl=e.target.closest('#pj-body [data-i]'); if(!sl) return;
+  e.preventDefault(); pjCtxClose(); PJ.ctxI=+sl.dataset.i;
+  const m=document.createElement('div'); m.id='pj-ctx'; m.setAttribute('role','menu');
+  m.innerHTML=`<button data-act="pjx-show">📺 Proyectar esta estrofa</button><button data-act="pjx-one">✏ Editar esta estrofa <kbd>F2</kbd></button><button data-act="pjx-all">✏ Editar toda la canción <kbd>Mayús+F2</kbd></button>`;
+  m.style.cssText=`position:fixed;z-index:9999;left:${Math.min(e.clientX,innerWidth-250)}px;top:${Math.min(e.clientY,innerHeight-140)}px;display:grid;min-width:230px;padding:5px;border-radius:10px;border:1px solid var(--line);background:var(--surface);box-shadow:0 12px 32px rgba(0,0,0,.35)`;
+  document.body.appendChild(m);
+});
+document.addEventListener('click',e=>{ const b=e.target.closest('#pj-ctx [data-act]'); if(!b){ if(!e.target.closest('#pj-ctx')) pjCtxClose(); return; }
+  const a=b.dataset.act, i=PJ.ctxI; pjCtxClose();
+  if(a==='pjx-show'){ const s=pjShownSong(); if(s&&pjSong()&&s.id===pjSong().id) pjShow(i); else { const el=document.querySelector(`#pj-body [data-i="${i}"]`); if(el) el.click(); } }
+  else if(a==='pjx-one') pjEditOpen('one',i); else if(a==='pjx-all') pjEditOpen('all',i);
+},true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') pjCtxClose(); });
+document.addEventListener('click',e=>{ if(e.target.closest('[data-act="pje-all"]')){ e.preventDefault(); const E=PJ.edit; pjEditOpen('all',E?E.idx:0); } });
+(()=>{ const st=document.createElement('style'); st.textContent=`#pj-ctx button{display:flex;justify-content:space-between;gap:14px;align-items:center;text-align:left;border:0;background:transparent;color:inherit;font:inherit;font-size:14px;padding:8px 10px;border-radius:7px;cursor:pointer}#pj-ctx button:hover{background:var(--accent-soft);color:var(--accent)}#pj-ctx kbd{font:11px var(--f-mono,monospace);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}`; document.head.appendChild(st); })();
