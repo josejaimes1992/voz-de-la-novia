@@ -239,11 +239,11 @@ function ioRender(){
       ${c.dup&&c.dupOf?`<small class="dupinfo">${c.dupOf.inBatch?'Igual a':'Ya existe como'} ${esc(dupLabel(c.dupOf))}${!c.dupOf.inBatch?` · <span class="chtag ${c.exCh?'y':'n'}">La tuya: ${c.exCh?'con acordes':'solo texto'}</span> <span class="chtag ${HAS_CH(c.body)?'y':'n'}">PDF: ${HAS_CH(c.body)?'con acordes':'solo texto'}</span>`:''}</small>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch?`<div class="dupact"><select data-imp="dupact" data-i="${i}" aria-label="Qué hacer con esta canción">${DUP_OPTS.map(([v,t])=>`<option value="${v}" ${c.dupAct===v?'selected':''}>${t}${v==='pro'&&c.dupOf.song.bodyPro&&c.dupOf.song.bodyPro.trim()?' (reemplaza la que tiene)':''}</option>`).join('')}</select><button class="btn ghost" data-act="imp-cmp" data-i="${i}">${c.cmp?'Cerrar comparación':'Comparar'}</button></div>`:''}
       ${c.dup&&c.dupOf&&!c.dupOf.inBatch&&c.dupOf.sim>=0.8&&chNorm(c.title)!==chNorm(c.dupOf.song.title)?`<div class="tmis">⚠ El título del PDF («${esc(c.title)}») no coincide con su letra: esa letra es «${esc(c.dupOf.song.title)}». <button class="btn ghost" data-act="imp-usetitle" data-i="${i}">Usar «${esc(c.dupOf.song.title)}»</button></div>`:''}
-      ${c.cmp&&c.dupOf?(()=>{ const ex=c.dupOf.song, chm=c.dupAct==='cpro'||c.dupAct==='cnew', tab=c.cmpTab||'ex';
+      ${c.cmp&&c.dupOf?(()=>{ const ex=c.dupOf.song, chm=c.dupAct==='cpro'||c.dupAct==='cnew'||c.dupAct==='lyr', tab=c.cmpTab||'ex';
         return `<div class="cmp-tabs" role="tablist"><button data-act="imp-tab" data-i="${i}" data-t="ex" aria-pressed="${tab==='ex'}">Ya en el sistema</button><button data-act="imp-tab" data-i="${i}" data-t="pdf" aria-pressed="${tab==='pdf'}">Del PDF</button>${chm?`<button data-act="imp-tab" data-i="${i}" data-t="res" aria-pressed="${tab==='res'}">Resultado</button>`:''}</div>
         <div class="cmp t-${tab}${chm?' three':''}"><div class="p-ex"><h4>Ya en el sistema · «${esc(ex.title)}»${ex.key?' · '+esc(keyText(parseKey(ex.key))):''}</h4><pre>${esc(ex.body||'')}</pre>${ex.bodyPro&&ex.bodyPro.trim()?`<h4>Su versión Original</h4><pre>${esc(ex.bodyPro)}</pre>`:''}</div>
           <div class="p-pdf"><h4>Del PDF · «${esc(c.title)}»${c.key?' · '+esc(keyText(parseKey(c.key))):''}</h4><textarea data-imp="body" data-i="${i}" class="body">${esc(c.body)}</textarea></div>
-          ${chm?`<div class="p-res"><h4>Resultado · tu letra con los acordes del PDF</h4><pre>${esc(chordsResult(c))}</pre></div>`:''}</div>`; })():''}
+          ${chm?`<div class="p-res"><h4>${c.dupAct==='lyr'?'Resultado · la letra del archivo con TUS acordes':'Resultado · tu letra con los acordes del PDF'}</h4><pre>${esc(chordsResult(c))}</pre></div>`:''}</div>`; })():''}
       ${c.hasChords===false?'<span class="pill">Solo letra</span>':''}
       ${c.doubts&&c.doubts.length?`<div class="ask"><b>Tengo una duda${c.num?` con la n.º ${c.num}`:''}:</b> ${esc(c.doubts.join(' '))}
         <div class="ask-snip">${esc(c.body.split('\n').filter(l=>l.trim()&&!/^#/.test(l)).slice(0,3).join(' / ').replace(/\[[^\]]*\]/g,'').slice(0,160))}…</div>
@@ -265,12 +265,13 @@ const HAS_CH=t=>/\[[^\]\s]{1,12}\]/.test(t||'');
 function ioExCh(song){ if(!song) return false; const g=song.versionOf||song.id; for(const x of S.songs.values()) if((x.id===g||x.versionOf===g)&&(HAS_CH(x.body)||HAS_CH(x.bodyPro))) return true; return false; }
 const DUP_GROUPS={
   t:{title:'Ya las tienes SOLO CON TEXTO y el PDF trae acordes',opts:[['body','Usar la del PDF con acordes (se actualiza la misma canción)'],['cpro','Solo pasar los acordes del PDF sobre mi letra (misma canción, versión “Original”)'],['skip','No subir']]},
-  c:{title:'Ya las tienes CON ACORDES',opts:[['skip','No subir: me quedo con la mía'],['new','Guardar la del PDF como otra versión dentro de la misma canción'],['pro','La del PDF reemplaza mi versión “Original”']]},
-  n:{title:'El PDF solo trae texto (sin acordes)',opts:[['skip','No subir: me quedo con la mía'],['body','Reemplazar mi letra por la del PDF']]}};
+  c:{title:'Ya las tienes CON ACORDES',opts:[['skip','No subir: me quedo con la mía'],['lyr','Usar la letra del archivo y conservar MIS acordes (misma canción)'],['new','Guardar la del PDF como otra versión dentro de la misma canción'],['pro','La del PDF reemplaza mi versión “Original”']]},
+  n:{title:'El archivo solo trae texto (sin acordes)',opts:[['skip','No subir: me quedo con la mía'],['lyr','Reemplazar mi letra y conservar MIS acordes (misma canción)'],['body','Reemplazar mi letra por la del PDF']]}};
 const dupGroup=c=>!HAS_CH(c.body)?'n':(c.exCh?'c':'t');
 const DUP_OPTS=[['skip','No subir: me quedo con la que ya tengo'],
   ['cpro','Solo los acordes del PDF sobre MI letra → versión “Original”'],
   ['cnew','Solo los acordes del PDF sobre MI letra → otra versión dentro de la misma canción'],
+  ['lyr','Solo la LETRA del archivo, conservando MIS acordes (misma canción)'],
   ['pro','PDF completo (su letra y acordes) → versión “Original”'],
   ['new','PDF completo (su letra y acordes) → otra versión dentro de la misma canción'],
   ['body','PDF completo → reemplaza mi versión “Básica”']];
@@ -299,7 +300,9 @@ function transferChords(target,source){
     let best=-1,bs=0; src.forEach((x,k)=>{ let sc=chSim(bw,x.w); if(k===last+1) sc+=0.05; if(sc>bs){ bs=sc; best=k; } });
     if(best<0||bs<0.5) return base; last=best; return chPlace(base,src[best]); }).join('\n');
 }
-function chordsResult(c){ const ex=c.dupOf&&c.dupOf.song; if(!ex) return c.body; return transferChords(ex.body||ex.bodyPro||'',c.body); }
+function chordsResult(c){ const ex=c.dupOf&&c.dupOf.song; if(!ex) return c.body; if(c.dupAct==='lyr') return lyrResult(c,HAS_CH(ex.bodyPro)&&!HAS_CH(ex.body)?'bodyPro':'body'); return transferChords(ex.body||ex.bodyPro||'',c.body); }
+/* Letra nueva del archivo + los acordes que ya tenía mi canción */
+function lyrResult(c,field){ const ex=c.dupOf.song, src=ex[field]||''; const plain=String(c.body||'').split('\n').map(l=>/^\s*#/.test(l)?l:chStrip(l)).join('\n'); return HAS_CH(src)?transferChords(plain,src):plain; }
 function ioDupConfirm(){ const d=IO.chunks.filter(c=>c.include&&c.dup); return `<div class="banner" style="border:2px solid var(--danger);display:grid;gap:8px"><b style="color:var(--danger)">Alto: vas a importar ${d.length} ${d.length===1?'canción que ya existe':'canciones que ya existen'}</b><ul style="margin:0;padding-left:18px">${d.map(c=>`<li>${esc(c.title)} → ${esc(dupLabel(c.dupOf))}</li>`).join('')}</ul><div class="actions"><button class="btn danger" data-act="imp-go-force">Importar de todas formas</button><button class="btn" data-act="imp-dup-off">Desmarcarlas y continuar</button></div></div>`; }
 async function ioImport(force){
   const sel=IO.chunks.filter(c=>c.include && c.title.trim()); if(!sel.length) return;
@@ -307,6 +310,7 @@ async function ioImport(force){
   const btn=document.querySelector('[data-act="imp-go"]'); if(btn) btn.disabled=true; const prog=$('#imp-prog');
   const writes=sel.map(c=>{ const ex=c.dup&&c.dupOf&&!c.dupOf.inBatch?c.dupOf.song:null; const act=ex?c.dupAct:'add';
     const chm=act==='cpro'||act==='cnew'; const body=chm?chordsResult(c):c.body;
+    if(ex&&act==='lyr'){ const d=JSON.parse(JSON.stringify(ex)); delete d.id; d.body=lyrResult(c,'body'); if(!HAS_CH(ex.body)&&HAS_CH(ex.bodyPro)) d.body=lyrResult(c,'bodyPro'); if(HAS_CH(ex.bodyPro)) d.bodyPro=lyrResult(c,'bodyPro'); if(!d.author&&c.author) d.author=c.author; d.updatedAt=Date.now(); return {col:'songs',id:ex.id,data:d}; }
     if(ex&&(act==='pro'||act==='cpro'||act==='body')){ const d=JSON.parse(JSON.stringify(ex)); delete d.id; if(act!=='body'){ d.bodyPro=body; } else { d.body=body; if(c.key) d.key=c.key; } d.updatedAt=Date.now(); return {col:'songs',id:ex.id,data:d}; }
     const data={title:c.title.trim(),author:c.author||'',key:c.key||'',category:'',bpm:c.bpm||'',capo:c.capo||0,body:c.body,notes:c.notes||'',updatedAt:Date.now()};
     if(ex&&(act==='new'||act==='cnew')){ data.versionOf=ex.versionOf||ex.id; data.body=body; if(chm||c.dupOf.sim>=0.8) data.title=ex.title; if(!data.author&&ex.author) data.author=ex.author; }
