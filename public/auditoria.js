@@ -59,7 +59,7 @@ function scan(){
     const n=lyr(s).length;
     if(cands.length) merged.push({s,why:`Dentro de la letra aparece otro título: «${cands[0].label}».`,cands});
     else if(n>90) merged.push({s,why:`Es muy larga (${n} líneas de letra): puede tener otra canción pegada.`,cands:[]}); }
-  const author=[]; for(const s of songs){ const t={body:s.body||'',author:''}; ioTakeAuthor(t); if(t.author&&t.body!==s.body) author.push({s,author:t.author,body:t.body}); }
+  const author=[]; for(const s of songs){ const t={body:s.body||'',author:''}; ioTakeAuthor(t); if(t.body!==(s.body||'')) author.push({s,author:t.author,body:t.body}); }
   const key=[]; for(const s of songs){ if(s.key&&s.key.trim()) continue; const g=ioGuessKey((s.bodyPro&&s.bodyPro.trim())?s.bodyPro:s.body); if(g) key.push({s,key:keyCanon(g.idx,g.minor)}); }
   return {dup:groups,pairs:dup,merged,author,key,total:songs.length,at:Date.now()};
 }
@@ -81,7 +81,7 @@ function splitWrites(s,line){
 }
 
 /* ---------- Pantalla ---------- */
-const TABS=[['dup','Repetidas'],['merged','Pegadas'],['author','Autor en la letra'],['key','Sin tono']];
+const TABS=[['dup','Repetidas'],['merged','Pegadas'],['author','Autor / título en la letra'],['key','Sin tono']];
 function link(s){ return `<a data-act="open-song" data-id="${esc(s.id)}">${esc(s.title||'Sin título')}</a>`; }
 function snip(s){ return esc(lyr(s).slice(0,6).join('\n')); }
 function itemHtml(t,x,i){
@@ -93,7 +93,7 @@ function itemHtml(t,x,i){
   if(t==='merged'){ const s=x.s; return `<div class="au-it"><h4>${link(s)} ${s.key?`<small>${esc(s.key)}</small>`:''}</h4><div class="why">${esc(x.why)}</div>
     <div class="acts">${(x.cands||[]).map(c=>`<button class="btn" data-act="au-split" data-id="${esc(s.id)}" data-l="${c.l}">✂ Separar: crear «${esc(c.label)}» aparte</button>`).join('')}<button class="btn" data-act="au-pick" data-id="${esc(s.id)}">${AU.pick===s.id?'Cancelar':'✂ Elegir dónde separar…'}</button><button class="btn pri" data-act="au-wb1" data-id="${esc(s.id)}"${x.other?` data-o="${esc(x.other.id)}"`:''}>🔎 Revisar y editar</button><button class="btn ghost" data-act="au-okmerge" data-id="${esc(s.id)}">Está bien así</button></div>
     ${AU.pick===s.id?`<div class="au-pick"><small style="color:var(--muted);padding:2px 4px">Toca la línea donde <b>empieza la otra canción</b>:</small>${String(s.body||'').split('\n').map((l,n)=>n>0&&strip(l).trim()?`<button data-act="au-split" data-id="${esc(s.id)}" data-l="${n}">${esc(strip(l).trim().slice(0,90))}</button>`:'').join('')}</div>`:''}</div>`; }
-  if(t==='author'){ return `<div class="au-it"><h4>${link(x.s)}</h4><div class="why">En la letra dice el autor: <b>${esc(x.author)}</b>${x.s.author?` (la ficha tiene «${esc(x.s.author)}»)`:''}</div><div class="acts"><button class="btn" data-act="au-auth" data-id="${esc(x.s.id)}">Pasar «${esc(x.author)}» a la ficha y quitarlo de la letra</button></div></div>`; }
+  if(t==='author'){ return `<div class="au-it"><h4>${link(x.s)}</h4><div class="why">${x.author?`En la letra dice el autor: <b>${esc(x.author)}</b>${x.s.author?` (la ficha tiene «${esc(x.s.author)}»)`:''}`:'La letra tiene una línea «Título: …» que no se canta.'}</div><div class="acts"><button class="btn" data-act="au-auth" data-id="${esc(x.s.id)}">${x.author?`Pasar «${esc(x.author)}» a la ficha y quitarlo de la letra`:'Quitar esa línea de la letra'}</button></div></div>`; }
   if(t==='key'){ return `<div class="au-it"><h4>${link(x.s)}</h4><div class="why">No tiene tono. Por sus acordes está en <b>${esc(keyLong(parseKey(x.key).idx,parseKey(x.key).minor))}</b> (${esc(x.key)}).</div><div class="acts"><button class="btn" data-act="au-key" data-id="${esc(x.s.id)}">Poner ${esc(x.key)}</button></div></div>`; }
   return '';
 }
@@ -102,7 +102,7 @@ function draw(){
   if(!r){ root.innerHTML='<p style="color:var(--muted)">Revisando todas las alabanzas…</p>'; return; }
   const list=r[AU.tab]||[]; const lim=AU.more[AU.tab]||40;
   const bulk=AU.tab==='dup'?`<button class="btn pri" data-act="cl-open">⚡ Limpiar todas las repetidas de una vez…</button>`:AU.tab==='author'&&list.length?`<button class="btn pri" data-act="au-auth-all">${list.length===1?'Arreglarla':`Arreglar las ${list.length}`}</button>`:AU.tab==='key'&&list.length?`<button class="btn pri" data-act="au-key-all">${list.length===1?'Ponerle el tono':`Poner el tono a las ${list.length}`}</button>`:'';
-  const help={dup:'Canciones con la misma letra o el mismo título. Únelas como versiones, borra la que sobra o márcalas como distintas.',merged:'Canciones que parecen traer otra canción pegada. Sepáralas en 2 con un toque.',author:'La letra trae una línea como «Intérprete: …» o «Autor: …». Se pasa a la ficha del autor y se quita de la letra.',key:'Alabanzas sin tono: lo calculé por la armonía de sus acordes (el primero y el último pesan más). Revisa y aplica.'}[AU.tab];
+  const help={dup:'Canciones con la misma letra o el mismo título. Únelas como versiones, borra la que sobra o márcalas como distintas.',merged:'Canciones que parecen traer otra canción pegada. Sepáralas en 2 con un toque.',author:'La letra trae una línea como «Intérprete: …», «Autor: …» o «Título: …». El autor pasa a la ficha y esas líneas se quitan de la letra.',key:'Alabanzas sin tono: lo calculé por la armonía de sus acordes (el primero y el último pesan más). Revisa y aplica.'}[AU.tab];
   root.innerHTML=`<div class="au-sum">${TABS.map(([k,t])=>`<div><b>${r[k].length}</b>${t}</div>`).join('')}</div>
     <div class="au-tabs" role="tablist">${TABS.map(([k,t])=>`<button data-act="au-tab" data-t="${k}" aria-pressed="${AU.tab===k}">${t}<small>${r[k].length}</small></button>`).join('')}<button data-act="au-rescan" style="margin-left:auto">↻ Revisar de nuevo</button></div>
     <p style="margin:0;font-size:13px;color:var(--muted)">${help}</p>${bulk?`<div>${bulk}</div>`:''}
@@ -132,8 +132,8 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act^="
   else if(a==='au-wb'){ const x=r.dup[+d.i]; if(x) wbOpen(x.members.map(m=>m.id)); }
   else if(a==='au-wb1'){ wbOpen([d.id,...(d.o?[d.o]:[])]); }
   else if(a==='au-del'){ const s=S1(d.id); if(!s) return; if(el.dataset.sure!=='1'){ el.dataset.sure='1'; el.textContent='¿Seguro? Toca otra vez'; el.classList.add('danger'); return; } (async()=>{ await removeDoc('songs',s.id); toast(`«${s.title}» a la papelera (se puede rescatar 60 días).`); AU.res=scan(); draw(); })(); }
-  else if(a==='au-auth'){ const x=r.author.find(y=>y.s.id===d.id); if(!x) return; const o=docOf(x.s); o.body=x.body; if(!o.author) o.author=x.author; if(o.bodyPro){ const t={body:o.bodyPro,author:''}; ioTakeAuthor(t); o.bodyPro=t.body; } save([{col:'songs',id:x.s.id,data:o}],`Autor: ${x.author}.`); }
-  else if(a==='au-auth-all'){ const w=r.author.map(x=>{ const o=docOf(x.s); o.body=x.body; if(!o.author) o.author=x.author; if(o.bodyPro){ const t={body:o.bodyPro,author:''}; ioTakeAuthor(t); o.bodyPro=t.body; } return {col:'songs',id:x.s.id,data:o}; }); save(w,`Listo: ${w.length} autores pasados a la ficha.`); }
+  else if(a==='au-auth'){ const x=r.author.find(y=>y.s.id===d.id); if(!x) return; const o=docOf(x.s); o.body=x.body; if(!o.author&&x.author) o.author=x.author; if(o.bodyPro){ const t={body:o.bodyPro,author:''}; ioTakeAuthor(t); o.bodyPro=t.body; } save([{col:'songs',id:x.s.id,data:o}],(x.author?`Autor: ${x.author}.`:'Línea quitada.')); }
+  else if(a==='au-auth-all'){ const w=r.author.map(x=>{ const o=docOf(x.s); o.body=x.body; if(!o.author&&x.author) o.author=x.author; if(o.bodyPro){ const t={body:o.bodyPro,author:''}; ioTakeAuthor(t); o.bodyPro=t.body; } return {col:'songs',id:x.s.id,data:o}; }); save(w,`Listo: ${w.length} autores pasados a la ficha.`); }
   else if(a==='au-key'){ const x=r.key.find(y=>y.s.id===d.id); if(!x) return; const o=docOf(x.s); o.key=x.key; save([{col:'songs',id:x.s.id,data:o}],`Tono ${x.key} para «${x.s.title}».`); }
   else if(a==='au-key-all'){ const w=r.key.map(x=>{ const o=docOf(x.s); o.key=x.key; return {col:'songs',id:x.s.id,data:o}; }); save(w,`Listo: ${w.length} alabanzas con tono.`); }
 });

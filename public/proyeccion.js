@@ -30,6 +30,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pj-vch{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}.pj-vch span{font:600 10px var(--f-mono,monospace);border:1px solid var(--line);border-radius:5px;padding:0 4px;color:var(--muted);cursor:pointer;background:var(--bg)}.pj-vch span:hover{border-color:var(--accent);color:var(--accent)}
 .obs-ch{display:grid;gap:2px}.obs-ch .ch{display:block;white-space:pre-line;border-radius:6px;padding:1px 6px;margin:0 -6px}.obs-ch .ch+.ch{border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent)}[aria-current="true"] .obs-ch .ch.on{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:2px solid var(--accent)}
 /* ---- Consola en el celular: letra grande primero, luego el programa y al final el buscador ---- */
 .pjm-now{display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line);background:var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -177,9 +178,14 @@ function pjAdd(id,show){
   if(i<0){ i=Math.min(PJ.si+1,PJ.songIds.length); PJ.songIds.splice(i,0,id); pjPersist(); }
   PJ.si=i; if(show){ if(pjSlides(pjSong()).length) pjShow(0); else toast('Esa canción no tiene letra para proyectar.'); }
 }
+/* Versiones: en la consola sale una fila por canción y sus versiones como botoncitos de tono */
+function pjIsVer(s){ return !!(s&&s.versionOf&&S.songs.has(s.versionOf)); }
+function pjVMap(){ const m=new Map(); for(const x of S.songs.values()) if(pjIsVer(x)){ let a=m.get(x.versionOf); if(!a) m.set(x.versionOf,a=[]); a.push(x); } return m; }
+function pjVChips(s,vm){ const v=(vm||pjVMap()).get(s.id); if(!v||!v.length) return ''; return `<span class="pj-vch">${v.map(x=>{ const k=songKey(x); return `<span role="button" data-act="pj-peek" data-id="${esc(x.id)}" title="Versión: ${esc(x.title)}">${k?esc(keyText(k)):'v'}</span>`; }).join('')}</span>`; }
 function pjFind(q,n){
   const toks=searchTokens(q); if(!toks.length) return [];
-  const out=[]; for(const s of S.songs.values()){ const m=matchSong(s,toks,'all'); if(m) out.push({s,m}); }
+  const best=new Map(); for(const s of S.songs.values()){ const m=matchSong(s,toks,'all'); if(!m) continue; const main=pjIsVer(s)?S.songs.get(s.versionOf):s; const o=best.get(main.id); if(!o||m.score>o.m.score) best.set(main.id,{s:main,m}); }
+  const out=[...best.values()];
   out.sort((a,b)=>b.m.score-a.m.score||COLL.compare(a.s.title,b.s.title)); return out.slice(0,n||8);
 }
 /* Acordes que usa una alabanza (para sugerir las que conectan con la que se está cantando) */
@@ -302,15 +308,15 @@ document.addEventListener('drop',e=>{ if(!PJ.dragging) return; const side=e.targ
 function pjWide(){ return innerWidth>=1100; }
 function pjCenter(){ return PJ.peek&&S.songs.get(PJ.peek)||pjSong(); }
 function pjRow(s,extra){ const sg=isSung(s.id), live=PJ.remote&&PJ.remote.mode==='text'&&PJ.remote.songId===s.id; const k=songKey(s);
-  return `<button class="pjw-row${sg?' sung':''}${pjCenter()&&pjCenter().id===s.id?' sel':''}" data-act="pj-peek" data-id="${esc(s.id)}" title="Clic: ver estrofas · Doble clic: proyectar · Arrastra al programa" draggable="true" data-drag="song"><span class="add" data-act="pj-addlist" data-id="${esc(s.id)}" role="button" title="Agregar al programa" aria-label="Agregar al programa">＋</span><span class="t">${esc(s.title)}${extra?`<small>${extra}</small>`:''}</span>${sg?'<span class="sg">✓</span>':''}${live?'<i class="lv">●</i>':''}${k?`<span class="key sm"${typeof kc==='function'?kc(k):''}>${esc(keyText(k))}</span>`:''}</button>`; }
+  return `<button class="pjw-row${sg?' sung':''}${pjCenter()&&pjCenter().id===s.id?' sel':''}" data-act="pj-peek" data-id="${esc(s.id)}" title="Clic: ver estrofas · Doble clic: proyectar · Arrastra al programa" draggable="true" data-drag="song"><span class="add" data-act="pj-addlist" data-id="${esc(s.id)}" role="button" title="Agregar al programa" aria-label="Agregar al programa">＋</span><span class="t">${esc(s.title)}${(()=>{ const vc=pjVChips(s,PJ._vm); return vc||extra?`<small>${vc}${extra||''}</small>`:''; })()}</span>${sg?'<span class="sg">✓</span>':''}${live?'<i class="lv">●</i>':''}${k?`<span class="key sm"${typeof kc==='function'?kc(k):''}>${esc(keyText(k))}</span>`:''}</button>`; }
 function pjLibHtml(){
-  const q=PJ.q.trim();
+  const q=PJ.q.trim(); PJ._vm=pjVMap();
   if(q){ const kq=pjKeyQuery(q); if(kq){ const L=[...S.songs.values()].filter(s=>{ const k=songKey(s); return k&&k.idx===kq.idx&&k.minor===kq.minor; }).sort((a,b)=>(isSung(a.id)?1:0)-(isSung(b.id)?1:0)||COLL.compare(a.title,b.title));
       return `<p class="pj-sug-h">En ${esc(keyText(kq))} (${L.length})</p>`+L.slice(0,300).map(s=>pjRow(s)).join(''); }
     const r=pjFind(q,80); return r.length?r.map(({s,m})=>pjRow(s,m.line?esc(m.line):'')).join(''):'<p class="pj-sug-h">Sin resultados.</p>'; }
   const sug=pjSuggest(); const cur=pjSong();
   let h=sug.length?`<p class="pj-sug-h">🎵 Conectan con «${esc(cur?cur.title:'')}» (acordes y tono)</p>`+sug.map(({s,ks,j})=>pjRow(s,`${ks>=3?'mismo tono':ks>=2?'tono relativo':ks>0?'tono vecino':'acordes parecidos'}${j?` · ${Math.round(j*100)}% acordes`:''}`)).join(''):'';
-  const all=[...S.songs.values()].sort((a,b)=>COLL.compare(a.title,b.title));
+  const all=[...S.songs.values()].filter(x=>!pjIsVer(x)).sort((a,b)=>COLL.compare(a.title,b.title));
   return h+`<p class="pj-sug-h">Todas las alabanzas (${all.length})</p>`+all.slice(0,PJ.libN||250).map(s=>pjRow(s)).join('')+(all.length>(PJ.libN||250)?`<button class="btn ghost" data-act="pj-libmore" style="width:100%;margin:6px 0">Ver más…</button>`:'');
 }
 function pjRenderWide(r,qf,qpos,scrollTop){

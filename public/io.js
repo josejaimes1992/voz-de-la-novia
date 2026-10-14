@@ -121,7 +121,9 @@ const AUTHOR_RE=/^\s*(?:#\s*)?(int[eé]rpretes?|autor(?:a|es)?|letra\s+y\s+m[uú
 function ioTakeAuthor(s){
   const L=String(s.body||'').split('\n'); let found='';
   const out=L.filter((l,i)=>{ const m=AUTHOR_RE.exec(l.replace(/\[[^\]]*\]/g,'')); if(!m) return true; const v=m[2].replace(/\s+/g,' ').trim(); if(!v||v.split(' ').length>9) return true; if(!found) found=v; return false; });
-  if(found){ s.body=out.join('\n').replace(/^\s*\n+/,'').replace(/\n{3,}/g,'\n\n'); if(!s.author) s.author=found; }
+  /* Líneas "Título: …" dentro de la letra (vienen de algunos archivos): se quitan */
+  const out2=out.filter(l=>!/^\s*(?:#\s*)?t[ií]tulo\s*:/i.test(l.replace(/\[[^\]]*\]/g,'')));
+  if(found||out2.length!==L.length){ s.body=out2.join('\n').replace(/^\s*\n+/,'').replace(/\n{3,}/g,'\n\n'); if(found&&!s.author) s.author=found; }
   return s;
 }
 /* Tono por la armonía: compara los acordes con las 24 escalas (acordes de cada grado, el primero y el último pesan más) */
