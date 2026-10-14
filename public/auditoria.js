@@ -101,7 +101,7 @@ function draw(){
   const root=document.getElementById('au-body'); if(!root) return; const r=AU.res;
   if(!r){ root.innerHTML='<p style="color:var(--muted)">Revisando todas las alabanzas…</p>'; return; }
   const list=r[AU.tab]||[]; const lim=AU.more[AU.tab]||40;
-  const bulk=AU.tab==='author'&&list.length?`<button class="btn pri" data-act="au-auth-all">${list.length===1?'Arreglarla':`Arreglar las ${list.length}`}</button>`:AU.tab==='key'&&list.length?`<button class="btn pri" data-act="au-key-all">${list.length===1?'Ponerle el tono':`Poner el tono a las ${list.length}`}</button>`:'';
+  const bulk=AU.tab==='dup'?`<button class="btn pri" data-act="cl-open">⚡ Limpiar todas las repetidas de una vez…</button>`:AU.tab==='author'&&list.length?`<button class="btn pri" data-act="au-auth-all">${list.length===1?'Arreglarla':`Arreglar las ${list.length}`}</button>`:AU.tab==='key'&&list.length?`<button class="btn pri" data-act="au-key-all">${list.length===1?'Ponerle el tono':`Poner el tono a las ${list.length}`}</button>`:'';
   const help={dup:'Canciones con la misma letra o el mismo título. Únelas como versiones, borra la que sobra o márcalas como distintas.',merged:'Canciones que parecen traer otra canción pegada. Sepáralas en 2 con un toque.',author:'La letra trae una línea como «Intérprete: …» o «Autor: …». Se pasa a la ficha del autor y se quita de la letra.',key:'Alabanzas sin tono: lo calculé por la armonía de sus acordes (el primero y el último pesan más). Revisa y aplica.'}[AU.tab];
   root.innerHTML=`<div class="au-sum">${TABS.map(([k,t])=>`<div><b>${r[k].length}</b>${t}</div>`).join('')}</div>
     <div class="au-tabs" role="tablist">${TABS.map(([k,t])=>`<button data-act="au-tab" data-t="${k}" aria-pressed="${AU.tab===k}">${t}<small>${r[k].length}</small></button>`).join('')}<button data-act="au-rescan" style="margin-left:auto">↻ Revisar de nuevo</button></div>
@@ -201,6 +201,55 @@ document.addEventListener('click',async e=>{ const el=e.target.closest('[data-ac
     if(await wbWrite(writes,`Creada «${title}»${rm?` y quitada de «${src.title}»`:''}.`)){ WB.cut=null; if(rm&&WB.draft[src.id]) delete WB.draft[src.id].text; WB.fresh.add(nid); WB.ids.splice(WB.ids.indexOf(src.id)+1,0,nid); wbDraw(); } return; }
   if(a==='wb-notdup'&&s){ const others=WB.ids.filter(id=>id!==s.id); const o=docOf(s); o.notDup=[...new Set([...(s.notDup||[]),...others])]; if(await wbWrite([{col:'songs',id:s.id,data:o}],`«${s.title}» marcada como distinta.`)) wbDraw(); return; }
   if(a==='wb-del'&&s){ if(el.dataset.sure!=='1'){ el.dataset.sure='1'; el.textContent='¿Seguro? Toca otra vez'; el.classList.add('danger'); return; } await removeDoc('songs',s.id); toast(`«${s.title}» a la papelera (se puede rescatar 60 días).`); WB.ids=WB.ids.filter(id=>id!==s.id); lastSig=''; await loadData(); if(WB.ids.length) wbDraw(); else wbBack(); return; }
+});
+
+/* ---------- Limpieza masiva de repetidas: agrupa, elige la mejor de cada grupo y aplica todo de una vez ---------- */
+const CL={mode:'ver',skip:new Set(),groups:null};
+const tnorm=t=>plainNorm(String(t||'').replace(/^\s*\d{1,4}\s*[.)\-–]\s*/,'').replace(/\(\s*\d+\s*\)\s*$/,'')).replace(/[^a-z0-9ñ ]/g,' ').replace(/\s+/g,' ').trim();
+function clBuild(){
+  const all=[...S.songs.values()].filter(x=>x&&x.id); const byId=new Map(all.map(x=>[x.id,x]));
+  const inProg=new Set(); for(const p of (S.programs?S.programs.values():[])) for(const it of (p.items||[])) if(it&&it.songId) inProg.add(it.songId);
+  const mains=all.filter(x=>!(x.versionOf&&byId.has(x.versionOf)));
+  const ok=(a,b)=>(a.notDup||[]).includes(b.id)||(b.notDup||[]).includes(a.id);
+  const par=new Map(mains.map(x=>[x.id,x.id])); const F=x=>{ while(par.get(x)!==x){ par.set(x,par.get(par.get(x))); x=par.get(x); } return x; }; const U=(a,b)=>par.set(F(a),F(b));
+  const sh=new Map(mains.map(x=>[x.id,lyricShingles(x)]));
+  const sim=(a,b)=>{ const A=sh.get(a.id),B=sh.get(b.id); if(A.size<3||B.size<3) return -1; return lyricSimilarity(A,B); };
+  // 1) mismo título (sin números delante): si la letra se parece o una no tiene letra
+  const byT=new Map(); for(const x of mains){ const t=tnorm(x.title); if(t.length<3) continue; let a=byT.get(t); if(!a) byT.set(t,a=[]); a.push(x); }
+  for(const arr of byT.values()) for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++){ const A=arr[i],B=arr[j]; if(ok(A,B)) continue; const z=sim(A,B); if(z<0||z>=0.4) U(A.id,B.id); }
+  // 2) misma letra (80% o más) aunque el título sea distinto
+  const r=AU.res||scan(); for(const d of (r.pairs||[])){ const A=d.a, B=d.b; if(!par.has(A.id)||!par.has(B.id)||ok(A,B)) continue; const sa=sh.get(A.id).size, sb=sh.get(B.id).size; if(d.sim>=0.8&&Math.min(sa,sb)/Math.max(sa,sb)>=0.6) U(A.id,B.id); }
+  const g=new Map(); for(const x of mains){ const k=F(x.id); let a=g.get(k); if(!a) g.set(k,a=[]); a.push(x); }
+  const score=x=>((x.audio||[]).length?1000:0)+(inProg.has(x.id)?200:0)+(all.some(y=>y.versionOf===x.id)?100:0)+(x.bodyPro&&x.bodyPro.trim()?50:0)+(/\[[^\]\s]{1,12}\]/.test(x.body||'')?20:0)+(x.key?5:0)+(x.author?2:0)+Math.min(9,(sh.get(x.id).size||0)/40);
+  return [...g.values()].filter(a=>a.length>1).map(a=>{ a.sort((p,q)=>score(q)-score(p)); return {keep:a[0],rest:a.slice(1),prot:new Set(a.slice(1).filter(x=>(x.audio||[]).length||inProg.has(x.id)).map(x=>x.id))}; }).sort((p,q)=>q.rest.length-p.rest.length||COLL.compare(p.keep.title||'',q.keep.title||''));
+}
+function clDraw(){
+  const root=document.getElementById('au-body'); if(!root) return; const G=CL.groups||[]; const act=G.filter((g,i)=>!CL.skip.has(i)); const n=act.reduce((t,g)=>t+g.rest.length,0);
+  const lbl=x=>`${esc(x.title||'Sin título')}${x.key?` <small style="color:var(--muted)">${esc(x.key)}</small>`:''}${(x.audio||[]).length?' 🎧':''}${x.bodyPro&&x.bodyPro.trim()?' <span class="pill ok">Original</span>':''}`;
+  root.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" data-act="cl-back">← Volver a la auditoría</button><b>${G.length} grupos de canciones iguales · ${G.reduce((t,g)=>t+g.rest.length,0)} copias de más</b></div>
+    <div class="au-it"><b>¿Qué hago con las copias de cada grupo?</b>
+      <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="cl-m" value="ver" ${CL.mode==='ver'?'checked':''}> <span><b>Unirlas como versiones de la mejor</b> <small style="color:var(--muted)">— no se borra nada; en la lista queda una sola fila con «+N versiones».</small></span></label>
+      ${S.isAdmin?`<label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="cl-m" value="del" ${CL.mode==='del'?'checked':''}> <span><b>Quedarme solo con la mejor y mandar las demás a la Papelera</b> <small style="color:var(--muted)">— las que tienen 🎧 audio o están en un programa se quedan como versión. Se pueden rescatar 60 días.</small></span></label>`:''}
+      <small style="color:var(--muted)">★ = la que se queda (la elegí por: audio, programa, versión Original, acordes, tono y letra más completa). Desmarca un grupo si no quieres tocarlo.</small></div>
+    <div class="au-list">${G.slice(0,CL.lim||150).map((g,i)=>`<label class="au-it" style="grid-template-columns:auto 1fr;align-items:start;cursor:pointer${CL.skip.has(i)?';opacity:.5':''}"><input type="checkbox" data-cl="${i}" ${CL.skip.has(i)?'':'checked'} style="margin-top:3px"><span style="display:grid;gap:3px;font-size:14px"><span>★ ${lbl(g.keep)}</span><span style="color:var(--muted);font-size:13px">${g.rest.map(x=>(CL.mode==='del'&&!g.prot.has(x.id)?'🗑 ':'🔗 ')+lbl(x)).join(' · ')}</span></span></label>`).join('')}</div>
+    ${G.length>(CL.lim||150)?`<button class="btn" data-act="cl-more">Ver más grupos (${G.length-(CL.lim||150)})</button>`:''}
+    <div class="au-it" style="position:sticky;bottom:-12px;border-color:var(--accent)"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn pri" data-act="cl-go" ${n?'':'disabled'}>Aplicar a ${act.length} grupos (${n} copias)</button><span id="cl-prog" style="font-size:13px;color:var(--muted)"></span></div></div>`;
+}
+document.addEventListener('change',e=>{ const t=e.target; if(t.name==='cl-m'){ CL.mode=t.value; clDraw(); } else if(t.dataset&&t.dataset.cl!=null){ const i=+t.dataset.cl; if(t.checked) CL.skip.delete(i); else CL.skip.add(i); clDraw(); } });
+document.addEventListener('click',async e=>{ const el=e.target.closest('[data-act^="cl-"]'); if(!el) return; e.preventDefault(); const a=el.dataset.act;
+  if(a==='cl-open'){ CL.skip=new Set(); CL.lim=150; const root=document.getElementById('au-body'); if(root) root.innerHTML='<p style="color:var(--muted)">Agrupando canciones iguales…</p>'; setTimeout(()=>{ CL.groups=clBuild(); clDraw(); },30); return; }
+  if(a==='cl-back'){ AU.res=scan(); draw(); return; }
+  if(a==='cl-more'){ CL.lim=(CL.lim||150)+150; clDraw(); return; }
+  if(a==='cl-go'){ if(AU.busy) return; AU.busy=true; el.disabled=true; const prog=document.getElementById('cl-prog');
+    const G=(CL.groups||[]).filter((g,i)=>!CL.skip.has(i)); const writes=[], del=[];
+    for(const g of G){ const keep=g.keep; for(const x of g.rest){ if(CL.mode==='del'&&S.isAdmin&&!g.prot.has(x.id)) del.push(x.id); else { const o=docOf(x); o.versionOf=keep.id; writes.push({col:'songs',id:x.id,data:o}); } } }
+    const delSet=new Set(del), keepOf=new Map(); G.forEach(g=>g.rest.forEach(x=>keepOf.set(x.id,g.keep.id)));
+    for(const y of S.songs.values()) if(y.versionOf&&keepOf.has(y.versionOf)&&!delSet.has(y.id)&&!writes.some(w=>w.id===y.id)){ const o=docOf(y); o.versionOf=keepOf.get(y.versionOf); writes.push({col:'songs',id:y.id,data:o}); }
+    try{ for(let i=0;i<writes.length;i+=100){ await api('/api/batch',{method:'POST',body:JSON.stringify({writes:writes.slice(i,i+100)})}); if(prog) prog.textContent=`Uniendo ${Math.min(i+100,writes.length)} de ${writes.length}…`; }
+      let nd=0; for(let i=0;i<del.length;i+=200){ const r=await api('/api/trash',{method:'POST',body:JSON.stringify({ids:del.slice(i,i+200),keepAudio:true})}); nd+=r.count||0; if(prog) prog.textContent=`A la Papelera ${nd} de ${del.length}…`; }
+      lastSig=''; await loadData(); toast(`Listo: ${writes.length} unidas como versión${nd?` · ${nd} a la Papelera`:''}.`); AU.busy=false; AU.res=scan(); draw(); }
+    catch(err){ AU.busy=false; el.disabled=false; if(err.code===401) lostAuth(); else toast('Se cortó a la mitad. Vuelve a abrir la limpieza y aplica de nuevo.'); lastSig=''; await loadData(); }
+    return; }
 });
 
 /* ---------- Borrar en bloque (solo administrador). Nunca borra las que tienen audio. ---------- */
