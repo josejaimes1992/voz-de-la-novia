@@ -136,7 +136,11 @@ async function msImport(files){
   const list=[]; for(const f of files){ if(/\.zip$/i.test(f.name)&&window.JSZip){ try{ const z=await JSZip.loadAsync(f); for(const [n,e] of Object.entries(z.files)){ if(e.dir||!/\.(pdf|txt)$/i.test(n)) continue; list.push({name:n.split('/').pop(),blob:await e.async('blob')}); } }catch{ toast('No se pudo abrir el .zip '+f.name); } } else list.push({name:f.name,blob:f}); }
   if(!list.length){ toast('No hay PDF ni texto para importar.'); return; }
   let ok=0, bad=[]; for(let i=0;i<list.length;i++){ const it=list[i]; MS.imp=`Importando ${i+1} de ${list.length}: ${it.name}…`; if(V.view==='mensaje') render();
-    try{ const r=await fetch('/api/sermons/import',{method:'POST',headers:{Authorization:'Bearer '+S.token,'X-File-Name':encodeURIComponent(it.name),'Content-Type':'application/octet-stream'},body:it.blob}); if(r.ok) ok++; else bad.push(it.name); }catch{ bad.push(it.name); } }
+    try{ const send=body=>fetch('/api/sermons/import',{method:'POST',headers:{Authorization:'Bearer '+S.token,'X-File-Name':encodeURIComponent(it.name),'Content-Type':'application/octet-stream'},body});
+      let r=await send(it.blob);
+      /* Si el servidor no pudo leer el PDF (p. ej. en la PC sin el lector), se lee aquí en el navegador y se envía como texto */
+      if(!r.ok&&r.status===422&&/\.pdf$/i.test(it.name)&&window.readPdfBrowser){ try{ const pages=await readPdfBrowser(new File([it.blob],it.name,{type:'application/pdf'})); const txt=(pages||[]).join('\n\n'); if(txt.trim().length>200) r=await send(new Blob([txt],{type:'text/plain'})); }catch{} }
+      if(r.ok) ok++; else bad.push(it.name); }catch{ bad.push(it.name); } }
   MS.imp=`Listo: ${ok} ${ok===1?'mensaje importado':'mensajes importados'}.${bad.length?` No se pudieron leer ${bad.length}: ${bad.slice(0,5).join(', ')}${bad.length>5?'…':''}`:''}`;
   await msLoadList(true); render();
 }

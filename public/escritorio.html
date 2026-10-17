@@ -1,0 +1,73 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configurar Voz de la Novia</title>
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#000;--card:#141416;--line:#2a2a2e;--ink:#efece4;--muted:#a7a395;--gold:#e9c45a;--gold-ink:#14110a;--bad:#ff8a7a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1d1a12,#000 60%);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:0 16px}
+main{max-width:640px;margin:0 auto;padding:40px 0 48px}
+.hero{text-align:center;margin-bottom:28px}
+.hero img{width:96px;height:96px;border-radius:24px;box-shadow:0 10px 40px rgba(233,196,90,.15)}
+h1{font-size:26px;margin:14px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0}
+.opts{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.opts{grid-template-columns:1fr}}
+.opt{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;text-align:left;color:inherit;font:inherit;transition:border-color .15s,transform .15s}
+.opt:hover{border-color:#4a4636;transform:translateY(-1px)}
+.opt.on{border-color:var(--gold);background:#1a1810}
+.opt b{display:block;font-size:17px;margin-bottom:4px}
+.opt span{color:var(--muted);font-size:14px}
+.opt .ic{font-size:26px;display:block;margin-bottom:8px}
+form{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:14px}
+label{display:grid;gap:6px;font-size:14px;color:var(--muted)}
+input{font:inherit;color:var(--ink);background:#0b0b0c;border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none}
+input:focus{border-color:var(--gold)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+button.go{font:inherit;font-weight:700;background:var(--gold);color:var(--gold-ink);border:0;border-radius:12px;padding:13px;cursor:pointer}
+button.go:disabled{opacity:.6;cursor:wait}
+.err{color:var(--bad);margin:0;font-size:14px}
+.note{color:var(--muted);font-size:13px;margin:0}
+[hidden]{display:none!important}
+</style></head><body><main>
+<div class="hero"><img src="/icon-192.png" alt=""><h1>Bienvenido a Voz de la Novia</h1>
+<p class="sub">Letras, acordes, Biblia y Mensaje en pantalla — funciona sin internet.</p></div>
+
+<div class="opts">
+  <button type="button" class="opt" data-m="cloud"><span class="ic">☁️</span><b>Conectar con la nube de mi iglesia</b><span>Baja las alabanzas, programas, mensajes y la Biblia de tu iglesia. Lo que cambies sin internet se sube solo cuando vuelva la conexión.</span></button>
+  <button type="button" class="opt" data-m="local"><span class="ic">💻</span><b>Usar solo en esta PC</b><span>Empieza vacío para tu iglesia: sube tus propias letras. Incluye la Biblia Reina-Valera 1909.</span></button>
+</div>
+
+<form id="f" hidden autocomplete="off">
+  <div id="cloud-f" hidden>
+    <label>Dirección de la nube de tu iglesia<input id="url" placeholder="Ej. vozdelanovia.up.railway.app" inputmode="url"></label>
+  </div>
+  <div id="local-f" hidden class="row">
+    <label>Nombre de la iglesia<input id="church" placeholder="Ej. Tabernáculo Betel"></label>
+    <label>Tu nombre<input id="name" placeholder="Ej. Pedro"></label>
+  </div>
+  <div class="row">
+    <label>Usuario<input id="user" autocapitalize="none" placeholder="Ej. pedro" required></label>
+    <label>Contraseña<input id="pw" type="password" required></label>
+  </div>
+  <p class="note" id="hint"></p>
+  <p class="err" id="err" hidden></p>
+  <button class="go" id="go">Empezar</button>
+</form>
+</main>
+<script>
+let mode='';
+const $=s=>document.querySelector(s);
+document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ mode=b.dataset.m;
+  document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('on',x===b));
+  $('#f').hidden=false; $('#cloud-f').hidden=mode!=='cloud'; $('#local-f').hidden=mode!=='local';
+  $('#hint').textContent=mode==='cloud'?'Usa el mismo usuario y contraseña con que entras en la página de tu iglesia. La primera vez necesitas internet.':'Este será el usuario administrador del programa en esta PC.';
+  $('#go').textContent=mode==='cloud'?'Conectar y bajar todo':'Empezar';
+  setTimeout(()=>(mode==='cloud'?$('#url'):$('#church')).focus(),20); });
+$('#f').onsubmit=async e=>{ e.preventDefault(); const err=$('#err'); err.hidden=true; const go=$('#go'); go.disabled=true; const t=go.textContent; go.textContent=mode==='cloud'?'Conectando y bajando…':'Preparando…';
+  try{ const r=await fetch('/api/desktop/setup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode,url:$('#url').value,church:$('#church').value,name:$('#name').value,username:$('#user').value.trim().toLowerCase(),password:$('#pw').value})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Error');
+    localStorage.setItem('vdn-token',JSON.stringify(d.token)); location.href='/';
+  }catch(x){ err.textContent=x.message||'No se pudo configurar.'; err.hidden=false; go.disabled=false; go.textContent=t; } };
+</script></body></html>

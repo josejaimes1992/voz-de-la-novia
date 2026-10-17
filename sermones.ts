@@ -3,6 +3,7 @@
    no en el repositorio, y solo se entregan a usuarios con sesión. */
 import { randomBytes } from "node:crypto";
 import { unlinkSync } from "node:fs";
+import { tool } from "./db.ts";
 
 export type Sermon = { id: string; code: string; title: string; date: string; place?: string; paras: { n: string; t: string }[]; by?: string; at?: number; file?: string };
 
@@ -11,10 +12,10 @@ const CODE_RE = /\b(\d{2})-(\d{4})([A-Za-z]{0,2})\b/;
 
 /* Texto plano de un PDF */
 export async function pdfText(buf: Uint8Array): Promise<string | null> {
-  const tmp = `/tmp/vdn-ser-${randomBytes(8).toString("hex")}`;
+  const tmp = `${require("node:os").tmpdir().replace(/\\/g, "/")}/vdn-ser-${randomBytes(8).toString("hex")}`;
   await Bun.write(tmp + ".pdf", buf);
   try {
-    const proc = Bun.spawn(["pdftotext", "-enc", "UTF-8", tmp + ".pdf", tmp + ".txt"], { stdout: "ignore", stderr: "pipe" });
+    const proc = Bun.spawn([tool("pdftotext"), "-enc", "UTF-8", tmp + ".pdf", tmp + ".txt"], { stdout: "ignore", stderr: "pipe" });
     if ((await proc.exited) !== 0) return null;
     return await Bun.file(tmp + ".txt").text();
   } finally { for (const e of [".pdf", ".txt"]) { try { unlinkSync(tmp + e); } catch {} } }

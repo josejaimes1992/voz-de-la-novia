@@ -1,12 +1,12 @@
 // Voz de la Novia — servidor (Bun + Postgres)
-import { SQL } from "bun";
+import { makeDb, appPath, tool } from "./db.ts";
 import { librosRoute, initLibros } from "./libros.ts";
 import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
 
-const db = new SQL(Bun.env.DATABASE_URL!);
+const db = makeDb();
 await db`CREATE TABLE IF NOT EXISTS docs (
   col text NOT NULL, id text NOT NULL, data jsonb NOT NULL, updated_at bigint NOT NULL,
   PRIMARY KEY (col, id))`;
@@ -48,6 +48,10 @@ if (u === 0) {
   }
 }
 
+/* Sin ffmpeg (PC con Windows): guarda la imagen tal cual si es PNG, JPG, WEBP o GIF */
+function rawImage(buf: Uint8Array, out: string) { const h = Buffer.from(buf.subarray(0, 12)); const ok = (h[0] === 0x89 && h[1] === 0x50) || (h[0] === 0xff && h[1] === 0xd8) || h.subarray(0, 4).toString() === "GIF8" || (h.subarray(0, 4).toString() === "RIFF" && h.subarray(8, 12).toString() === "WEBP");
+  if (ok) require("node:fs").writeFileSync(out, buf); return ok; }
+const TMPD = require("node:os").tmpdir().replace(/\\/g, "/");
 const AUDIO_DIR = Bun.env.AUDIO_DIR ?? "/data/audio";
 try { mkdirSync(AUDIO_DIR, { recursive: true }); } catch (e) { console.error("No se pudo crear la carpeta de audios", e); }
 const AUDIO_TYPES: Record<string, string> = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/ogg": "ogg", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac", "audio/3gpp": "3gp", "audio/amr": "amr" };
@@ -153,8 +157,8 @@ async function logUser(actor: User, target: { id: number; name: string }, action
   await db`INSERT INTO user_log (at, actor_id, actor_name, target_id, target_name, action, detail) VALUES (${Date.now()}, ${actor.id}, ${actor.name}, ${target.id}, ${target.name}, ${action}, ${JSON.stringify(detail)}::jsonb)`;
 }
 
-const HTML = await Bun.file(new URL("./public/index.html", import.meta.url)).text();
-const LOGO = Bun.file(new URL("./public/logo.jpg", import.meta.url));
+const HTML = await Bun.file(appPath("./public/index.html")).text();
+const LOGO = Bun.file(appPath("./public/logo.jpg"));
 const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8", "/auditoria.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
@@ -164,7 +168,7 @@ let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, p
 /* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
 let RVR1960: Uint8Array | null = null;
 try {
-  const k = Bun.env.BIBLE_KEY ?? ""; const f = new URL("./data/rvr1960.enc", import.meta.url);
+  const k = Bun.env.BIBLE_KEY ?? ""; const f = appPath("./data/rvr1960.enc");
   if (k && existsSync(f)) { const raw = Buffer.from(await Bun.file(f).arrayBuffer()); const d = createDecipheriv("aes-256-gcm", Buffer.from(k, "hex"), raw.subarray(0, 12)); d.setAuthTag(raw.subarray(12, 28)); RVR1960 = new Uint8Array(Buffer.concat([d.update(raw.subarray(28)), d.final()])); console.log("Biblia RVR1960 lista"); }
 } catch (e) { console.error("No se pudo abrir la RVR1960", e); }
 /* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
@@ -197,7 +201,7 @@ function cleanStyle(b: any) {
 let BIBLES: Record<string, any> = {};
 function bibleData(id: string) {
   if (BIBLES[id]) return BIBLES[id];
-  try { const gz = id === "RVR1960" ? RVR1960 : new Uint8Array(require("node:fs").readFileSync(new URL("./public/biblia/rv1909.json.gz", import.meta.url))); if (!gz) return null; BIBLES[id] = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(gz))); return BIBLES[id]; } catch { return null; }
+  try { const gz = id === "RVR1960" ? RVR1960 : new Uint8Array(require("node:fs").readFileSync(appPath("./public/biblia/rv1909.json.gz"))); if (!gz) return null; BIBLES[id] = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(gz))); return BIBLES[id]; } catch { return null; }
 }
 /* Referencias Biblia → Mensaje (se reconstruyen cuando cambian los mensajes) */
 let REFS: { epoch: number; p: Promise<RefIndex> } | null = null;
@@ -257,7 +261,7 @@ async function projNav(d: number, kind: string): Promise<any | null> {
   }
   return null;
 }
-const PROJ_HTML = Bun.file(new URL("./public/proyector.html", import.meta.url));
+const PROJ_HTML = Bun.file(appPath("./public/proyector.html"));
 const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
 
 
@@ -276,7 +280,7 @@ function trToks(t: string) { return String(t).normalize("NFD").replace(/[̀-ͯ]/
 /* Prepara el audio para la voz y lo corta en partes de 30 s: los modelos escuchan mucho mejor el canto en partes cortas */
 const TR_CHUNK = 30;
 async function trPrepare(path: string): Promise<{ dir: string; files: string[] } | null> {
-  const dir = `/tmp/tr-${randomBytes(6).toString("hex")}`;
+  const dir = `${TMPD}/tr-${randomBytes(6).toString("hex")}`;
   try {
     mkdirSync(dir, { recursive: true });
     const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000",
@@ -407,6 +411,13 @@ Responde SOLO un JSON: {"title": string, "sections": [{"label": string, "lines":
 }
 
 const BUILD = String(Date.now());
+/* ---- Versión de escritorio (DESKTOP=1): primer arranque y sincronización con la nube ---- */
+let DK: any = null;
+if (Bun.env.DESKTOP === "1") {
+  DK = await import("./desktop/sync.ts");
+  await DK.desktopInit({ db, json, publicUser, resetIndex, appDir: Bun.env.APP_DIR ?? ".", dataDir: AUDIO_DIR.replace(/\/audio\/?$/, ""), brandDir: BRAND_DIR, fondosDir: FONDOS_DIR,
+    setRvr: (gz: Uint8Array | null) => { RVR1960 = gz; delete BIBLES.RVR1960; }, setCfg: (c: any) => { CFG = { ...CHURCH_DEFAULT, ...c }; }, setStyle: (st: any) => { STYLE = { ...STYLE_DEFAULT, ...st }; } });
+}
 const SERVER = Bun.serve({
   maxRequestBodySize: 120 * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
@@ -414,6 +425,7 @@ const SERVER = Bun.serve({
     const url = new URL(req.url);
     const p = url.pathname;
     try {
+      if (DK) { const dr = await DK.desktopRoute(req, p); if (dr) return dr; }
       if (p === "/api/proyector/estilo" && req.method === "GET") return json(STYLE);
       if (p.startsWith("/libro/")) { const lr = await librosRoute(req, url, p, null, db); if (lr) return lr; }
       const mk = p.match(/^\/marca\/(logo-[a-z0-9]{4,16}\.png)$/);
@@ -422,13 +434,13 @@ const SERVER = Bun.serve({
       if (fm) { const f = `${FONDOS_DIR}/${fm[1]}.jpg`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       if (p === "/biblia/versiones") return json({ versions: [...(RVR1960 ? [{ id: "RVR1960", name: "Reina-Valera 1960", url: "/biblia/rvr1960.json" }] : []), { id: "RV1909", name: "Reina-Valera 1909", url: "/biblia/rv1909.json" }] });
       if (p === "/biblia/rvr1960.json") return RVR1960 ? new Response(RVR1960, { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } }) : json({ error: "not_found" }, 404);
-      if (p === "/biblia/rv1909.json") return new Response(Bun.file(new URL("./public/biblia/rv1909.json.gz", import.meta.url)), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
-      if (p === "/manifest.webmanifest") return new Response(Bun.file(new URL("./public/manifest.webmanifest", import.meta.url)), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
-      if (p === "/sw.js") return new Response(Bun.file(new URL("./public/sw.js", import.meta.url)), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
-      if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(brandHtml(await Bun.file(new URL("./public/instalar.html", import.meta.url)).text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
-      if (p === "/" || p === "/index.html") return new Response(brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/biblia/rv1909.json") return new Response(Bun.file(appPath("./public/biblia/rv1909.json.gz")), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
+      if (p === "/manifest.webmanifest") return new Response(Bun.file(appPath("./public/manifest.webmanifest")), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
+      if (p === "/sw.js") return new Response(Bun.file(appPath("./public/sw.js")), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+      if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(brandHtml(await Bun.file(appPath("./public/instalar.html")).text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/" || p === "/index.html") return new Response(DK ? DK.desktopHtml(brandHtml(HTML)) : brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
-      if (p === "/obs") return new Response(Bun.file(new URL("./public/obs.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/obs") return new Response(Bun.file(appPath("./public/obs.html")), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/proyector") return new Response(brandHtml(await PROJ_HTML.text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/ws/equipo") {
         const t = url.searchParams.get("t") ?? ""; const u = t ? await currentUser(new Request(url, { headers: { authorization: "Bearer " + t } })) : null;
@@ -442,7 +454,7 @@ const SERVER = Bun.serve({
       }
       if (p === "/api/proyector" && req.method === "GET") return json(PROJ);
       if (p === "/logo.jpg") return new Response(LOGO, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
-      if (STATIC[p]) return new Response(Bun.file(new URL("./public" + p, import.meta.url)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
+      if (STATIC[p]) return new Response(Bun.file(appPath("./public" + p)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
 
       const am = p.match(/^\/audio\/([^/]+)$/);
       if (am && (req.method === "GET" || req.method === "HEAD")) {
@@ -574,9 +586,9 @@ const SERVER = Bun.serve({
       if (p === "/api/config/logo" && req.method === "POST") {
         if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
         const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 10_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
-        const id = Date.now().toString(36); const tmp = `/tmp/logo-${id}`; await Bun.write(tmp, buf); const out = `${BRAND_DIR}/logo-${id}.png`;
-        try { const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(512,iw)':-2", out], { stdout: "ignore", stderr: "pipe" });
-          if ((await proc.exited) !== 0 || !existsSync(out)) return json({ error: "not_image" }, 415); } finally { try { unlinkSync(tmp); } catch {} }
+        const id = Date.now().toString(36); const tmp = `${TMPD}/logo-${id}`; await Bun.write(tmp, buf); const out = `${BRAND_DIR}/logo-${id}.png`;
+        try { let ok = false; try { const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(512,iw)':-2", out], { stdout: "ignore", stderr: "pipe" }); ok = (await proc.exited) === 0 && existsSync(out); } catch { ok = rawImage(buf, out); }
+          if (!ok) return json({ error: "not_image" }, 415); } finally { try { unlinkSync(tmp); } catch {} }
         CFG = { ...CFG, logo: `/marca/logo-${id}.png` }; await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('config', 'church', ${JSON.stringify(CFG)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
         return json(CFG);
       }
@@ -588,10 +600,10 @@ const SERVER = Bun.serve({
       if (p === "/api/fondos" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 15_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
-        const id = randomBytes(12).toString("hex"); const tmp = `/tmp/fondo-${id}`; await Bun.write(tmp, buf);
+        const id = randomBytes(12).toString("hex"); const tmp = `${TMPD}/fondo-${id}`; await Bun.write(tmp, buf);
         try {
-          const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(1920,iw)':-2", "-q:v", "3", `${FONDOS_DIR}/${id}.jpg`], { stdout: "ignore", stderr: "pipe" });
-          if ((await proc.exited) !== 0 || !existsSync(`${FONDOS_DIR}/${id}.jpg`)) return json({ error: "not_image" }, 415);
+          let ok = false; try { const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(1920,iw)':-2", "-q:v", "3", `${FONDOS_DIR}/${id}.jpg`], { stdout: "ignore", stderr: "pipe" }); ok = (await proc.exited) === 0 && existsSync(`${FONDOS_DIR}/${id}.jpg`); } catch { ok = rawImage(buf, `${FONDOS_DIR}/${id}.jpg`); }
+          if (!ok) return json({ error: "not_image" }, 415);
         } finally { try { unlinkSync(tmp); } catch {} }
         return json({ url: `/fondo/${id}.jpg` });
       }
@@ -799,7 +811,7 @@ const SERVER = Bun.serve({
           const len = Number(req.headers.get("content-length") ?? 0); if (len > 110_000_000) return json({ error: "too_large" }, 413);
           const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 110_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
           /* Comprime: MP3 mono 64 kbps (se escucha bien en cualquier celular o PC y ocupa ~0,5 MB por minuto) */
-          const id = randomBytes(12).toString("hex"); const tmpIn = `/tmp/up-${id}.${ext}`; const tmpOut = `/tmp/up-${id}.mp3`;
+          const id = randomBytes(12).toString("hex"); const tmpIn = `${TMPD}/up-${id}.${ext}`; const tmpOut = `${TMPD}/up-${id}.mp3`;
           await Bun.write(tmpIn, buf);
           let file = id + "." + ext, size = buf.length, duration = 0;
           try {
@@ -843,10 +855,10 @@ const SERVER = Bun.serve({
         const buf = new Uint8Array(await req.arrayBuffer());
         if (buf.length > 40_000_000) return json({ error: "too_large" }, 413);
         if (buf.length < 5 || String.fromCharCode(...buf.slice(0, 5)) !== "%PDF-") return json({ error: "not_pdf" }, 400);
-        const tmp = `/tmp/vdn-${randomBytes(8).toString("hex")}`;
+        const tmp = `${TMPD}/vdn-${randomBytes(8).toString("hex")}`;
         await Bun.write(tmp + ".pdf", buf);
         try {
-          const proc = Bun.spawn(["pdftotext", "-bbox-layout", "-enc", "UTF-8", tmp + ".pdf", tmp + ".html"], { stdout: "ignore", stderr: "pipe" });
+          const proc = Bun.spawn([tool("pdftotext"), "-bbox-layout", "-enc", "UTF-8", tmp + ".pdf", tmp + ".html"], { stdout: "ignore", stderr: "pipe" });
           const code = await proc.exited;
           if (code !== 0) return json({ error: "pdf_failed" }, 422);
           const x = await Bun.file(tmp + ".html").text();

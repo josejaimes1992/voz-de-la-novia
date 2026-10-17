@@ -1,0 +1,53 @@
+# Programa de Windows: compila VozDeLaNovia.exe en una PC con Windows de GitHub,
+# lo prueba (arranca, configura, lee un PDF) y lo publica en "Releases".
+name: Programa de escritorio
+on:
+  workflow_dispatch:
+  push:
+    tags: ["escritorio-v*"]
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.13" }
+      - name: Lector de PDF (Poppler)
+        run: |
+          curl -sSL -o pop.zip https://github.com/oschwartz10612/poppler-windows/releases/download/v24.08.0-0/Release-24.08.0-0.zip
+          unzip -q pop.zip -d pop
+          B=pop/poppler-24.08.0/Library/bin; mkdir -p winbin
+          for f in pdftotext.exe pdftoppm.exe pdfinfo.exe poppler.dll lcms2.dll freetype.dll zlib.dll jpeg8.dll libcurl.dll openjp2.dll libpng16.dll tiff.dll libssh2.dll deflate.dll Lerc.dll liblzma.dll zstd.dll libcrypto-3-x64.dll; do cp "$B/$f" winbin/; done
+          cp pop/poppler-24.08.0/share/poppler/COPYING winbin/POPPLER-LICENSE-GPL.txt
+          printf 'Poppler 24.08.0 (https://poppler.freedesktop.org) - GPL.\r\nCodigo fuente: https://poppler.freedesktop.org/poppler-24.08.0.tar.xz\r\n' > winbin/POPPLER-LEEME.txt
+      - name: Compilar
+        run: bun desktop/build.ts --bin winbin --icon desktop/icon.ico
+      - name: Probar el programa
+        run: |
+          export VDN_DATA="$RUNNER_TEMP/vdn" VDN_NO_OPEN=1
+          ./dist/VozDeLaNovia.exe > run.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4747/api/desktop/status && break; sleep 1; done; echo
+          curl -sf localhost:4747/ | grep -q "Configurar Voz de la Novia"
+          T=$(curl -sf localhost:4747/api/desktop/setup -H 'content-type: application/json' -d '{"mode":"local","church":"Iglesia de prueba","username":"prueba","password":"clave123"}' | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).token)')
+          curl -sf -X PUT localhost:4747/api/songs/s1 -H "authorization: Bearer $T" -d '{"title":"Prueba","body":"[G]Hola"}'
+          curl -sf localhost:4747/api/data | grep -q '"Prueba"'
+          curl -sf localhost:4747/biblia/rv1909.json -o /dev/null
+          curl -sf localhost:4747/obs -o /dev/null
+          ls "$VDN_DATA"/app-*/bin/pdftotext.exe && "$VDN_DATA"/app-*/bin/pdftotext.exe -v
+          cat run.log
+          taskkill //F //IM VozDeLaNovia.exe || true
+      - uses: actions/upload-artifact@v4
+        with: { name: VozDeLaNovia, path: dist/VozDeLaNovia.exe }
+      - name: Publicar en Releases
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/VozDeLaNovia.exe
+          make_latest: true
+          name: Voz de la Novia para Windows (${{ github.ref_name }})
+          body: |
+            Programa de Windows de Voz de la Novia: funciona sin internet.
+            Descarga VozDeLaNovia.exe y ábrelo. Si Windows muestra "Windows protegió su PC", toca "Más información" → "Ejecutar de todas formas".

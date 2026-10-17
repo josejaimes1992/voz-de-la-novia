@@ -2,6 +2,7 @@
    Los PDF se guardan en el volumen (/data/libros), se comprimen al subirlos y se muestran
    página por página como imágenes livianas (sirve en cualquier teléfono, sin visor pesado). */
 import { randomBytes, createHmac } from "node:crypto";
+import { tool } from "./db.ts";
 import { mkdirSync, existsSync, unlinkSync, statSync, rmSync, renameSync } from "node:fs";
 
 type User = { id: number; username: string; name: string; role: string } | null;
@@ -15,7 +16,7 @@ const sig = (id: string) => createHmac("sha256", SECRET).update("libro:" + id).d
 const parse = (v: any) => typeof v === "string" ? JSON.parse(v) : v;
 const run = async (cmd: string[]) => { const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" }); const out = await new Response(p.stdout).text(); const code = await p.exited; return { code, out }; };
 
-async function pageCount(f: string) { const r = await run(["pdfinfo", f]); const m = r.out.match(/Pages:\s+(\d+)/); return m ? +m[1] : 0; }
+async function pageCount(f: string) { const r = await run([tool("pdfinfo"), f]); const m = r.out.match(/Pages:\s+(\d+)/); return m ? +m[1] : 0; }
 /* Comprime el PDF (si hay Ghostscript y el resultado es realmente más chico) */
 async function compress(f: string) {
   if (!Bun.which("gs")) return;
@@ -27,7 +28,7 @@ async function render(id: string, n: number, w: number) {
   const dir = `${DIR}/${id}/cache`; const out = `${dir}/${w}-${n}.jpg`;
   if (existsSync(out)) return out;
   mkdirSync(dir, { recursive: true });
-  const r = await run(["pdftoppm", "-f", String(n), "-l", String(n), "-scale-to", String(w), "-jpeg", "-jpegopt", "quality=78,progressive=y", "-singlefile", `${DIR}/${id}/doc.pdf`, `${dir}/${w}-${n}`]);
+  const r = await run([tool("pdftoppm"), "-f", String(n), "-l", String(n), "-scale-to", String(w), "-jpeg", "-jpegopt", "quality=78,progressive=y", "-singlefile", `${DIR}/${id}/doc.pdf`, `${dir}/${w}-${n}`]);
   return r.code === 0 && existsSync(out) ? out : null;
 }
 async function list(db: any) { const rows = await db`SELECT id, data FROM docs WHERE col = 'libros'`; return rows.map((r: any) => ({ ...parse(r.data), id: r.id })); }
