@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["desktop/VERSION"]
+    paths: ["desktop/VERSION", ".github/workflows/escritorio.yml"]
 permissions:
   contents: write
 jobs:
@@ -25,9 +25,13 @@ jobs:
           cp pop/poppler-24.08.0/share/poppler/COPYING winbin/POPPLER-LICENSE-GPL.txt
           printf 'Poppler 24.08.0 (https://poppler.freedesktop.org) - GPL.\r\nCodigo fuente: https://poppler.freedesktop.org/poppler-24.08.0.tar.xz\r\n' > winbin/POPPLER-LEEME.txt
       - name: Compilar
-        run: bun desktop/build.ts --bin winbin --icon desktop/icon.ico
+        run: |
+          set -o pipefail
+          bun desktop/build.ts --bin winbin --icon desktop/icon.ico 2>&1 | tee build.log || { while IFS= read -r l; do echo "::error::$l"; done < build.log; exit 1; }
       - name: Probar el programa
         run: |
+          trap 'c=$?; [ $c -ne 0 ] && { echo "::error::falló la prueba (código $c)"; [ -f run.log ] && while IFS= read -r l; do echo "::error::$l"; done < run.log; }' EXIT
+          set -e
           export VDN_DATA="$(cygpath -m "$RUNNER_TEMP")/vdn" VDN_NO_OPEN=1
           ./dist/VozDeLaNovia.exe > run.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:4747/api/desktop/status && break; sleep 1; done; echo
