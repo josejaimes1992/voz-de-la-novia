@@ -60,7 +60,11 @@ const box=document.getElementById('box');
 const HOLE={x:4.17,y:26.94,w:46,h:46*1920/1080*9/16};
 if(OPT.view==='biblia'){ document.body.classList.add('bv'); const r=document.documentElement.style; r.setProperty('--hx',HOLE.x+'%'); r.setProperty('--hy',HOLE.y+'%'); r.setProperty('--hw',HOLE.w+'%'); r.setProperty('--hh',HOLE.h+'%'); }
 let ST={};
-function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; if(ST.img){ bg.style.background=`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#020b1d'}`; document.getElementById('bv-dim').style.opacity=String(ST.dim??0.35); } }
+const OBS_BG={azul:'radial-gradient(120% 90% at 70% 40%,#0d3a73 0%,#06204a 45%,#020b1d 100%)',noche:'linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%)',celeste:'linear-gradient(135deg,#0a2a43 0%,#13628f 55%,#3ba0d8 100%)',vino:'linear-gradient(135deg,#2b0a14 0%,#6b1430 55%,#a8323e 100%)',purpura:'linear-gradient(135deg,#1a0b2e 0%,#3d1e6d 55%,#6a3fa0 100%)',esmeralda:'linear-gradient(135deg,#02251c 0%,#0b5e46 55%,#1d8a6a 100%)',dorado:'linear-gradient(135deg,#1c1206 0%,#5a3b10 55%,#b8862b 100%)',atardecer:'linear-gradient(135deg,#1e0f2e 0%,#7a2e4f 50%,#e0803a 100%)',grafito:'linear-gradient(135deg,#0b0b0d 0%,#24262b 55%,#3b3f47 100%)'};
+function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; const k=Q.get('fondo')||ST.obsBg||'azul'; const dim=document.getElementById('bv-dim');
+  if(k==='templo'&&ST.img){ bg.style.background=`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#020b1d'}`; dim.style.opacity=String(ST.dim??0.35); }
+  else if(k==='templo'){ bg.style.background=ST.bg||'#000'; dim.style.opacity='0'; }
+  else { bg.style.background=OBS_BG[k]||OBS_BG.azul; dim.style.opacity='0'; } }
 let bvKey='';
 function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getElementById('bv-t'), r=document.getElementById('bv-r');
   const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
