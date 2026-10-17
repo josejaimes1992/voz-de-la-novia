@@ -10,7 +10,7 @@ const args = process.argv.slice(2);
 const opt = (k: string, d?: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const target = opt("--target", "bun-windows-x64")!;
 const files = [...new Bun.Glob("public/**/*").scanSync({ cwd: root, dot: false }), ...new Bun.Glob("data/*").scanSync({ cwd: root })]
-  .filter(f => !/rvr1960\.enc$/.test(f)).sort();
+  .map(f => f.replace(/\\/g, "/")).filter(f => !/rvr1960\.enc$/.test(f)).sort();
 /* --bin carpeta: programas extra para Windows (pdftotext de Poppler, GPL) que se copian a bin/ */
 const binDir = opt("--bin");
 const extra: [string, string][] = binDir ? [...new Bun.Glob("*").scanSync({ cwd: binDir })].sort().map(f => ["bin/" + f, resolve(binDir, f)] as [string, string]) : [];
