@@ -109,7 +109,7 @@ function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true;
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
   const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const steps=msSteps(P.t); MS.part=Math.max(0,Math.min(MS.part,steps));
-  const st={mode:'text',read:true,title:s.title,text:P.t,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part}};
+  const st={mode:'text',read:true,title:s.title,text:P.t,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||''}};
   MS.remote=st; MS.live=true; render(); setTimeout(msScroll,20);
   try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo poner en pantalla. Revisa el internet.'); }
   if(V.view==='mensaje') render();
