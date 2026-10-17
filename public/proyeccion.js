@@ -30,6 +30,22 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pjw .pjw-grid .pjw-v[aria-current="true"]{background:#a8392f;color:#fff;box-shadow:inset 4px 0 0 #ff8a7f}.pjw .pjw-grid .pjw-v[aria-current="true"] .h,.pjw .pjw-grid .pjw-v[aria-current="true"] .h b{color:#ffe1dc}
+.pjw .pjw-grid .pjw-v[aria-current="true"] .h::after{content:"● en pantalla";font:800 9.5px var(--f-ui);letter-spacing:.08em;margin-left:8px;color:#fff;background:rgba(0,0,0,.25);border-radius:999px;padding:1px 7px}
+/* ---- Zonas del en vivo, cada una con su color: Vista previa (azul) · Pantalla (rojo) · Lista de hoy (dorado) ---- */
+.pjw .pjw-grid>.pjw-sl>.pjw-h,.pjw .pjw-grid>.pjw-bb{border-top:3px solid #3d8fd6}
+.pjw .pjw-grid>.pjw-sl>.pjw-h{background:color-mix(in srgb,#3d8fd6 13%,var(--surface));color:#3d8fd6}
+.pjw .pjw-grid>.pjw-sl>.pjw-h::before{content:"👁 Vista previa";flex:none;font:800 10px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#3d8fd6;border-radius:999px;padding:3px 8px;margin-right:2px}
+.pjw .pjw-grid>.pjw-sl{background:color-mix(in srgb,#3d8fd6 4%,var(--bg))}
+.pjw .pjw-grid>.pjw-live{background:color-mix(in srgb,#e05a4f 7%,var(--bg))}
+.pjw .pjw-grid>.pjw-live>.pjw-h{border-top:3px solid #e05a4f;background:color-mix(in srgb,#e05a4f 16%,var(--surface));color:#e05a4f}
+.pjz-dot{width:9px;height:9px;border-radius:50%;background:#e05a4f;flex:none;box-shadow:0 0 0 0 rgba(224,90,79,.7);animation:pjzPulse 1.6s infinite}
+@keyframes pjzPulse{0%{box-shadow:0 0 0 0 rgba(224,90,79,.65)}70%{box-shadow:0 0 0 8px rgba(224,90,79,0)}100%{box-shadow:0 0 0 0 rgba(224,90,79,0)}}
+.pjw .pjw-grid>.pjw-live .pjw-scr{box-shadow:0 0 0 4px color-mix(in srgb,#e05a4f 25%,transparent),0 10px 28px rgba(0,0,0,.3)}
+.pjw .pjw-grid>aside.pj-side{background:color-mix(in srgb,#c9a227 6%,var(--bg));padding-top:0}
+.pjw .pjw-grid>aside.pj-side>.pj-side-h{margin:0 -8px 6px;padding:10px 12px;border-top:3px solid #c9a227;background:color-mix(in srgb,#c9a227 16%,var(--surface))}
+.pjw .pjw-grid>aside.pj-side>.pj-side-h::before{content:"📋 Lista de hoy";display:block;font:800 10px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:#9a7a10;margin-bottom:2px}
+.pjw .pjw-grid>.pjw-lib .pjw-tabs{border-top:3px solid color-mix(in srgb,var(--muted) 45%,transparent)}
 .pjf-it.warn{border-color:#e08a2b;background:color-mix(in srgb,#e08a2b 12%,transparent)}.pjf-sim{font:700 11px var(--f-sans,system-ui);border-radius:999px;padding:1px 7px;margin-left:4px}.pjf-sim.ok{background:#2fa36b;color:#fff}.pjf-sim.mid{background:#e0a32b;color:#1b1406}.pjf-sim.bad{background:var(--danger);color:#fff}
 .pjf-cmp{flex-basis:100%;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:6px}.pjf-cmp>div{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;max-height:260px;overflow:auto;font-size:13.5px;line-height:1.5}.pjf-cmp h5{margin:0 0 6px;font-size:12px;color:var(--muted)}.pjf-cmp p{margin:0}
 .pjf-cmp mark.dx-a{background:color-mix(in srgb,var(--danger) 30%,transparent);color:inherit;border-radius:3px}.pjf-cmp mark.dx-b{background:color-mix(in srgb,#e0c22b 40%,transparent);color:inherit;border-radius:3px}.pjf-nav{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
@@ -350,7 +366,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
         ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():PJ.tab==='txt'?pjTxtLib():pjMsgLib()}</section>
       ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):PJ.tab==='txt'?pjTxtCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
         <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span>${pjSlP(x,onSong&&r.idx===i,r)}</button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
-      <section class="pjw-live"><div class="pjw-h">En directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
+      <section class="pjw-live"><div class="pjw-h"><i class="pjz-dot"></i>En pantalla · en directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
         <p class="pjw-now"><b>${r.mode==='black'?'■ Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</p>
         <div class="pjw-btns"><button class="btn" data-act="pj-nav" data-d="-1">◀ Anterior</button><button class="btn pri" data-act="pj-nav" data-d="1">Siguiente ▶</button>
