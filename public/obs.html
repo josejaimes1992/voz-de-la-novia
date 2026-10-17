@@ -28,6 +28,18 @@ body.top #rd{bottom:auto;top:5%}
   transition:transform 1.4s cubic-bezier(.3,.1,.3,1);text-shadow:0 0 2px #000,0 0 2px #000,0 3px 8px rgba(0,0,0,.85),0 0 18px rgba(0,0,0,.5);-webkit-text-stroke:1px rgba(0,0,0,.35)}
 body.up #rdi{text-transform:uppercase}
 #rdi sup{font-size:.55em;color:#f2c94c;margin-right:.25em}
+/* Biblia a media pantalla (escena "Biblia" de OBS): fondo + hueco 16:9 para la cámara + versículo a la derecha */
+#bv{position:absolute;inset:0;display:none}
+body.bv #bv{display:block} body.bv #box,body.bv #rd{display:none!important}
+#bv-bg{position:absolute;inset:0;background:radial-gradient(120% 90% at 70% 40%,#0d3a73 0%,#06204a 45%,#020b1d 100%);background-size:cover;background-position:center;
+  clip-path:polygon(0 0,100% 0,100% 100%,0 100%,0 0,var(--hx) var(--hy),var(--hx) calc(var(--hy) + var(--hh)),calc(var(--hx) + var(--hw)) calc(var(--hy) + var(--hh)),calc(var(--hx) + var(--hw)) var(--hy),var(--hx) var(--hy))}
+#bv-dim{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;clip-path:inherit}
+#bv-frame{position:absolute;left:var(--hx);top:var(--hy);width:var(--hw);height:var(--hh);box-sizing:border-box;border:3px solid rgba(255,255,255,.22);border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.55)}
+#bv-txt{position:absolute;left:52.5%;right:4.5%;top:8%;bottom:8%;display:flex;flex-direction:column;justify-content:center;color:var(--col);opacity:0;transform:translateY(10px);transition:opacity .35s ease,transform .35s ease}
+#bv-txt.on{opacity:1;transform:none}
+#bv-t{font-weight:600;line-height:1.22;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+#bv-r{margin-top:.5em;font-weight:700;color:#f2c94c;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+body.up #bv-t{text-transform:uppercase}
 #dot{position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#e5484d;display:none}
 #dot.show{display:block}
 </style>
@@ -35,14 +47,34 @@ body.up #rdi{text-transform:uppercase}
 <body>
 <div id="box"></div>
 <div id="rd"><div id="rdi"></div></div>
+<div id="bv"><div id="bv-bg"></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div></div>
 <div id="dot" class="show" title="Sin conexión con la app"></div>
 <script>
 /* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
 const Q=new URLSearchParams(location.search);
-const OPT={ml:Math.min(6,Math.max(2,+Q.get('ml')||3)),mt:Math.min(2,Math.max(.5,+Q.get('mt')||1)),t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
+const OPT={view:Q.get('vista')||'',scene:(Q.get('escena')||'').trim(),ml:Math.min(6,Math.max(2,+Q.get('ml')||3)),mt:Math.min(2,Math.max(.5,+Q.get('mt')||1)),t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
 document.body.classList.toggle('top',OPT.top); document.body.classList.toggle('up',OPT.up); document.body.classList.toggle('band',OPT.band);
 document.body.style.setProperty('--font',`'${OPT.font}'`); document.body.style.setProperty('--col',OPT.color);
 const box=document.getElementById('box');
+/* Hueco para la cámara (en % de la pantalla 1920×1080): x 4.17%, y 26.9%, ancho 46%, alto 46%·16/9 */
+const HOLE={x:4.17,y:26.94,w:46,h:46*1920/1080*9/16};
+if(OPT.view==='biblia'){ document.body.classList.add('bv'); const r=document.documentElement.style; r.setProperty('--hx',HOLE.x+'%'); r.setProperty('--hy',HOLE.y+'%'); r.setProperty('--hw',HOLE.w+'%'); r.setProperty('--hh',HOLE.h+'%'); }
+let ST={};
+function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; if(ST.img){ bg.style.background=`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#020b1d'}`; document.getElementById('bv-dim').style.opacity=String(ST.dim??0.35); } }
+let bvKey='';
+function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getElementById('bv-t'), r=document.getElementById('bv-r');
+  const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
+  if(key===bvKey) return; bvKey=key; T.classList.remove('on'); if(!isB) return;
+  setTimeout(()=>{ t.textContent=String(st.text||'').replace(/\s*\n\s*/g,' '); r.textContent=st.ref||'';
+    let fs=Math.round(innerHeight*0.075*OPT.t); const H=T.clientHeight; const set=()=>{ t.style.fontSize=fs+'px'; r.style.fontSize=Math.round(fs*.8)+'px'; };
+    set(); let n=0; while((t.offsetHeight+r.offsetHeight+fs*.5)>H&&fs>16&&n++<60){ fs=Math.floor(fs*.95); set(); }
+    T.classList.add('on'); }, bvKey&&T.textContent?200:0); }
+/* Cambiar sola de escena en OBS (la fuente necesita "Acceso avanzado a OBS" en Permisos de la página) */
+let scPrev=null, scOn=false;
+function sceneAuto(st){ if(!OPT.scene||OPT.view==='biblia'||!window.obsstudio||!obsstudio.setCurrentScene) return;
+  const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon;
+  if(isB&&!scOn){ scOn=true; try{ obsstudio.getCurrentScene(sc=>{ if(sc&&sc.name&&sc.name!==OPT.scene) scPrev=sc.name; obsstudio.setCurrentScene(OPT.scene); }); }catch{ try{ obsstudio.setCurrentScene(OPT.scene); }catch{} } }
+  else if(!isB&&scOn){ scOn=false; if(scPrev) try{ obsstudio.setCurrentScene(scPrev); }catch{} } }
 const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Junta las líneas de la diapositiva en 2 líneas lo más parejas posible */
 function twoLines(text){
@@ -77,12 +109,14 @@ function rdShow(st){
 }
 function rdHide(){ if(!rdKey) return; rdKey=''; cancelAnimationFrame(rdAuto); rd.classList.remove('on'); }
 function show(st){
+  sceneAuto(st);
+  if(OPT.view==='biblia') return bvShow(st);
   let html='';
   if(st&&st.mode==='text'&&st.sermon&&OPT.msg){ if(cur){ cur=''; box.classList.remove('on'); } rdShow(st); return; }
   rdHide();
   if(st&&st.mode==='text'){
     if(st.sermon){ /* el Mensaje se muestra en la ventana de lectura */ }
-    else if(st.ref||st.bible){ if(OPT.bible) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
+    else if(st.ref||st.bible){ if(OPT.bible&&!OPT.scene) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
     else { let L; if(st.subs>0){ const ch=chunks(st.text); L=ch[Math.min(st.sub||0,ch.length-1)]; } else L=twoLines(st.text); html=L.map(l=>`<span class="ln">${esc(l)}</span>`).join(''); }
   }
   if(html===cur) return; cur=html;
@@ -95,7 +129,7 @@ let ws,retry=0;
 function connect(){
   try{ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; document.getElementById('dot').classList.remove('show'); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver) location.reload(); return; } if(d._sung||d._style) return; show(d); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver) location.reload(); return; } if(d._style){ bvStyle(d._style); return; } if(d._sung) return; show(d); }catch{} };
   ws.onclose=()=>{ document.getElementById('dot').classList.add('show'); later(); };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }

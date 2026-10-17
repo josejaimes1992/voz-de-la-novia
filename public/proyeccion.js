@@ -626,9 +626,9 @@ document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-
 
 /* ===== OBS: letra abajo en 2 líneas para la transmisión + exportar PNG ===== */
 const OBS_FONTS=['Barlow Semi Condensed','Oswald','Montserrat','Figtree'];
-function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',pasos:true,used:false,ml:3,mt:1,...o}; }
+function obsOpt(){ let o={}; try{ o=JSON.parse(localStorage.getItem('vdn-obs')||'{}')||{}; }catch{} return {t:1,pos:'abajo',may:true,franja:false,biblia:true,mensaje:false,fuente:'Barlow Semi Condensed',pasos:true,used:false,ml:3,mt:1,bsc:false,bscn:'Biblia',...o}; }
 function obsSave(o){ try{ localStorage.setItem('vdn-obs',JSON.stringify(o)); }catch{} }
-function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); if(o.mensaje){ if(o.ml!==3) q.set('ml',String(o.ml)); if(o.mt!==1) q.set('mt',String(o.mt)); } const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
+function obsUrl(o){ const q=new URLSearchParams(); if(o.t!==1) q.set('t',String(o.t)); if(o.pos==='arriba') q.set('pos','arriba'); if(!o.may) q.set('may','0'); if(o.franja) q.set('franja','1'); if(!o.biblia) q.set('biblia','0'); if(o.mensaje) q.set('mensaje','1'); if(o.fuente!=='Barlow Semi Condensed') q.set('fuente',o.fuente); if(o.bsc&&o.bscn) q.set('escena',o.bscn); if(o.mensaje){ if(o.ml!==3) q.set('ml',String(o.ml)); if(o.mt!==1) q.set('mt',String(o.mt)); } const s=q.toString(); return location.origin+'/obs'+(s?'?'+s:''); }
 function obsTwo(text){
   const L=String(text||'').split('\n').map(s=>s.trim().replace(/^\/\/|\/\/$/g,'').trim()).filter(Boolean);
   if(!L.length) return [];
@@ -692,6 +692,17 @@ function obsOpen(){
           <li>Ponla <b>encima</b> de la cámara. El fondo ya es transparente.</li>
           <li>Listo: cada vez que proyectes una estrofa desde aquí, en la transmisión sale en 2 líneas. Con <b>Negro</b> o <b>Logo</b> la letra desaparece.</li>
         </ol></div>
+      <div style="display:grid;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px 12px"><b style="font-size:14px">📖 Biblia a media pantalla (opcional)</b>
+        <span style="font-size:13px;color:var(--muted)">Cuando proyectes una cita, OBS cambia solo a una escena con la cámara a la izquierda y el versículo grande a la derecha. Al quitarla, vuelve a la escena de antes.</span>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="obs-bsc" ${o.bsc?'checked':''}> Cambiar sola a la escena <input id="obs-bscn" class="input" value="${esc(o.bscn)}" style="width:120px;padding:3px 8px"> cuando proyecte una cita</label>
+        ${o.bsc?`<ol style="margin:0;padding-left:20px;font-size:13px;color:var(--muted);line-height:1.6">
+          <li>Con la casilla marcada, <b>vuelve a copiar la dirección del punto 1</b> y pégala en tu fuente de Navegador de siempre. Clic derecho en esa fuente → <b>Propiedades</b> → <b>Permisos de la página: "Acceso avanzado a OBS"</b>.</li>
+          <li>En OBS crea una escena nueva llamada <b>${esc(o.bscn)}</b>.</li>
+          <li>Ahí agrega tu <b>cámara</b> (+ → Dispositivo de captura de video → "Agregar existente"). Clic derecho en la cámara → Transformar → <b>Editar transformación</b>: Posición <b>80 , 291</b> · Tipo de caja delimitadora <b>"Escalar al interior de los límites"</b> · Tamaño de caja <b>883 × 497</b>.</li>
+          <li>Encima de la cámara agrega un <b>Navegador</b> con esta dirección (1920 × 1080):
+            <div style="display:flex;gap:8px;margin-top:4px"><input id="obs-burl" class="input" readonly value="${esc(location.origin+'/obs?vista=biblia'+(o.may?'':'&may=0')+(o.fuente!=='Barlow Semi Condensed'?'&fuente='+encodeURIComponent(o.fuente):'')+(o.t!==1?'&t='+o.t:''))}" style="flex:1;min-width:0;font-family:var(--f-mono);font-size:12px"><button class="btn" data-act="obs-bcopy">Copiar</button></div></li>
+          <li>Listo: el fondo es el mismo de la pantalla del templo (🎨 Fondo). El hueco de la cámara es 16:9, así no salen franjas.</li></ol>`:''}
+      </div>
       <div style="display:grid;gap:6px"><b style="font-size:14px">2) Imágenes PNG (opcional)</b>
         <span style="font-size:13px;color:var(--muted)">Una imagen transparente por estrofa, con este mismo estilo. Sirve para editar videos o para OBS sin internet.</span>
         <div>${s?`<button class="btn" data-act="obs-png" data-id="${esc(s.id)}">🖼 Descargar PNG de «${esc(s.title)}»</button>`:'<span style="font-size:13px">Abre una alabanza para descargar sus PNG.</span>'}</div></div>
@@ -700,7 +711,7 @@ function obsOpen(){
   const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
   const set=ch=>{ const n={...obsOpt(),...ch}; obsSave(n); const u=$('#obs-url'); if(u) u.value=obsUrl(n); redraw(); };
   on('#obs-t','input',e=>set({t:+e.target.value})); on('#obs-f','change',e=>set({fuente:e.target.value})); on('#obs-pos','change',e=>set({pos:e.target.value}));
-  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-pasos','change',e=>{ set({pasos:e.target.checked}); try{ pjRender(); }catch{} }); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>{ set({mensaje:e.target.checked}); obsOpen(); }); on('#obs-mt','input',e=>set({mt:+e.target.value})); on('#obs-ml','input',e=>{ set({ml:+e.target.value}); const v=$('#obs-mlv'); if(v) v.textContent=e.target.value; });
+  on('#obs-may','change',e=>set({may:e.target.checked})); on('#obs-bsc','change',e=>{ set({bsc:e.target.checked}); obsOpen(); }); on('#obs-bscn','change',e=>{ set({bscn:e.target.value.trim()||'Biblia'}); obsOpen(); }); on('#obs-pasos','change',e=>{ set({pasos:e.target.checked}); try{ pjRender(); }catch{} }); on('#obs-fr','change',e=>set({franja:e.target.checked})); on('#obs-bb','change',e=>set({biblia:e.target.checked})); on('#obs-ms','change',e=>{ set({mensaje:e.target.checked}); obsOpen(); }); on('#obs-mt','input',e=>set({mt:+e.target.value})); on('#obs-ml','input',e=>{ set({ml:+e.target.value}); const v=$('#obs-mlv'); if(v) v.textContent=e.target.value; });
   redraw(); document.fonts&&document.fonts.load('700 40px "Barlow Semi Condensed"').then(redraw).catch(()=>{}); document.fonts&&document.fonts.ready.then(redraw);
 }
 async function obsPng(id){
@@ -721,6 +732,7 @@ async function obsPng(id){
 }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act;
   if(a==='obs-open'){ ev.preventDefault(); obsOpen(); }
+  else if(a==='obs-bcopy'){ const u=$('#obs-burl'); if(!u) return; u.select(); (navigator.clipboard?navigator.clipboard.writeText(u.value):Promise.reject()).then(()=>toast('Dirección copiada. Pégala en el Navegador de la escena Biblia.')).catch(()=>{ try{ document.execCommand('copy'); toast('Dirección copiada.'); }catch{} }); }
   else if(a==='obs-copy'){ const u=$('#obs-url'); if(!u) return; u.select(); (navigator.clipboard?navigator.clipboard.writeText(u.value):Promise.reject()).then(()=>toast('Dirección copiada. Pégala en OBS.')).catch(()=>{ try{ document.execCommand('copy'); toast('Dirección copiada.'); }catch{} }); }
   else if(a==='obs-png'){ ev.preventDefault(); obsPng(el.dataset.id); }
 });
