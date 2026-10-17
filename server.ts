@@ -602,6 +602,13 @@ const SERVER = Bun.serve({
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, sub: Math.min(30, Math.max(0, Number(b.sub) || 0)), subs: Math.min(30, Math.max(0, Number(b.subs) || 0)), by: user.name, at: Date.now() };
+        /* Mensaje: completar título, código, fecha y lugar desde el Mensaje guardado (para la ficha de OBS) */
+        const SM: any = (PROJ as any).sermon;
+        if (SM && (!SM.title || !SM.code || !SM.place)) { try { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${SM.id}`; if (r[0]) { const d = parseJ(r[0].data);
+          let code = SM.code || d.code || ""; let place = SM.place || d.place || "";
+          if (!code) { const t = await metaByTitle(d.title).catch(() => null); if (t) { code = t.code; if (!place) place = t.place || ""; } }
+          if (code && !place) { const m = await metaFor(code).catch(() => null); if (m?.place) place = m.place; }
+          SM.title = SM.title || d.title || ""; SM.code = code; SM.place = place; SM.date = SM.date || d.date || (/^\d{2}-\d{4}/.test(code) ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : ""); } } catch {} }
         if (mode !== "black") PROJ_PREV = null; else if (BEFORE.mode !== "black") PROJ_PREV = BEFORE;
         pubProj();
         return json(PROJ);
