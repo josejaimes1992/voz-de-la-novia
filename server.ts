@@ -28,7 +28,7 @@ await db`CREATE INDEX IF NOT EXISTS changes_doc ON changes (col, doc_id, at DESC
 
 const SEED: [string, string, Record<string, unknown>][] = [["songs", "ej-santo", {"author": "Reginald Heber · trad. Juan B. Cabrera", "body": "# Estrofa 1\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! [D]Señor omni[A]potente,\n[D]siempre el [Bm]labio [E]mío loo[A]res te da[E]rá[A].\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! te a[D]doro [A]reverente,\n[G]Dios en tres [D]per[Bm]sonas, [D]ben[A]dita Trini[D]dad.\n\n# Estrofa 2\n[D]¡Santo! ¡[Bm]Santo! ¡[G]Santo! en [D]numeroso [A]coro,\n[D]santos esco[Bm]gidos te a[E]doran sin ce[A]sar,\n[D]de alegría [Bm]llenos, y [G]sus co[D]ronas de [A]oro\n[G]rinden ante el [D]tro[Bm]no y el [D]cris[A]talino [D]mar.", "category": "Himno", "ejemplo": true, "key": "D", "notes": "Ejemplo de dominio público. Edítalo o bórralo cuando quieras.", "title": "Santo, Santo, Santo", "updatedAt": 1790866763569}], ["songs", "ej-castillo", {"author": "Martín Lutero · trad. Juan B. Cabrera", "body": "# Estrofa 1\n[C]Castillo fuerte es [G]nuestro [C]Dios,\nde[F]fensa y [G]buen es[C]cudo;\ncon su po[G]der nos [C]libra[F]rá\nen [C]este [G]trance a[C]gudo.\nCon [Am]furia y con a[G]fán\na[C]cósa[F]nos Sa[C]tán;\npor [Am]armas deja [G]ver\nas[C]tucia y [F]gran po[G]der;\n[F]cual él no [C]hay en la [G]tie[C]rra.", "category": "Himno", "ejemplo": true, "key": "C", "notes": "", "title": "Castillo fuerte es nuestro Dios", "updatedAt": 1790866763569}], ["songs", "ej-cristo", {"author": "Anna B. Warner · trad. tradicional", "body": "# Intro\n[G] [C] [D] [G]\n\n# Estrofa\n[G]Cristo me ama, [C]bien lo [G]sé,\nsu pa[G]labra [D]me hace [G]ver,\nque los [G]niños [C]son de A[G]quel,\nquien es [G]nuestro a[D]migo [G]fiel.\n\n# Coro\n[G]Cristo me ama, [C]Cristo me [G]ama,\n[G]Cristo me ama, [D]la Biblia dice a[G]sí.", "category": "Infantil", "ejemplo": true, "key": "G", "notes": "Repetir el coro al final.", "title": "Cristo me ama", "updatedAt": 1790866763569}], ["programs", "ej-prog", {"date": "2026-10-01", "ejemplo": true, "items": [{"key": "G", "note": "", "songId": "ej-cristo"}, {"key": "Eb", "note": "Subir medio tono", "songId": "ej-santo"}, {"key": "C", "note": "Solo estrofa 1", "songId": "ej-castillo"}], "notes": "Programa de ejemplo.", "service": "Servicio de adoración · 10:00", "title": "Culto dominical", "updatedAt": 1790866763569}]];
 const [{ n }] = await db`SELECT count(*)::int AS n FROM docs`;
-if (n === 0) {
+if (n === 0 && Bun.env.SEED_SONGS !== "0") {
   for (const [col, id, data] of SEED) {
     await db`INSERT INTO docs (col, id, data, updated_at) VALUES (${col}, ${id}, ${JSON.stringify(data)}::jsonb, ${Date.now()}) ON CONFLICT DO NOTHING`;
   }
@@ -41,7 +41,8 @@ if (u === 0) {
   const initial = Bun.env.INITIAL_PASSWORD ?? "";
   if (initial) {
     const hash = await Bun.password.hash(initial);
-    const people: [string, string, string][] = [["jose", "JOSE", "admin"], ["jorge", "JORGE", "moderator"], ["jeremias", "JEREMIAS", "moderator"], ["michael", "MICHAEL", "moderator"]];
+    const adm = (Bun.env.ADMIN_USER ?? "").trim().toLowerCase();
+    const people: [string, string, string][] = adm ? [[adm, (Bun.env.ADMIN_NAME ?? adm).toUpperCase(), "admin"]] : [["jose", "JOSE", "admin"], ["jorge", "JORGE", "moderator"], ["jeremias", "JEREMIAS", "moderator"], ["michael", "MICHAEL", "moderator"]];
     for (const [username, name, role] of people) await db`INSERT INTO users (username, name, role, pass_hash, created_at) VALUES (${username}, ${name}, ${role}, ${hash}, ${Date.now()}) ON CONFLICT DO NOTHING`;
     console.log("Usuarios iniciales creados:", people.length);
   }
@@ -169,6 +170,15 @@ try {
 /* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
 initLibros(AUDIO_DIR);
 const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
+/* ---- Ajustes de la iglesia (para que cada iglesia tenga su copia con su nombre y su logo) ---- */
+const BRAND_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/marca";
+try { mkdirSync(BRAND_DIR, { recursive: true }); } catch {}
+const CHURCH_DEFAULT = { name: Bun.env.CHURCH_NAME ?? "Tabernáculo Shalom Adonai", logo: Bun.env.CHURCH_LOGO ?? "/shalom-logo.jpg?v=1" };
+let CFG: { name: string; logo: string } = { ...CHURCH_DEFAULT };
+try { const r = await db`SELECT data FROM docs WHERE col = 'config' AND id = 'church'`; if (r[0]) CFG = { ...CFG, ...parseJ(r[0].data) }; } catch {}
+const escH = (t: string) => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as any)[c]);
+function brandHtml(h: string) { if (CFG.name === "Tabernáculo Shalom Adonai" && CFG.logo === "/shalom-logo.jpg?v=1") return h;
+  return h.replaceAll("Tabernáculo Shalom Adonai", escH(CFG.name)).replaceAll("/shalom-logo.jpg?v=1", escH(CFG.logo)); }
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
 const VOZ_LIMIT = new Map<string, { n: number; t: number }>();
@@ -406,6 +416,8 @@ const SERVER = Bun.serve({
     try {
       if (p === "/api/proyector/estilo" && req.method === "GET") return json(STYLE);
       if (p.startsWith("/libro/")) { const lr = await librosRoute(req, url, p, null, db); if (lr) return lr; }
+      const mk = p.match(/^\/marca\/(logo-[a-z0-9]{4,16}\.png)$/);
+      if (mk) { const f = `${BRAND_DIR}/${mk[1]}`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/png", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       const fm = p.match(/^\/fondo\/([a-f0-9]{24})\.jpg$/);
       if (fm) { const f = `${FONDOS_DIR}/${fm[1]}.jpg`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       if (p === "/biblia/versiones") return json({ versions: [...(RVR1960 ? [{ id: "RVR1960", name: "Reina-Valera 1960", url: "/biblia/rvr1960.json" }] : []), { id: "RV1909", name: "Reina-Valera 1909", url: "/biblia/rv1909.json" }] });
@@ -413,11 +425,11 @@ const SERVER = Bun.serve({
       if (p === "/biblia/rv1909.json") return new Response(Bun.file(new URL("./public/biblia/rv1909.json.gz", import.meta.url)), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
       if (p === "/manifest.webmanifest") return new Response(Bun.file(new URL("./public/manifest.webmanifest", import.meta.url)), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
       if (p === "/sw.js") return new Response(Bun.file(new URL("./public/sw.js", import.meta.url)), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
-      if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(Bun.file(new URL("./public/instalar.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
-      if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(brandHtml(await Bun.file(new URL("./public/instalar.html", import.meta.url)).text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/" || p === "/index.html") return new Response(brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
       if (p === "/obs") return new Response(Bun.file(new URL("./public/obs.html", import.meta.url)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
-      if (p === "/proyector") return new Response(PROJ_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      if (p === "/proyector") return new Response(brandHtml(await PROJ_HTML.text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/ws/equipo") {
         const t = url.searchParams.get("t") ?? ""; const u = t ? await currentUser(new Request(url, { headers: { authorization: "Bearer " + t } })) : null;
         if (!u) return new Response("unauthorized", { status: 401 });
@@ -551,6 +563,22 @@ const SERVER = Bun.serve({
         await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
         SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
         return json(STYLE);
+      }
+      if (p === "/api/config" && req.method === "GET") return json(CFG);
+      if (p === "/api/config" && req.method === "PUT") {
+        if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
+        const b = await req.json().catch(() => ({})); const name = typeof b.name === "string" && b.name.trim() ? b.name.trim().slice(0, 80) : CFG.name;
+        CFG = { ...CFG, name }; await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('config', 'church', ${JSON.stringify(CFG)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+        return json(CFG);
+      }
+      if (p === "/api/config/logo" && req.method === "POST") {
+        if (!user || user.role !== "admin") return json({ error: "forbidden" }, user ? 403 : 401);
+        const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 10_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
+        const id = Date.now().toString(36); const tmp = `/tmp/logo-${id}`; await Bun.write(tmp, buf); const out = `${BRAND_DIR}/logo-${id}.png`;
+        try { const proc = Bun.spawn(["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(512,iw)':-2", out], { stdout: "ignore", stderr: "pipe" });
+          if ((await proc.exited) !== 0 || !existsSync(out)) return json({ error: "not_image" }, 415); } finally { try { unlinkSync(tmp); } catch {} }
+        CFG = { ...CFG, logo: `/marca/logo-${id}.png` }; await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('config', 'church', ${JSON.stringify(CFG)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+        return json(CFG);
       }
       if (p === "/api/fondos" && req.method === "GET") {
         if (!user) return json({ error: "unauthorized" }, 401);

@@ -299,4 +299,25 @@ document.addEventListener('click',async ev=>{ const el=ev.target.closest('[data-
   catch(e){ BB.busy=false; if(e.code===401) lostAuth(); else toast(`Se borraron ${done}; el resto falló. Inténtalo de nuevo.`); lastSig=''; await loadData(); bulkDraw(); return; }
   BB.busy=false; lastSig=''; await loadData(); closeModal(); render(); toast(`Listo: ${done} alabanzas a la Papelera${kept?` (${kept} con audio se conservaron)`:''}. Puedes rescatarlas 60 días.`);
 });
+
+/* ---------- Ajustes de la iglesia: nombre y logo (para las copias de otras iglesias) ---------- */
+window.openChurch=async function(){
+  if(!S.isAdmin){ toast('Solo el administrador puede cambiar los ajustes.'); return; }
+  addCss(); let C={name:'',logo:''}; try{ C=await (await fetch('/api/config')).json(); }catch{}
+  $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Ajustes de la iglesia" data-stop style="width:min(560px,100%)">
+    <header><h3>⛪ Ajustes de la iglesia</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
+    <div class="body" style="display:grid;gap:14px">
+      <label class="f">Nombre de la iglesia<input id="ch-name" class="input" value="${esc(C.name||'')}" maxlength="80"></label>
+      <div style="display:flex;gap:14px;align-items:center"><img id="ch-logo" src="${esc(C.logo||'')}" alt="" style="width:84px;height:84px;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:#111">
+        <div style="display:grid;gap:6px"><b style="font-size:14px">Logo de la iglesia</b><small style="color:var(--muted)">Sale arriba a la derecha, abajo en el pie, en la pantalla del proyector (Logo) y en los PDF. Mejor una imagen cuadrada (PNG con fondo transparente).</small>
+          <label class="btn" style="width:max-content;cursor:pointer">📷 Subir logo<input id="ch-file" type="file" accept="image/*" hidden></label></div></div>
+      <div class="actions" style="justify-content:flex-end"><button class="btn" data-act="close-modal">Cancelar</button><button class="btn pri" data-act="ch-save">Guardar</button></div>
+    </div></div></div>`;
+  const f=document.getElementById('ch-file'); f.addEventListener('change',async()=>{ const file=f.files[0]; if(!file) return; toast('Subiendo logo…');
+    try{ const r=await fetch('/api/config/logo',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:file}); const d=await r.json(); if(!r.ok) throw 0; document.getElementById('ch-logo').src=d.logo; toast('Logo guardado.'); }catch{ toast('No se pudo subir esa imagen.'); } });
+};
+document.addEventListener('click',async e=>{ const el=e.target.closest('[data-act="open-church"],[data-act="ch-save"]'); if(!el) return; e.preventDefault();
+  if(el.dataset.act==='open-church'){ const det=el.closest('details'); if(det) det.open=false; return openChurch(); }
+  const name=(document.getElementById('ch-name').value||'').trim(); if(!name) return toast('Escribe el nombre de la iglesia.');
+  try{ await api('/api/config',{method:'PUT',body:JSON.stringify({name})}); toast('Guardado. Recargando…'); setTimeout(()=>location.reload(),700); }catch{ toast('No se pudo guardar.'); } });
 })();
