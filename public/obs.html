@@ -29,7 +29,15 @@ body.top #rd{bottom:auto;top:5%}
 body.up #rdi{text-transform:uppercase}
 #rdi sup{font-size:.55em;color:#f2c94c;margin-right:.25em}
 /* Biblia a media pantalla (escena "Biblia" de OBS): fondo + hueco 16:9 para la cámara + versículo a la derecha */
-#bv{position:absolute;inset:0;display:none}
+#bv{position:absolute;left:50%;top:50%;width:min(100vw,177.7778vh);height:min(56.25vw,100vh);transform:translate(-50%,-50%);display:none}
+#bv-glow{position:absolute;inset:-10%;overflow:hidden}
+#bv-glow i{position:absolute;border-radius:50%;filter:blur(calc(var(--bvh,1080px)*.11));opacity:.9;animation:bvDrift 38s ease-in-out infinite alternate}
+#bv-glow i:nth-child(2){animation-duration:47s;animation-direction:alternate-reverse}
+#bv-glow i:nth-child(3){animation-duration:55s}
+@keyframes bvDrift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-3%) scale(1.08)}100%{transform:translate(-3%,4%) scale(.95)}}
+#bv-noise{position:absolute;inset:0;opacity:.11;mix-blend-mode:overlay;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+#bv-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%)}
+#bv-warn{position:fixed;left:10px;top:10px;z-index:9;background:#e5484d;color:#fff;font:600 14px system-ui;padding:6px 10px;border-radius:6px;display:none}
 body.bv #bv{display:block} body.bv #box,body.bv #rd{display:none!important}
 #bv-bg{position:absolute;inset:0;background:radial-gradient(120% 90% at 70% 40%,#0d3a73 0%,#06204a 45%,#020b1d 100%);background-size:cover;background-position:center;
   clip-path:polygon(0 0,100% 0,100% 100%,0 100%,0 0,var(--hx) var(--hy),var(--hx) calc(var(--hy) + var(--hh)),calc(var(--hx) + var(--hw)) calc(var(--hy) + var(--hh)),calc(var(--hx) + var(--hw)) var(--hy),var(--hx) var(--hy))}
@@ -47,7 +55,8 @@ body.up #bv-t{text-transform:uppercase}
 <body>
 <div id="box"></div>
 <div id="rd"><div id="rdi"></div></div>
-<div id="bv"><div id="bv-bg"></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div></div>
+<div id="bv-warn"></div>
+<div id="bv"><div id="bv-bg"><div id="bv-glow"></div><div id="bv-noise"></div><div id="bv-vig"></div><div id="bv-dim"></div></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div></div>
 <div id="dot" class="show" title="Sin conexión con la app"></div>
 <script>
 /* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
@@ -58,19 +67,31 @@ document.body.style.setProperty('--font',`'${OPT.font}'`); document.body.style.s
 const box=document.getElementById('box');
 /* Hueco para la cámara (en % de la pantalla 1920×1080): x 4.17%, y 26.9%, ancho 46%, alto 46%·16/9 */
 const HOLE={x:4.17,y:26.94,w:46,h:46*1920/1080*9/16};
-if(OPT.view==='biblia'){ document.body.classList.add('bv'); const r=document.documentElement.style; r.setProperty('--hx',HOLE.x+'%'); r.setProperty('--hy',HOLE.y+'%'); r.setProperty('--hw',HOLE.w+'%'); r.setProperty('--hh',HOLE.h+'%'); }
+function bvWarn(){ const w=document.getElementById('bv-warn'); if(!w) return; const r=innerWidth/innerHeight; document.documentElement.style.setProperty('--bvh',document.getElementById('bv').clientHeight+'px');
+  if(OPT.view==='biblia'&&Math.abs(r-16/9)>0.03){ w.style.display='block'; w.textContent=`Esta fuente mide ${innerWidth}×${innerHeight} (no es 16:9). En OBS: clic derecho → Propiedades → Ancho 1920 y Alto 1080 (o 3840×2160). No la estires con el mouse.`; } else w.style.display='none'; }
+addEventListener('resize',bvWarn); setTimeout(bvWarn,50);
+if(OPT.view==='biblia'){ document.body.classList.add('bv'); setTimeout(()=>bvStyle(),0); const r=document.documentElement.style; r.setProperty('--hx',HOLE.x+'%'); r.setProperty('--hy',HOLE.y+'%'); r.setProperty('--hw',HOLE.w+'%'); r.setProperty('--hh',HOLE.h+'%'); }
 let ST={};
-const OBS_BG={azul:'radial-gradient(120% 90% at 70% 40%,#0d3a73 0%,#06204a 45%,#020b1d 100%)',noche:'linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%)',celeste:'linear-gradient(135deg,#0a2a43 0%,#13628f 55%,#3ba0d8 100%)',vino:'linear-gradient(135deg,#2b0a14 0%,#6b1430 55%,#a8323e 100%)',purpura:'linear-gradient(135deg,#1a0b2e 0%,#3d1e6d 55%,#6a3fa0 100%)',esmeralda:'linear-gradient(135deg,#02251c 0%,#0b5e46 55%,#1d8a6a 100%)',dorado:'linear-gradient(135deg,#1c1206 0%,#5a3b10 55%,#b8862b 100%)',atardecer:'linear-gradient(135deg,#1e0f2e 0%,#7a2e4f 50%,#e0803a 100%)',grafito:'linear-gradient(135deg,#0b0b0d 0%,#24262b 55%,#3b3f47 100%)'};
-function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; const k=Q.get('fondo')||ST.obsBg||'azul'; const dim=document.getElementById('bv-dim');
-  if(k==='templo'&&ST.img){ bg.style.background=`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#020b1d'}`; dim.style.opacity=String(ST.dim??0.35); }
-  else if(k==='templo'){ bg.style.background=ST.bg||'#000'; dim.style.opacity='0'; }
-  else { bg.style.background=OBS_BG[k]||OBS_BG.azul; dim.style.opacity='0'; } }
+const OBS_BG={
+  aurora:['#030607',[['#1f6f73',72,42,62],['#0c3640',18,82,58],['#2c8f89',88,12,38]]],
+  bruma:['#050a0b',[['#3a6b68',55,50,72],['#0b2226',12,18,52],['#14403f',92,88,50]]],
+  oceano:['#02060c',[['#0f3f6b',62,36,66],['#0a5a72',22,82,52],['#071d2c',92,92,50]]],
+  esmeralda:['#020806',[['#105c46',66,55,62],['#0a3a2c',18,20,52],['#1d7d60',90,14,36]]],
+  indigo:['#04040c',[['#2c2b72',60,40,62],['#14123a',18,86,56],['#3b3084',90,14,36]]],
+  vino:['#090305',[['#5c1528',66,45,62],['#2a0811',18,82,56],['#7c2336',90,14,36]]],
+  oro:['#080603',[['#5e4416',66,45,56],['#2a1c08',18,82,56],['#7c5c1e',88,18,32]]],
+  carbon:['#050505',[['#2b2e34',60,40,66],['#15171a',18,86,56],['#3b3f46',88,14,36]]]};
+OBS_BG.azul=OBS_BG.oceano; OBS_BG.noche=OBS_BG.bruma; OBS_BG.celeste=OBS_BG.aurora; OBS_BG.purpura=OBS_BG.indigo; OBS_BG.dorado=OBS_BG.oro; OBS_BG.atardecer=OBS_BG.vino; OBS_BG.grafito=OBS_BG.carbon;
+function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; const k=Q.get('fondo')||ST.obsBg||'aurora'; const dim=document.getElementById('bv-dim'), glow=document.getElementById('bv-glow');
+  if(k==='templo'){ glow.innerHTML=''; bg.style.background=ST.img?`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#000'}`:(ST.bg||'#000'); dim.style.cssText='position:absolute;inset:0;background:#000;opacity:'+(ST.img?(ST.dim??0.35):0); return; }
+  const P=OBS_BG[k]||OBS_BG.aurora; bg.style.background=P[0]; dim.style.opacity='0';
+  glow.innerHTML=P[1].map(([c,x,y,sz])=>`<i style="left:${x-sz/2}%;top:${y-sz/2*1.78}%;width:${sz}%;height:${sz*1.78}%;background:radial-gradient(circle,${c} 0%,${c}cc 30%,transparent 70%)"></i>`).join(''); }
 let bvKey='';
 function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getElementById('bv-t'), r=document.getElementById('bv-r');
   const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
   if(key===bvKey) return; bvKey=key; T.classList.remove('on'); if(!isB) return;
   setTimeout(()=>{ t.textContent=String(st.text||'').replace(/\s*\n\s*/g,' '); r.textContent=st.ref||'';
-    let fs=Math.round(innerHeight*0.075*OPT.t); const H=T.clientHeight; const set=()=>{ t.style.fontSize=fs+'px'; r.style.fontSize=Math.round(fs*.8)+'px'; };
+    let fs=Math.round(document.getElementById('bv').clientHeight*0.075*OPT.t); const H=T.clientHeight; const set=()=>{ t.style.fontSize=fs+'px'; r.style.fontSize=Math.round(fs*.8)+'px'; };
     set(); let n=0; while((t.offsetHeight+r.offsetHeight+fs*.5)>H&&fs>16&&n++<60){ fs=Math.floor(fs*.95); set(); }
     T.classList.add('on'); }, bvKey&&T.textContent?200:0); }
 /* Cambiar sola de escena en OBS (la fuente necesita "Acceso avanzado a OBS" en Permisos de la página) */

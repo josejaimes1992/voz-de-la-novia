@@ -172,7 +172,7 @@ const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 try { mkdirSync(FONDOS_DIR, { recursive: true }); } catch {}
 const FONTS = new Set(["Figtree", "Montserrat", "Poppins", "Merriweather", "Oswald", "Lora"]);
 const VOZ_LIMIT = new Map<string, { n: number; t: number }>();
-const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, upperRead: false, size: 1, sizeBible: 1, sizeMsg: 1, margin: 4, shadow: true, obsBg: "azul" };
+const STYLE_DEFAULT = { bg: "#000000", img: "", dim: 0.35, color: "#ffffff", ref: "#e9c45a", font: "Figtree", upper: false, upperRead: false, size: 1, sizeBible: 1, sizeMsg: 1, margin: 4, shadow: true, obsBg: "aurora" };
 let STYLE: any = { ...STYLE_DEFAULT };
 try { const r = await db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) STYLE = { ...STYLE_DEFAULT, ...parseJ(r[0].data) }; } catch {}
 function cleanStyle(b: any) {
@@ -181,7 +181,7 @@ function cleanStyle(b: any) {
   const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
   const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
-    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), sizeBible: num(b.sizeBible, 0.5, 2.2, STYLE.sizeBible ?? 1), sizeMsg: num(b.sizeMsg, 0.5, 2.2, STYLE.sizeMsg ?? 1), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow, obsBg: typeof b.obsBg === "string" && /^[a-z]{3,12}$/.test(b.obsBg) ? b.obsBg : ((STYLE as any).obsBg ?? "azul") };
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), sizeBible: num(b.sizeBible, 0.5, 2.2, STYLE.sizeBible ?? 1), sizeMsg: num(b.sizeMsg, 0.5, 2.2, STYLE.sizeMsg ?? 1), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow, obsBg: typeof b.obsBg === "string" && /^[a-z]{3,12}$/.test(b.obsBg) ? b.obsBg : ((STYLE as any).obsBg ?? "aurora") };
 }
 /* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
 let BIBLES: Record<string, any> = {};
