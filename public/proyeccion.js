@@ -30,6 +30,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pj .pjw-lib .pjw-tabs{display:flex;flex-wrap:nowrap;gap:3px}.pj .pjw-lib .pjw-tabs button{flex:1 1 auto;padding:7px 3px;font-size:11.5px;min-width:0;white-space:nowrap}
 .pj-vch{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}.pj-vch span{font:600 10px var(--f-mono,monospace);border:1px solid var(--line);border-radius:5px;padding:0 4px;color:var(--muted);cursor:pointer;background:var(--bg)}.pj-vch span:hover{border-color:var(--accent);color:var(--accent)}
 .obs-ch{display:grid;gap:2px}.obs-ch .ch{display:block;white-space:pre-line;border-radius:6px;padding:1px 6px;margin:0 -6px}.obs-ch .ch+.ch{border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent)}[aria-current="true"] .obs-ch .ch.on{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:2px solid var(--accent)}
 /* ---- Consola en el celular: letra grande primero, luego el programa y al final el buscador ---- */
@@ -264,6 +265,7 @@ function pjStep(d){
   if(j>=0&&j<PJ.songIds.length){ PJ.si=j; const m=pjSlides(pjSong()).length; pjRender(true); return pjShow(d>0?0:Math.max(0,m-1),d>0?0:-1); }
 }
 async function pjNav(d){ const r=PJ.remote||{};
+  if(r.mode==='text'&&r.label==='Nota'&&PJ.tab==='txt'){ const sl=pjTxtSlides(); const i=(r.idx||0)+d; if(i>=0&&i<sl.length) pjTxtShow(i); return; }
   if(r.mode==='text'&&(r.bible||r.sermon)){ try{ PJ.remote=await api('/api/proyector/nav',{method:'POST',body:JSON.stringify({d,kind:r.bible?'item':'scroll'})}); if(r.bible&&PJ.remote.bible&&typeof BB!=='undefined'){ BB.b=PJ.remote.bible.b; BB.c=PJ.remote.bible.c; BB.v=PJ.remote.bible.v; } if(r.sermon&&PJ.remote.sermon&&typeof MS!=='undefined'){ MS.p=PJ.remote.sermon.p; MS.part=PJ.remote.sermon.part||0; } pjRender(); }catch{ toast('No se pudo cambiar.'); } return; }
   pjStep(d); }
 function pjMode(m){ const r=PJ.remote||{}; if(r.mode===m) m='text'; if(m==='text'&&!r.text){ return pjShow(0); } pjSend({...r,mode:m}); }
@@ -332,9 +334,9 @@ function pjRenderWide(r,qf,qpos,scrollTop){
       <button class="btn" data-act="pj-min" title="Esconder el control para usar el resto de la app">${ICON.search}Seguir en la app</button>
       <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open" aria-pressed="${obsStepOn()}" title="${obsStepOn()?'Transmisión: avanza de 2 en 2 líneas':'Letra para OBS'}">📡 OBS${obsStepOn()?' · 2 en 2':''}</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjw-grid side${PJ.tab==='bible'?' bbmode':''}">
-      <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
-        ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():pjMsgLib()}</section>
-      ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
+      <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje'],['txt','Texto']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
+        ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():PJ.tab==='txt'?pjTxtLib():pjMsgLib()}</section>
+      ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):PJ.tab==='txt'?pjTxtCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
         <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span>${pjSlP(x,onSong&&r.idx===i,r)}</button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
       <section class="pjw-live"><div class="pjw-h">En directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
@@ -364,6 +366,37 @@ function pjBibleCenter(r){
   return `<section class="pjw-sl"><div class="pjw-h">${esc(bk[1])} ${BB.c+1}<span class="sp"></span><button class="btn sm" data-act="pjb-ch" data-d="-1" ${BB.c<=0?'disabled':''}>◀ Cap.</button><select id="pjb-chsel" aria-label="Capítulo">${bk[3].map((_,i)=>`<option value="${i}" ${i===BB.c?'selected':''}>${i+1}</option>`).join('')}</select><button class="btn sm" data-act="pjb-ch" data-d="1" ${BB.c>=bk[3].length-1?'disabled':''}>Cap. ▶</button></div>
     <div class="pjw-scroll" id="pj-body">${ch.map((t,i)=>`<button class="pjw-v" data-act="pjb-v" data-v="${i}" aria-current="${on===i}"><span class="h">${esc(bk[1])} ${BB.c+1}:${i+1}</span><p>${esc(t)}</p></button>`).join('')}</div></section>`;
 }
+/* ===== Texto libre: escribir lo que quieras y proyectarlo; las notas se guardan en este equipo ===== */
+const PJ_TXT_QUICK=[['Bienvenidos','Bienvenidos a la casa de Dios'],['Oremos','Oremos'],['Ofrenda','Momento de la ofrenda'],['Santa Cena','Santa Cena'],['Bautismos','Servicio de bautismos'],['Silencio','Guardemos silencio, por favor']];
+function pjNotes(){ try{ return JSON.parse(localStorage.getItem('vdn-notes')||'[]')||[]; }catch{ return []; } }
+function pjNotesSave(L){ try{ localStorage.setItem('vdn-notes',JSON.stringify(L.slice(0,200))); }catch{} }
+function pjTxt(){ if(!PJ.note) PJ.note={id:'',title:'',text:''}; return PJ.note; }
+function pjTxtSlides(){ return String(pjTxt().text||'').split(/\n\s*\n/).map(x=>x.replace(/\s+$/,'').replace(/^\s*\n/,'')).filter(x=>x.trim()); }
+function pjTxtShow(i){ const n=pjTxt(); const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
+function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();
+  return `<div style="padding:8px"><button class="btn pri" data-act="pjt-new" style="width:100%">＋ Nueva nota</button></div>
+    <div class="pjw-scroll">${L.length?`<p class="pj-sug-h">Mis notas (${L.length})</p>`+L.map(x=>`<button class="pjw-row${n.id===x.id?' sel':''}" data-act="pjt-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title||x.text.split('\n')[0].slice(0,40)||'Nota')}<small>${esc(x.text.replace(/\s+/g,' ').slice(0,60))}</small></span></button>`).join(''):''}
+      <p class="pj-sug-h">Rápidas (un clic y sale en pantalla)</p>${PJ_TXT_QUICK.map(([t,x],i)=>`<button class="pjw-row" data-act="pjt-quick" data-i="${i}"><span class="t" style="text-transform:none">${esc(t)}<small>${esc(x)}</small></span></button>`).join('')}</div>`; }
+function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:-1;
+  return `<section class="pjw-sl"><div class="pjw-h">Texto libre<span class="sp"></span><span style="text-transform:none;letter-spacing:0">Ctrl+Enter proyecta</span></div>
+    <div class="pjw-scroll" style="display:grid;gap:8px;align-content:start;padding:10px 12px">
+      <input id="pjt-title" class="input" placeholder="Título (opcional, no sale en pantalla)" value="${esc(n.title)}">
+      <textarea id="pjt-text" placeholder="Escribe aquí lo que quieres mostrar…&#10;&#10;Deja una línea en blanco para hacer otra diapositiva." style="min-height:180px;resize:vertical;font:17px/1.45 var(--f-sans,system-ui);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit">${esc(n.text)}</textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn pri" data-act="pjt-show">📺 Proyectar</button><button class="btn" data-act="pjt-save">💾 Guardar nota</button>${n.id?`<button class="btn ghost" data-act="pjt-del">🗑 Borrar nota</button>`:''}<button class="btn ghost" data-act="pjt-clear">Limpiar</button></div>
+      ${sl.length>1?`<p class="pj-sug-h" style="margin:4px 0 0">Diapositivas (clic para proyectar · ← → para pasar)</p>`:''}
+      <div id="pjt-slides" style="display:grid;gap:6px">${sl.length>1?sl.map((x,i)=>`<button class="pjw-v" data-act="pjt-slide" data-i="${i}" aria-current="${live===i}"><span class="h">Diapositiva <b>${i+1}</b></span><p>${esc(x)}</p></button>`).join(''):''}</div>
+    </div></section>`; }
+document.addEventListener('input',e=>{ const t=e.target; if(t.id==='pjt-text'){ pjTxt().text=t.value; clearTimeout(PJ.ttT); PJ.ttT=setTimeout(()=>{ const box=$('#pjt-slides'); if(box){ const sl=pjTxtSlides(); box.innerHTML=sl.length>1?sl.map((x,i)=>`<button class="pjw-v" data-act="pjt-slide" data-i="${i}"><span class="h">Diapositiva <b>${i+1}</b></span><p>${esc(x)}</p></button>`).join(''):''; } },250); } else if(t.id==='pjt-title') pjTxt().title=t.value; });
+document.addEventListener('keydown',e=>{ if(e.target&&e.target.id==='pjt-text'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); pjTxtShow(0); } });
+document.addEventListener('click',e=>{ const el=e.target.closest('[data-act^="pjt-"]'); if(!el) return; e.preventDefault(); const a=el.dataset.act; const n=pjTxt();
+  if(a==='pjt-new'||a==='pjt-clear'){ PJ.note={id:a==='pjt-clear'?n.id:'',title:a==='pjt-clear'?n.title:'',text:''}; pjRender(); setTimeout(()=>{ const t=$('#pjt-text'); if(t) t.focus(); },30); }
+  else if(a==='pjt-open'){ const x=pjNotes().find(y=>y.id===el.dataset.id); if(x){ PJ.note={...x}; pjRender(); } }
+  else if(a==='pjt-quick'){ const q=PJ_TXT_QUICK[+el.dataset.i]; PJ.note={id:'',title:q[0],text:q[1]}; pjRender(); pjTxtShow(0); }
+  else if(a==='pjt-show') pjTxtShow(0);
+  else if(a==='pjt-slide') pjTxtShow(+el.dataset.i);
+  else if(a==='pjt-save'){ if(!n.text.trim()) return toast('Escribe algo primero.'); const L=pjNotes(); if(!n.id) n.id='n'+Date.now().toString(36); const i=L.findIndex(y=>y.id===n.id); const rec={id:n.id,title:n.title.trim(),text:n.text}; if(i>=0) L[i]=rec; else L.unshift(rec); pjNotesSave(L); toast('Nota guardada.'); pjRender(); }
+  else if(a==='pjt-del'){ pjNotesSave(pjNotes().filter(y=>y.id!==n.id)); PJ.note={id:'',title:'',text:''}; toast('Nota borrada.'); pjRender(); }
+});
 function pjMsgLib(){
   if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
   const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
@@ -398,7 +431,8 @@ function pjRender(scrollTop){
     return;
   }
   const qf=document.activeElement&&document.activeElement.id==='pj-q'; const qpos=qf?document.activeElement.selectionStart:0;
-  if(pjWide()){ pjRenderWide(r,qf,qpos,scrollTop); return; }
+  const ae=document.activeElement, tf=ae&&/^pjt-(text|title)$/.test(ae.id)?{id:ae.id,a:ae.selectionStart,b:ae.selectionEnd,st:ae.scrollTop}:null;
+  if(pjWide()){ pjRenderWide(r,qf,qpos,scrollTop); if(tf){ const el=document.getElementById(tf.id); if(el){ el.focus(); try{ el.setSelectionRange(tf.a,tf.b); }catch{} el.scrollTop=tf.st; } } return; }
   const body=$('#pj-body'); const keep=body&&!scrollTop?body.scrollTop:0;
   const onSong=r.mode==='text'&&s&&r.songId===s.id;
   const scr=r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=2" alt="">':esc(r.text||'');
