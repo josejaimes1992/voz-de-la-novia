@@ -1,7 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { SQL } from "bun";
 import { librosRoute, initLibros } from "./libros.ts";
-import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
+import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
@@ -515,7 +515,7 @@ const SERVER = Bun.serve({
           if (!text || text.trim().length < 200) return json({ error: "no_text", file: name }, 422);
           const ser = parseSermon(text, name);
           if (!ser) return json({ error: "no_paras", file: name }, 422);
-          try { const m = await metaFor(ser.code); if (m) { (ser as any).place = m.place; if (m.title && badTitle(ser.title, ser.code)) ser.title = m.title; } } catch {}
+          try { if (!ser.code) { const t = await metaByTitle(ser.title); if (t) { ser.code = t.code; ser.date = `19${t.code.slice(0, 2)}-${t.code.slice(3, 5)}-${t.code.slice(5, 7)}`; } } const m = await metaFor(ser.code); if (m) { (ser as any).place = m.place; if (m.title && badTitle(ser.title, ser.code)) ser.title = m.title; } } catch {}
           const prev = await db`SELECT id FROM docs WHERE col = 'sermons' AND id = ${ser.id}`;
           const data = { ...ser, file: name, by: user.name, at: Date.now() };
           await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('sermons', ${ser.id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
@@ -524,7 +524,14 @@ const SERVER = Bun.serve({
           return json({ ok: true, id: ser.id, code: ser.code, title: ser.title, paras: ser.paras.length, replaced: !!prev[0] });
         }
         const sm = p.match(/^\/api\/sermons\/([A-Za-z0-9_-]{1,80})$/);
-        if (sm && req.method === "GET") { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; return r[0] ? json(parseJ(r[0].data)) : json({ error: "not_found" }, 404); }
+        if (sm && req.method === "GET") { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; if (!r[0]) return json({ error: "not_found" }, 404);
+          /* Si le faltan código, fecha o lugar, se buscan en su propio texto (primeros y últimos párrafos) */
+          const d = parseJ(r[0].data);
+          if (!d.code) { try { const t = await metaByTitle(d.title); if (t) { d.code = t.code; if (!d.place && t.place) d.place = t.place; } } catch {} }
+          if (d.code && !d.place) { try { const m = await metaFor(d.code); if (m && m.place) d.place = m.place; } catch {} }
+          if (!d.code || !d.date || !d.place) { const P = d.paras || []; const m = sermonMeta([...P.slice(0, 4), ...P.slice(-4)].map((x: any) => x.t).join(" ") + " " + (d.title || ""));
+            if (!d.code && m.code) d.code = m.code; if (!d.date) d.date = d.code && /^\d{2}-\d{4}/.test(d.code) ? `19${d.code.slice(0, 2)}-${d.code.slice(3, 5)}-${d.code.slice(5, 7)}` : (m.date || ""); if (!d.place && m.place) d.place = m.place; }
+          return json(d); }
         if (sm && req.method === "PUT") {
           const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${sm[1]}`; if (!r[0]) return json({ error: "not_found" }, 404);
           const old = parseJ(r[0].data); const b = await req.json().catch(() => ({}));

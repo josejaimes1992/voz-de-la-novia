@@ -20,6 +20,22 @@ export async function pdfText(buf: Uint8Array): Promise<string | null> {
   } finally { for (const e of [".pdf", ".txt"]) { try { unlinkSync(tmp + e); } catch {} } }
 }
 
+/* Busca en el texto del Mensaje su código, fecha y lugar (las ediciones traen al inicio o al final:
+   "...predicado el domingo por la mañana, 28 de julio de 1963, en el Tabernáculo Branham en Jeffersonville, Indiana, EE. UU.") */
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","setiembre","octubre","noviembre","diciembre"];
+export function sermonMeta(text: string): { code?: string; date?: string; place?: string } {
+  const t = String(text || "").replace(/\s+/g, " ");
+  const out: { code?: string; date?: string; place?: string } = {};
+  const cm = t.match(/\b([4-6]\d)-(\d{4})([MAEBSXmaebsx]{0,2})\b/);
+  if (cm) out.code = `${cm[1]}-${cm[2]}${(cm[3] || "").toUpperCase()}`;
+  const dm = t.match(new RegExp(`\\b(\\d{1,2})\\s+de\\s+(${MESES.join("|")})(?:\\s+de|\\s+del|,)?\\s+(19[4-6]\\d)\\b`, "i"));
+  if (dm) { let mi = MESES.indexOf(dm[2].toLowerCase()); if (mi >= 9) mi--; out.date = `${dm[3]}-${String(mi + 1).padStart(2, "0")}-${String(+dm[1]).padStart(2, "0")}`; }
+  const W = "[A-ZÁÉÍÓÚÑ][a-záéíóúñü'.]+(?:\\s(?:de\\s|del\\s|la\\s)?[A-ZÁÉÍÓÚÑ][a-záéíóúñü'.]+){0,3}";
+  const pm = t.match(new RegExp(`\\b(${W}),\\s*(${W})(?:,\\s*(EE\\.?\\s?UU\\.?|E\\.?\\s?U\\.?\\s?A\\.?|U\\.?S\\.?A\\.?|Estados Unidos|Canadá|México|Sudáfrica|Suiza|Alemania|Noruega|Finlandia|India|Puerto Rico|Jamaica))`));
+  if (pm) out.place = `${pm[1]}, ${pm[2]}, ${/^(EE|E\.?\s?U|U\.?S|Estados)/i.test(pm[3]) ? "EE. UU." : pm[3]}`;
+  return out;
+}
+
 /* Convierte el texto de un sermón en párrafos numerados */
 export function parseSermon(raw: string, fileName: string): Sermon | null {
   const clean0 = raw.replace(/\r/g, "").replace(/\u00ad/g, "");
@@ -70,7 +86,9 @@ export function parseSermon(raw: string, fileName: string): Sermon | null {
   if (out.length < 3) return null;
   const date = code ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : "";
   const id = (code || norm(title).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || randomBytes(4).toString("hex")) + (code && /[A-Z]$/.test(code) ? "" : "");
-  return { id, code, title: title.slice(0, 160), date, paras: out };
+  const meta = sermonMeta(clean0.slice(0, 6000) + " " + clean0.slice(-6000));
+  const code2 = code || meta.code || ""; const date2 = date || (code2 ? `19${code2.slice(0, 2)}-${code2.slice(3, 5)}-${code2.slice(5, 7)}` : meta.date || "");
+  return { id: code ? id : (meta.code ? meta.code : id), code: code2, title: title.slice(0, 160), date: date2, ...(meta.place ? { place: meta.place } : {}), paras: out };
 }
 
 /* Índice en memoria para buscar rápido en todos los mensajes */
@@ -117,6 +135,17 @@ async function catalog(): Promise<Map<string, Meta>> {
     const m = { title: fixCase(x.Title), place: fixCase(x.Lugar).replace(/^-$/, "") }; if (!map.has(code)) map.set(code, m); }
   CAT = { at: Date.now(), map }; return map;
 }
+/* Buscar en el catálogo por el título (para los Mensajes que se subieron sin código) */
+const tkey = (t: string) => norm(String(t || "")).replace(/[^a-z0-9ñ ]+/g, " ").replace(/\s+/g, " ").trim();
+export async function metaByTitle(title: string): Promise<(Meta & { code: string }) | null> {
+  const k = tkey(title); if (k.length < 4) return null; const map = await catalog();
+  const hits: string[] = []; for (const [c, m] of map) if (tkey(m.title) === k) hits.push(c);
+  if (hits.length === 1) return { code: hits[0], ...map.get(hits[0])! };
+  if (hits.length > 1) return null; /* el mismo título en varias fechas: no adivino */
+  const A = new Set(k.split(" ").filter(w => w.length > 2)); let best: string | null = null, bs = 0, second = 0;
+  for (const [c, m] of map) { const B = new Set(tkey(m.title).split(" ").filter(w => w.length > 2)); if (!B.size) continue; let n = 0; for (const w of A) if (B.has(w)) n++; const sc = n / Math.max(A.size, B.size); if (sc > bs) { second = bs; bs = sc; best = c; } else if (sc > second) second = sc; }
+  return best && bs >= 0.85 && bs - second > 0.1 ? { code: best, ...map.get(best)! } : null;
+}
 export async function metaFor(code: string): Promise<Meta | null> {
   if (!code) return null; const map = await catalog(); const c = code.toUpperCase();
   if (map.has(c)) return map.get(c)!;
@@ -135,8 +164,10 @@ export function badTitle(t: string, code: string) {
 }
 export async function syncSermonMeta(db: any) {
   const map = await catalog(); const rows = await db`SELECT id, data FROM docs WHERE col = 'sermons'`; let places = 0, titles = 0, missing: string[] = [];
-  for (const r of rows) { const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data; if (!d.code) continue;
-    const m = await metaFor(d.code); if (!m) { missing.push(d.code); continue; } let ch = false;
+  for (const r of rows) { const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data; let ch = false;
+    if (!d.code) { const t = await metaByTitle(d.title); if (!t) continue; d.code = t.code; ch = true; }
+    if (!d.date && /^\d{2}-\d{4}/.test(d.code)) { d.date = `19${d.code.slice(0, 2)}-${d.code.slice(3, 5)}-${d.code.slice(5, 7)}`; ch = true; }
+    const m = await metaFor(d.code); if (!m) { missing.push(d.code); if (ch) await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'sermons' AND id = ${r.id}`; continue; }
     if (m.place && d.place !== m.place) { d.place = m.place; places++; ch = true; }
     if (m.title && !d.editedBy && badTitle(d.title, d.code)) { d.titleOld = d.title; d.title = m.title; titles++; ch = true; }
     if (ch) await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'sermons' AND id = ${r.id}`; }
