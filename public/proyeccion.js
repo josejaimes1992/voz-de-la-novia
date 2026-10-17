@@ -30,6 +30,14 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pjc{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;display:grid;gap:4px}.pjc-h{font-weight:700;font-size:13px;padding:0 4px}.pjc-h small{color:var(--muted);font-weight:600;margin-left:4px}
+.pjc-it{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--line);border-left:3px solid #c9a227;border-radius:8px;background:var(--surface);color:inherit;font:inherit;padding:6px 8px;cursor:pointer}
+.pjc-it:hover{border-color:var(--accent)}.pjc-it.on{background:var(--accent-soft);border-color:var(--accent)}.pjc-it .n{font:700 12px var(--f-mono,monospace);color:#b8860b}
+.pjc-it .t{display:grid;min-width:0}.pjc-it .t b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pjc-it .t small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjc-it .rm{color:var(--muted);padding:0 4px;font-size:16px}.pjc-it .rm:hover{color:var(--danger)}
+.pjc-add{margin-left:auto;font:600 11px var(--f-sans,system-ui);color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px;text-transform:none;letter-spacing:0;cursor:pointer}.pjc-add:hover{background:var(--accent);color:var(--accent-ink)}
+.pjw-v .h{display:flex;align-items:center;gap:8px}
+.pjf{display:grid;gap:6px}.pjf-it{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between;border:1px solid #c9a227;background:color-mix(in srgb,#c9a227 12%,transparent);border-radius:8px;padding:7px 10px;font-size:13px}.pjf-it .acts{display:flex;gap:6px}
 .pj .pjw-lib .pjw-tabs{display:flex;flex-wrap:nowrap;gap:3px}.pj .pjw-lib .pjw-tabs button{flex:1 1 auto;padding:7px 3px;font-size:11.5px;min-width:0;white-space:nowrap}
 .pj-vch{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}.pj-vch span{font:600 10px var(--f-mono,monospace);border:1px solid var(--line);border-radius:5px;padding:0 4px;color:var(--muted);cursor:pointer;background:var(--bg)}.pj-vch span:hover{border-color:var(--accent);color:var(--accent)}
 .obs-ch{display:grid;gap:2px}.obs-ch .ch{display:block;white-space:pre-line;border-radius:6px;padding:1px 6px;margin:0 -6px}.obs-ch .ch+.ch{border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent)}[aria-current="true"] .obs-ch .ch.on{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:2px solid var(--accent)}
@@ -277,6 +285,7 @@ function pjSide(r){
     return `<button class="pj-it${isSung(id)?' sung':''}${PJ.sel&&PJ.sel.has(i)?' pick':''}" data-act="pj-song" data-i="${i}" aria-pressed="${i===PJ.si}" draggable="true" data-drag="it"><span class="n">${i+1}</span><span class="t"><b>${esc(so?so.title:'')}</b>${isSung(id)?'<span class="sg">✓ Cantada</span>':''}${it&&it.note?`<em>${esc(it.note)}</em>`:''}${!it&&p?'<em class="x">Agregada ahora</em>':''}</span>${key?`<span class="key sm"${typeof kc==='function'?kc(key):''}>${esc(keyText(key))}</span>`:''}${live?'<i class="lv" title="En pantalla">●</i>':''}${S.canWrite&&!(p&&p._shared)?`<span class="rm" data-act="pj-rm" data-i="${i}" role="button" title="Quitar del programa" aria-label="Quitar">×</span>`:''}</button>`; }).join('');
   const can=S.canWrite&&!(p&&p._shared);
   return `<aside class="pj-side" id="pj-side"><div class="pj-side-h"><b>${esc(p?p.title||'Programa':'Lista de hoy')}</b>${p&&p.notes?`<small>${esc(p.notes)}</small>`:''}${!p&&can&&PJ.songIds.length?`<button class="btn pri sm" data-act="pj-saveprog" style="margin-top:6px">Guardar como programa</button>`:''}</div>${rows}
+    ${pjCitesHtml(r)}
     ${can?`<div class="pj-drop" data-drop="end">⤵ Arrastra aquí alabanzas de la izquierda (o usa ＋)</div><p class="pj-side-tip">Clic: abrir · Shift/Ctrl + clic: elegir varias · <kbd>Delete</kbd>: quitar · arrastra para ordenar</p>`:''}</aside>`;
 }
 /* ---- Armar el programa: agregar, quitar y ordenar (se guarda en el programa) ---- */
@@ -381,12 +390,13 @@ function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&
   return `<section class="pjw-sl"><div class="pjw-h">Texto libre<span class="sp"></span><span style="text-transform:none;letter-spacing:0">Ctrl+Enter proyecta</span></div>
     <div class="pjw-scroll" style="display:grid;gap:8px;align-content:start;padding:10px 12px">
       <input id="pjt-title" class="input" placeholder="Título (opcional, no sale en pantalla)" value="${esc(n.title)}">
-      <textarea id="pjt-text" placeholder="Escribe aquí lo que quieres mostrar…&#10;&#10;Deja una línea en blanco para hacer otra diapositiva." style="min-height:180px;resize:vertical;font:17px/1.45 var(--f-sans,system-ui);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit">${esc(n.text)}</textarea>
+      <div id="pjt-found">${pjFoundHtml()}</div>
+      <textarea id="pjt-text" placeholder="Escribe aquí lo que quieres mostrar…&#10;&#10;Deja una línea en blanco para hacer otra diapositiva.&#10;&#10;Si pegas una cita del Mensaje (por ejemplo: 64-0719 La Fiesta De Las Trompetas · 291 Ahora, ¡lo mismo…) la reconozco y te ofrezco proyectarla como Mensaje." style="min-height:180px;resize:vertical;font:17px/1.45 var(--f-sans,system-ui);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit">${esc(n.text)}</textarea>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn pri" data-act="pjt-show">📺 Proyectar</button><button class="btn" data-act="pjt-save">💾 Guardar nota</button>${n.id?`<button class="btn ghost" data-act="pjt-del">🗑 Borrar nota</button>`:''}<button class="btn ghost" data-act="pjt-clear">Limpiar</button></div>
       ${sl.length>1?`<p class="pj-sug-h" style="margin:4px 0 0">Diapositivas (clic para proyectar · ← → para pasar)</p>`:''}
       <div id="pjt-slides" style="display:grid;gap:6px">${sl.length>1?sl.map((x,i)=>`<button class="pjw-v" data-act="pjt-slide" data-i="${i}" aria-current="${live===i}"><span class="h">Diapositiva <b>${i+1}</b></span><p>${esc(x)}</p></button>`).join(''):''}</div>
     </div></section>`; }
-document.addEventListener('input',e=>{ const t=e.target; if(t.id==='pjt-text'){ pjTxt().text=t.value; clearTimeout(PJ.ttT); PJ.ttT=setTimeout(()=>{ const box=$('#pjt-slides'); if(box){ const sl=pjTxtSlides(); box.innerHTML=sl.length>1?sl.map((x,i)=>`<button class="pjw-v" data-act="pjt-slide" data-i="${i}"><span class="h">Diapositiva <b>${i+1}</b></span><p>${esc(x)}</p></button>`).join(''):''; } },250); } else if(t.id==='pjt-title') pjTxt().title=t.value; });
+document.addEventListener('input',e=>{ const t=e.target; if(t.id==='pjt-text'){ pjTxt().text=t.value; pjDetectSoon(); clearTimeout(PJ.ttT); PJ.ttT=setTimeout(()=>{ const box=$('#pjt-slides'); if(box){ const sl=pjTxtSlides(); box.innerHTML=sl.length>1?sl.map((x,i)=>`<button class="pjw-v" data-act="pjt-slide" data-i="${i}"><span class="h">Diapositiva <b>${i+1}</b></span><p>${esc(x)}</p></button>`).join(''):''; } },250); } else if(t.id==='pjt-title') pjTxt().title=t.value; });
 document.addEventListener('keydown',e=>{ if(e.target&&e.target.id==='pjt-text'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); pjTxtShow(0); } });
 document.addEventListener('click',e=>{ const el=e.target.closest('[data-act^="pjt-"]'); if(!el) return; e.preventDefault(); const a=el.dataset.act; const n=pjTxt();
   if(a==='pjt-new'||a==='pjt-clear'){ PJ.note={id:a==='pjt-clear'?n.id:'',title:a==='pjt-clear'?n.title:'',text:''}; pjRender(); setTimeout(()=>{ const t=$('#pjt-text'); if(t) t.focus(); },30); }
@@ -397,6 +407,48 @@ document.addEventListener('click',e=>{ const el=e.target.closest('[data-act^="pj
   else if(a==='pjt-save'){ if(!n.text.trim()) return toast('Escribe algo primero.'); const L=pjNotes(); if(!n.id) n.id='n'+Date.now().toString(36); const i=L.findIndex(y=>y.id===n.id); const rec={id:n.id,title:n.title.trim(),text:n.text}; if(i>=0) L[i]=rec; else L.unshift(rec); pjNotesSave(L); toast('Nota guardada.'); pjRender(); }
   else if(a==='pjt-del'){ pjNotesSave(pjNotes().filter(y=>y.id!==n.id)); PJ.note={id:'',title:'',text:''}; toast('Nota borrada.'); pjRender(); }
 });
+/* ===== Citas del Mensaje: párrafos de varios mensajes para el culto ===== */
+function pjCitesKey(){ return PJ.programId?'p:'+PJ.programId:'d:'+new Date(Date.now()-5*3600_000).toISOString().slice(0,10); }
+function pjCites(){ const k=pjCitesKey(); if(PJ._citesFor!==k){ PJ._citesFor=k; let L=[]; const p=PJ.programId&&S.programs.get(PJ.programId); if(p&&Array.isArray(p.cites)) L=p.cites.slice(); else { try{ L=JSON.parse(localStorage.getItem('vdn-cites-'+k)||'[]')||[]; }catch{} } PJ.cites=L; } return PJ.cites||(PJ.cites=[]); }
+function pjCitesSave(){ const k=pjCitesKey(); const L=pjCites(); try{ localStorage.setItem('vdn-cites-'+k,JSON.stringify(L.slice(0,200))); }catch{}
+  const p=PJ.programId&&S.programs.get(PJ.programId); if(p&&!p._shared&&S.canWrite){ const np=JSON.parse(JSON.stringify(p)); np.cites=L; S.programs.set(np.id,np); clearTimeout(PJ.citesT); PJ.citesT=setTimeout(()=>writeDoc('programs',np),400); } }
+function pjCiteAdd(c){ const L=pjCites(); if(L.some(x=>x.sid===c.sid&&x.n===c.n)){ toast('Esa cita ya está en la lista.'); return false; } L.push({sid:c.sid,code:c.code||'',title:c.title||'',place:c.place||'',i:c.i,n:c.n,snip:String(c.snip||'').slice(0,90)}); pjCitesSave(); pjRender(); toast(`Cita agregada: ${c.code||c.title} · párrafo ${c.n}`); return true; }
+function pjCitesHtml(r){ const L=pjCites(); const live=r&&r.mode==='text'&&r.sermon;
+  return `<div class="pjc"><div class="pjc-h">📜 Citas del Mensaje <small>${L.length||''}</small></div>${L.length?L.map((c,k)=>`<button class="pjc-it${live&&live.id===c.sid&&String(r.num)===String(c.n)?' on':''}" data-act="pjc-go" data-k="${k}"><span class="n">¶${esc(c.n)}</span><span class="t"><b>${esc(c.title||c.code)}</b><small>${esc(c.code||'')}${c.snip?' · '+esc(c.snip):''}</small></span><span class="rm" data-act="pjc-rm" data-k="${k}" role="button" title="Quitar">×</span></button>`).join(''):`<p class="pj-side-tip" style="margin:4px 0">Doble clic (o «＋ Cita») en un párrafo del Mensaje, o pega la cita en la pestaña Texto.</p>`}</div>`; }
+async function pjCiteGo(c){ try{ if(!MS.cur||MS.cur.id!==c.sid) await msOpen(c.sid,null); const s=MS.cur; if(!s) return; let i=s.paras.findIndex(p=>String(p.n)===String(c.n)); if(i<0) i=Math.min(c.i||0,s.paras.length-1);
+  MS.p=i; MS.part=0; MS.auto=0; await msProject(); PJ.tab='msg'; pjRender(true); setTimeout(()=>{ const el=document.querySelector(`#pj-body [data-act="pjm-p"][data-i="${i}"]`); if(el) el.scrollIntoView({block:'center'}); },60); }catch(e){ toast('No se pudo abrir esa cita.'); } }
+document.addEventListener('dblclick',e=>{ const el=e.target.closest('#pj-body [data-act="pjm-p"]'); if(!el||!PJ.open) return; const s=MS.cur; const i=+el.dataset.i; if(!s||!s.paras[i]) return; pjCiteAdd({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t}); });
+document.addEventListener('click',e=>{ const el=e.target.closest('[data-act^="pjc-"],[data-act^="pjf-"]'); if(!el) return; e.preventDefault(); e.stopPropagation(); const a=el.dataset.act;
+  if(a==='pjc-add'){ const s=MS.cur; const i=+el.dataset.i; if(s&&s.paras[i]) pjCiteAdd({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t}); }
+  else if(a==='pjc-rm'){ const L=pjCites(); L.splice(+el.dataset.k,1); pjCitesSave(); pjRender(); }
+  else if(a==='pjc-go'){ const c=pjCites()[+el.dataset.k]; if(c) pjCiteGo(c); }
+  else if(a==='pjf-go'){ const c=(PJ.found||[])[+el.dataset.k]; if(c) pjCiteGo(c); }
+  else if(a==='pjf-add'){ const c=(PJ.found||[])[+el.dataset.k]; if(c) pjCiteAdd(c); }
+  else if(a==='pjf-all'){ let n=0; for(const c of (PJ.found||[])) if(!pjCites().some(x=>x.sid===c.sid&&x.n===c.n)){ pjCites().push({sid:c.sid,code:c.code,title:c.title,place:c.place||'',i:c.i,n:c.n,snip:String(c.snip||'').slice(0,90)}); n++; } pjCitesSave(); pjRender(); toast(`${n} citas agregadas.`); }
+},true);
+/* ---- Reconocer una cita pegada: código (64-0719) + número de párrafo, o por el texto ---- */
+const PJ_SC=new Map();
+async function pjSermon(id){ if(PJ_SC.has(id)) return PJ_SC.get(id); const s=await api('/api/sermons/'+encodeURIComponent(id)); PJ_SC.set(id,s); return s; }
+const pjW=t=>msNorm(t).replace(/[^a-z0-9ñ ]+/g,' ').split(/\s+/).filter(w=>w.length>2);
+function pjBestPara(s,txt){ const A=new Set(pjW(txt)); if(A.size<4) return -1; let bi=-1,bs=0; s.paras.forEach((p,i)=>{ const B=new Set(pjW(p.t)); let k=0; for(const w of A) if(B.has(w)) k++; const sc=k/A.size; if(sc>bs){ bs=sc; bi=i; } }); return bs>=0.6?bi:-1; }
+async function pjDetect(text){
+  const out=[]; const T=String(text||''); if(T.trim().length<12) return out;
+  if(!MS.list) await msLoadList(); const list=MS.list||[];
+  const re=/(\d{2})-(\d{4})([A-Za-z]{0,2})/g; const hits=[]; let m; while((m=re.exec(T))) hits.push({at:m.index,end:re.lastIndex,code:`${m[1]}-${m[2]}${m[3].toUpperCase()}`});
+  for(let h=0;h<hits.length;h++){ const H=hits[h]; const seg=T.slice(H.end,h+1<hits.length?hits[h+1].at:T.length); const line=seg.split('\n')[0];
+    let cands=list.filter(x=>(x.code||'').toUpperCase().startsWith(H.code.slice(0,7))); if(H.code.length>7){ const ex=cands.filter(x=>x.code.toUpperCase()===H.code); if(ex.length) cands=ex; }
+    if(cands.length>1){ const tw=new Set(pjW(line)); cands.sort((a,b)=>pjW(b.title).filter(w=>tw.has(w)).length-pjW(a.title).filter(w=>tw.has(w)).length); }
+    const x=cands[0]; if(!x) continue; let s; try{ s=await pjSermon(x.id); }catch{ continue; }
+    const rest=seg.slice(line.length); const nm=/(?:^|\n)\s*(?:E-)?(\d{1,4})[\s.)]+(\S[\s\S]*)/.exec(rest)||/^\s*(?:E-)?(\d{1,4})[\s.)]+(\S[\s\S]*)/.exec(seg.replace(line,''));
+    let i=-1; if(nm){ i=s.paras.findIndex(p=>String(p.n)===nm[1]); }
+    if(i<0) i=pjBestPara(s,rest||seg);
+    if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t});
+  }
+  if(!out.length){ const words=pjW(T).slice(0,9).join(' '); if(words.split(' ').length>=5){ try{ const r=await api('/api/sermons/search?q='+encodeURIComponent(words)); const p=(r.paras||[])[0]; if(p){ const s=await pjSermon(p.id); const i=s.paras.findIndex(q=>String(q.n)===String(p.n)); if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t}); } }catch{} } }
+  return out; }
+function pjDetectSoon(){ clearTimeout(PJ.detT); PJ.detT=setTimeout(async()=>{ const t=pjTxt().text; PJ.found=await pjDetect(t).catch(()=>[]); const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); },700); }
+function pjFoundHtml(){ const F=PJ.found||[]; if(!F.length) return '';
+  return `<div class="pjf">${F.map((c,k)=>`<div class="pjf-it"><span>📜 Es del Mensaje <b>${esc(c.code||'')} · ${esc(c.title)}</b> · Párrafo <b>${esc(c.n)}</b></span><span class="acts"><button class="btn pri sm" data-act="pjf-go" data-k="${k}">📺 Proyectar como Mensaje</button><button class="btn sm" data-act="pjf-add" data-k="${k}">＋ A citas</button></span></div>`).join('')}${F.length>1?`<button class="btn sm" data-act="pjf-all">＋ Agregar las ${F.length} a citas</button>`:''}</div>`; }
 function pjMsgLib(){
   if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
   const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
@@ -407,7 +459,7 @@ function pjMsgCenter(r){
   const s=typeof MS!=='undefined'&&MS.cur; if(!s) return `<section class="pjw-sl"><div class="pjw-h">Mensaje</div><p class="pj-empty" style="padding:16px">${MS&&MS.curId?'Abriendo…':'Elige un mensaje a la izquierda.'}</p></section>`;
   const on=r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id?r.sermon.p:-1;
   return `<section class="pjw-sl"><div class="pjw-h"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">${esc(s.title)}</span><span class="sp"></span><span>${esc(s.code||'')}</span></div>
-    <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v" data-act="pjm-p" data-i="${i}" aria-current="${on===i}"><span class="h">Párrafo ${esc(p.n)}</span><p>${esc(p.t)}</p></button>`).join('')}</div></section>`;
+    <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v" data-act="pjm-p" data-i="${i}" aria-current="${on===i}" title="Clic: proyectar · Doble clic: agregar a Citas"><span class="h">Párrafo ${esc(p.n)}<span class="pjc-add" data-act="pjc-add" data-i="${i}" role="button" title="Agregar a las citas del culto">＋ Cita</span></span><p>${esc(p.t)}</p></button>`).join('')}</div></section>`;
 }
 function pjBindTabs(){
   const bq=$('#pjb-q'); if(bq){ bq.addEventListener('input',e=>{ PJ.bq=e.target.value; clearTimeout(PJ.bqt); PJ.bqt=setTimeout(()=>{ pjRender(); const n=$('#pjb-q'); if(n){ n.focus(); const l=n.value.length; try{ n.setSelectionRange(l,l); }catch{} } },250); });
