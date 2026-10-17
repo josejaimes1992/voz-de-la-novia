@@ -135,7 +135,7 @@ function rdApply(st){ cancelAnimationFrame(rdAuto); rdAuto=null; if(typeof gRaf!
   else { $('#rd-in').classList.toggle('glide',!!st.glide); rdSet((st.sc||0)*rdMax()); } }
 function show(st){
   cur=st; const key=st.mode+'|'+(st.mode==='text'?st.text+'|'+(st.ref||'')+'|'+(st.read?1:0):'');
-  if(key===lastKey){ if(st.mode==='text'&&st.read) rdApply(st); return; } lastKey=key;
+  if(key===lastKey){ if(st.mode==='text'&&st.read&&st.src!=='wheel') rdApply(st); return; } lastKey=key;
   $('#L-logo').classList.toggle('on', st.mode==='logo');
   const A=$('#L-a'), B=$('#L-b'), R=$('#L-read');
   if(st.mode==='text'&&st.read){ A.classList.remove('on'); B.classList.remove('on');
@@ -251,7 +251,12 @@ document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); l
 /* Rueda del mouse: baja o sube el texto despacio, con una transición suave */
 let wAcc=0, wT=0, gTarget=null, gRaf=null;
 function glideTo(t){ gTarget=Math.max(0,Math.min(rdMax(),t)); cancelAnimationFrame(rdAuto); rdAuto=null; if(gRaf) return;
-  const tick=()=>{ const diff=gTarget-rdOff; if(Math.abs(diff)<0.4){ rdSet(gTarget,false); gRaf=null; return; } rdSet(rdOff+diff*0.045,false); gRaf=requestAnimationFrame(tick); }; gRaf=requestAnimationFrame(tick); }
+  const tick=()=>{ const diff=gTarget-rdOff; if(Math.abs(diff)<0.4){ rdSet(gTarget,false); gRaf=null; scReport(true); return; } rdSet(rdOff+diff*0.045,false); scReport(false); gRaf=requestAnimationFrame(tick); }; gRaf=requestAnimationFrame(tick); }
+/* Avisar la posición al servidor (OBS y la consola la siguen) */
+let scLast=0, scT=null;
+function scReport(final){ const now=Date.now(); if(!final&&now-scLast<300) return; scLast=now; clearTimeout(scT);
+  scT=setTimeout(()=>{ let t=null; try{ t=JSON.parse(localStorage.getItem('vdn-token')||'null'); }catch{} if(!t||!cur||!cur.read) return; const max=rdMax(); const sc=max>0?rdOff/max:0;
+    fetch('/api/proyector/sc',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({sc,key:String(cur.text||'').slice(0,40)})}).catch(()=>{}); }, final?0:10); }
 document.addEventListener('wheel',e=>{ const L=$('#L-read'); const reading=L&&L.classList.contains('on')&&$('#rd-in').textContent.trim();
   e.preventDefault(); const dy=e.deltaY*(e.deltaMode===1?16:1);
   if(reading){ const max=rdMax(); const base=gRaf?gTarget:rdOff; const next=base+dy*0.45;

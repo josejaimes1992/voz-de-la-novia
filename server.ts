@@ -573,7 +573,15 @@ const SERVER = Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : b.kind === "glide" ? "glide" : "scroll";
         const next = await projNav(d, kind); if (!next) return json(PROJ);
-        PROJ = { ...next, by: user.name, at: Date.now() }; PROJ_PREV = null; pubProj(); return json(PROJ);
+        PROJ = { ...next, src: undefined, by: user.name, at: Date.now() } as any; PROJ_PREV = null; pubProj(); return json(PROJ);
+      }
+      /* La pantalla del proyector avisa cuánto bajó con la rueda (para que OBS y la consola la sigan) */
+      if (p === "/api/proyector/sc" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const b = await req.json().catch(() => ({})); const P: any = PROJ;
+        if (P.mode !== "text" || !P.read || (b.key && b.key !== String(P.text || "").slice(0, 40))) return json({ ok: false });
+        const sc = Math.min(1, Math.max(0, Number(b.sc) || 0)); const steps = msStepsSrv(P.text || "");
+        PROJ = { ...P, sc, auto: 0, glide: true, src: "wheel", sermon: P.sermon ? { ...P.sermon, part: Math.round(sc * steps) } : P.sermon, at: Date.now() } as any; pubProj(); return json({ ok: true });
       }
       if (p === "/api/proyector/sung") {
         await sungLoad();
