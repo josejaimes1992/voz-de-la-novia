@@ -30,6 +30,9 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .pj-empty{color:var(--muted);padding:20px 0}
+.pjf-it.warn{border-color:#e08a2b;background:color-mix(in srgb,#e08a2b 12%,transparent)}.pjf-sim{font:700 11px var(--f-sans,system-ui);border-radius:999px;padding:1px 7px;margin-left:4px}.pjf-sim.ok{background:#2fa36b;color:#fff}.pjf-sim.mid{background:#e0a32b;color:#1b1406}.pjf-sim.bad{background:var(--danger);color:#fff}
+.pjf-cmp{flex-basis:100%;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:6px}.pjf-cmp>div{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;max-height:260px;overflow:auto;font-size:13.5px;line-height:1.5}.pjf-cmp h5{margin:0 0 6px;font-size:12px;color:var(--muted)}.pjf-cmp p{margin:0}
+.pjf-cmp mark.dx-a{background:color-mix(in srgb,var(--danger) 30%,transparent);color:inherit;border-radius:3px}.pjf-cmp mark.dx-b{background:color-mix(in srgb,#e0c22b 40%,transparent);color:inherit;border-radius:3px}.pjf-nav{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .pjc{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;display:grid;gap:4px}.pjc-h{font-weight:700;font-size:13px;padding:0 4px}.pjc-h small{color:var(--muted);font-weight:600;margin-left:4px}
 .pjc-it{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--line);border-left:3px solid #c9a227;border-radius:8px;background:var(--surface);color:inherit;font:inherit;padding:6px 8px;cursor:pointer}
 .pjc-it:hover{border-color:var(--accent)}.pjc-it.on{background:var(--accent-soft);border-color:var(--accent)}.pjc-it .n{font:700 12px var(--f-mono,monospace);color:#b8860b}
@@ -37,7 +40,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pjc-it .rm{color:var(--muted);padding:0 4px;font-size:16px}.pjc-it .rm:hover{color:var(--danger)}
 .pjc-add{margin-left:auto;font:600 11px var(--f-sans,system-ui);color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px;text-transform:none;letter-spacing:0;cursor:pointer}.pjc-add:hover{background:var(--accent);color:var(--accent-ink)}
 .pjw-v .h{display:flex;align-items:center;gap:8px}
-.pjf{display:grid;gap:6px}.pjf-it{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between;border:1px solid #c9a227;background:color-mix(in srgb,#c9a227 12%,transparent);border-radius:8px;padding:7px 10px;font-size:13px}.pjf-it .acts{display:flex;gap:6px}
+.pjf{display:grid;gap:6px}.pjf-it{min-width:0;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between;border:1px solid #c9a227;background:color-mix(in srgb,#c9a227 12%,transparent);border-radius:8px;padding:7px 10px;font-size:13px}.pjf-it .acts{display:flex;gap:6px;flex-wrap:wrap}.pjf-it>span:first-child{min-width:0;flex:1 1 260px}#pjt-text,#pjt-title{width:100%;box-sizing:border-box}
 .pj .pjw-lib .pjw-tabs{display:flex;flex-wrap:nowrap;gap:3px}.pj .pjw-lib .pjw-tabs button{flex:1 1 auto;padding:7px 3px;font-size:11.5px;min-width:0;white-space:nowrap}
 .pj-vch{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}.pj-vch span{font:600 10px var(--f-mono,monospace);border:1px solid var(--line);border-radius:5px;padding:0 4px;color:var(--muted);cursor:pointer;background:var(--bg)}.pj-vch span:hover{border-color:var(--accent);color:var(--accent)}
 .obs-ch{display:grid;gap:2px}.obs-ch .ch{display:block;white-space:pre-line;border-radius:6px;padding:1px 6px;margin:0 -6px}.obs-ch .ch+.ch{border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent)}[aria-current="true"] .obs-ch .ch.on{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:2px solid var(--accent)}
@@ -388,7 +391,7 @@ function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();
       <p class="pj-sug-h">Rápidas (un clic y sale en pantalla)</p>${PJ_TXT_QUICK.map(([t,x],i)=>`<button class="pjw-row" data-act="pjt-quick" data-i="${i}"><span class="t" style="text-transform:none">${esc(t)}<small>${esc(x)}</small></span></button>`).join('')}</div>`; }
 function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:-1;
   return `<section class="pjw-sl"><div class="pjw-h">Texto libre<span class="sp"></span><span style="text-transform:none;letter-spacing:0">Ctrl+Enter proyecta</span></div>
-    <div class="pjw-scroll" style="display:grid;gap:8px;align-content:start;padding:10px 12px">
+    <div class="pjw-scroll" style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;padding:10px 12px">
       <input id="pjt-title" class="input" placeholder="Título (opcional, no sale en pantalla)" value="${esc(n.title)}">
       <div id="pjt-found">${pjFoundHtml()}</div>
       <textarea id="pjt-text" placeholder="Escribe aquí lo que quieres mostrar…&#10;&#10;Deja una línea en blanco para hacer otra diapositiva.&#10;&#10;Si pegas una cita del Mensaje (por ejemplo: 64-0719 La Fiesta De Las Trompetas · 291 Ahora, ¡lo mismo…) la reconozco y te ofrezco proyectarla como Mensaje." style="min-height:180px;resize:vertical;font:17px/1.45 var(--f-sans,system-ui);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit">${esc(n.text)}</textarea>
@@ -422,6 +425,8 @@ document.addEventListener('click',e=>{ const el=e.target.closest('[data-act^="pj
   if(a==='pjc-add'){ const s=MS.cur; const i=+el.dataset.i; if(s&&s.paras[i]) pjCiteAdd({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t}); }
   else if(a==='pjc-rm'){ const L=pjCites(); L.splice(+el.dataset.k,1); pjCitesSave(); pjRender(); }
   else if(a==='pjc-go'){ const c=pjCites()[+el.dataset.k]; if(c) pjCiteGo(c); }
+  else if(a==='pjf-cmp'){ const k=+el.dataset.k; PJ.cmpK=PJ.cmpK===k?null:k; const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); }
+  else if(a==='pjf-mv'){ const c=(PJ.found||[])[+el.dataset.k]; if(!c) return; const sm=PJ_SC.get(c.sid); if(!sm) return; const i=Math.max(0,Math.min(sm.paras.length-1,c.i+(+el.dataset.d))); c.i=i; c.n=sm.paras[i].n; c.snip=sm.paras[i].t; c.sim=pjSim(c.pasted||'',c.snip); const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); }
   else if(a==='pjf-go'){ const c=(PJ.found||[])[+el.dataset.k]; if(c) pjCiteGo(c); }
   else if(a==='pjf-add'){ const c=(PJ.found||[])[+el.dataset.k]; if(c) pjCiteAdd(c); }
   else if(a==='pjf-all'){ let n=0; for(const c of (PJ.found||[])) if(!pjCites().some(x=>x.sid===c.sid&&x.n===c.n)){ pjCites().push({sid:c.sid,code:c.code,title:c.title,place:c.place||'',i:c.i,n:c.n,snip:String(c.snip||'').slice(0,90)}); n++; } pjCitesSave(); pjRender(); toast(`${n} citas agregadas.`); }
@@ -434,21 +439,35 @@ function pjBestPara(s,txt){ const A=new Set(pjW(txt)); if(A.size<4) return -1; l
 async function pjDetect(text){
   const out=[]; const T=String(text||''); if(T.trim().length<12) return out;
   if(!MS.list) await msLoadList(); const list=MS.list||[];
-  const re=/(\d{2})-(\d{4})([A-Za-z]{0,2})/g; const hits=[]; let m; while((m=re.exec(T))) hits.push({at:m.index,end:re.lastIndex,code:`${m[1]}-${m[2]}${m[3].toUpperCase()}`});
+  const re=/(\d{2})-(\d{4})([A-Za-z]{0,2})/g; const hits=[]; let m; while((m=re.exec(T))){ let sf=m[3].toUpperCase(); if(sf==='AM'||sf==='A'||sf==='MA') sf='M'; else if(sf==='PM'||sf==='P'||sf==='N') sf='E'; hits.push({at:m.index,end:re.lastIndex,code:`${m[1]}-${m[2]}${sf}`}); }
   for(let h=0;h<hits.length;h++){ const H=hits[h]; const seg=T.slice(H.end,h+1<hits.length?hits[h+1].at:T.length); const line=seg.split('\n')[0];
     let cands=list.filter(x=>(x.code||'').toUpperCase().startsWith(H.code.slice(0,7))); if(H.code.length>7){ const ex=cands.filter(x=>x.code.toUpperCase()===H.code); if(ex.length) cands=ex; }
     if(cands.length>1){ const tw=new Set(pjW(line)); cands.sort((a,b)=>pjW(b.title).filter(w=>tw.has(w)).length-pjW(a.title).filter(w=>tw.has(w)).length); }
     const x=cands[0]; if(!x) continue; let s; try{ s=await pjSermon(x.id); }catch{ continue; }
     const rest=seg.slice(line.length); const nm=/(?:^|\n)\s*(?:E-)?(\d{1,4})[\s.)]+(\S[\s\S]*)/.exec(rest)||/^\s*(?:E-)?(\d{1,4})[\s.)]+(\S[\s\S]*)/.exec(seg.replace(line,''));
     let i=-1; if(nm){ i=s.paras.findIndex(p=>String(p.n)===nm[1]); }
+    if(i>=0&&nm&&pjSim(nm[2],s.paras[i].t)<0.5){ const j=pjBestPara(s,nm[2]); if(j>=0) i=j; }
     if(i<0) i=pjBestPara(s,rest||seg);
-    if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t});
+    const pasted=(nm?nm[2]:(rest||seg)).trim();
+    if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t,pasted,reqN:nm?nm[1]:null,sim:pjSim(pasted,s.paras[i].t)});
   }
-  if(!out.length){ const words=pjW(T).slice(0,9).join(' '); if(words.split(' ').length>=5){ try{ const r=await api('/api/sermons/search?q='+encodeURIComponent(words)); const p=(r.paras||[])[0]; if(p){ const s=await pjSermon(p.id); const i=s.paras.findIndex(q=>String(q.n)===String(p.n)); if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t}); } }catch{} } }
+  if(!out.length){ const words=pjW(T).slice(0,9).join(' '); if(words.split(' ').length>=5){ try{ const r=await api('/api/sermons/search?q='+encodeURIComponent(words)); const p=(r.paras||[])[0]; if(p){ const s=await pjSermon(p.id); const i=s.paras.findIndex(q=>String(q.n)===String(p.n)); if(i>=0) out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t,pasted:T.trim(),reqN:null,sim:pjSim(T,s.paras[i].t)}); } }catch{} } }
   return out; }
-function pjDetectSoon(){ clearTimeout(PJ.detT); PJ.detT=setTimeout(async()=>{ const t=pjTxt().text; PJ.found=await pjDetect(t).catch(()=>[]); const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); },700); }
+function pjDetectSoon(){ PJ.cmpK=null; clearTimeout(PJ.detT); PJ.detT=setTimeout(async()=>{ const t=pjTxt().text; PJ.found=await pjDetect(t).catch(()=>[]); const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); },700); }
+function pjSim(a,b){ const A=pjW(a), B=new Set(pjW(b)); if(!A.length) return 0; let k=0; for(const w of A) if(B.has(w)) k++; return k/A.length; }
+/* Comparar palabra por palabra (LCS): marca lo que sobra o falta */
+function pjDiff(a,b){ const ta=String(a).split(/(\s+)/).filter(x=>x.trim()), tb=String(b).split(/(\s+)/).filter(x=>x.trim()); const na=ta.map(w=>pjW(w).join('')), nb=tb.map(w=>pjW(w).join(''));
+  const A=na.slice(0,600), B=nb.slice(0,600); const n=A.length, m=B.length; const L=Array.from({length:n+1},()=>new Uint16Array(m+1));
+  for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--) L[i][j]=A[i]&&A[i]===B[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  const okA=new Set(), okB=new Set(); for(let i=0,j=0;i<n&&j<m;){ if(A[i]&&A[i]===B[j]){ okA.add(i); okB.add(j); i++; j++; } else if(L[i+1][j]>=L[i][j+1]) i++; else j++; }
+  const paint=(t,ok,cls)=>t.map((w,i)=>ok.has(i)||!pjW(w).length?esc(w):`<mark class="${cls}">${esc(w)}</mark>`).join(' ');
+  return {a:paint(ta,okA,'dx-a'),b:paint(tb,okB,'dx-b'),pct:Math.round(100*okA.size/Math.max(1,ta.filter(w=>pjW(w).length).length))}; }
 function pjFoundHtml(){ const F=PJ.found||[]; if(!F.length) return '';
-  return `<div class="pjf">${F.map((c,k)=>`<div class="pjf-it"><span>📜 Es del Mensaje <b>${esc(c.code||'')} · ${esc(c.title)}</b> · Párrafo <b>${esc(c.n)}</b></span><span class="acts"><button class="btn pri sm" data-act="pjf-go" data-k="${k}">📺 Proyectar como Mensaje</button><button class="btn sm" data-act="pjf-add" data-k="${k}">＋ A citas</button></span></div>`).join('')}${F.length>1?`<button class="btn sm" data-act="pjf-all">＋ Agregar las ${F.length} a citas</button>`:''}</div>`; }
+  return `<div class="pjf">${F.map((c,k)=>{ const warn=c.reqN&&String(c.reqN)!==String(c.n); const open=PJ.cmpK===k; const d=open?pjDiff(c.pasted||'',c.snip||''):null;
+    return `<div class="pjf-it${warn?' warn':''}"><span>📜 Es del Mensaje <b>${esc(c.code||'')} · ${esc(c.title)}</b> · Párrafo <b>${esc(c.n)}</b>${c.sim!=null?` <small class="pjf-sim ${c.sim>=0.85?'ok':c.sim>=0.6?'mid':'bad'}">${Math.round(c.sim*100)}% igual</small>`:''}${warn?`<br><small>⚠ Pegaste el párrafo <b>${esc(c.reqN)}</b>, pero en este Mensaje el texto coincide con el <b>${esc(c.n)}</b>. Compara antes de proyectar.</small>`:''}</span>
+      <span class="acts"><button class="btn sm" data-act="pjf-cmp" data-k="${k}">${open?'Cerrar comparación':'🔍 Ver y comparar'}</button><button class="btn pri sm" data-act="pjf-go" data-k="${k}">📺 Proyectar como Mensaje</button><button class="btn sm" data-act="pjf-add" data-k="${k}">＋ A citas</button></span>
+      ${open?`<div class="pjf-cmp"><div><h5>Lo que pegaste</h5><p>${d.a}</p></div><div><h5>Párrafo ${esc(c.n)} del Mensaje <span class="pjf-sim ${d.pct>=85?'ok':d.pct>=60?'mid':'bad'}">${d.pct}% igual</span></h5><p>${d.b}</p></div>
+        <div class="pjf-nav"><button class="btn sm" data-act="pjf-mv" data-k="${k}" data-d="-1">‹ Párrafo anterior</button><small><mark class="dx-a">rojo</mark> = solo en lo pegado · <mark class="dx-b">amarillo</mark> = solo en el Mensaje</small><button class="btn sm" data-act="pjf-mv" data-k="${k}" data-d="1">Párrafo siguiente ›</button></div></div>`:''}</div>`; }).join('')}${F.length>1?`<button class="btn sm" data-act="pjf-all">＋ Agregar las ${F.length} a citas</button>`:''}</div>`; }
 function pjMsgLib(){
   if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
   const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
