@@ -437,6 +437,7 @@ const SERVER = Bun.serve({
       if (p === "/biblia/rv1909.json") return new Response(Bun.file(appPath("./public/biblia/rv1909.json.gz")), { headers: { "content-type": "application/json; charset=utf-8", "content-encoding": "gzip", "cache-control": "public, max-age=86400" } });
       if (p === "/manifest.webmanifest") return new Response(Bun.file(appPath("./public/manifest.webmanifest")), { headers: { "content-type": "application/manifest+json", "cache-control": "no-cache" } });
       if (p === "/sw.js") return new Response(Bun.file(appPath("./public/sw.js")), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+      if (p === "/descargar" || p === "/windows") return new Response(await Bun.file(appPath("./public/descargar.html")).text(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(brandHtml(await Bun.file(appPath("./public/instalar.html")).text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/" || p === "/index.html") return new Response(DK ? DK.desktopHtml(brandHtml(HTML)) : brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");

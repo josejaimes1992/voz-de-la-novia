@@ -25,7 +25,7 @@ const out = opt("--out", target.includes("windows") ? "dist/VozDeLaNovia.exe" : 
 const cmd = ["bun", "build", "--compile", `--target=${target}`, root + "desktop/main.ts", "--outfile", root + out];
 const exe = opt("--exe"); if (exe) cmd.push(`--compile-executable-path=${exe}`);
 if (target.includes("windows") && process.platform === "win32") {
-  cmd.push("--windows-title=Voz de la Novia", "--windows-publisher=Tabernáculo Shalom Adonai", "--windows-description=Voz de la Novia — alabanzas, Biblia y Mensaje en pantalla", "--windows-version=1.0.0.0");
+  cmd.push("--windows-title=Voz de la Novia", "--windows-publisher=Tabernáculo Shalom Adonai", "--windows-description=Voz de la Novia — alabanzas, Biblia y Mensaje en pantalla", `--windows-version=${readFileSync(root + "desktop/VERSION", "utf8").trim()}.0`);
   const ico = opt("--icon"); if (ico) cmd.push(`--windows-icon=${ico}`);
 }
 const p = Bun.spawnSync(cmd, { stdout: "inherit", stderr: "inherit" });

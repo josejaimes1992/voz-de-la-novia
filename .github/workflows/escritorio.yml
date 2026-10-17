@@ -4,7 +4,8 @@ name: Programa de escritorio
 on:
   workflow_dispatch:
   push:
-    tags: ["escritorio-v*"]
+    branches: [main]
+    paths: ["desktop/VERSION"]
 permissions:
   contents: write
 jobs:
@@ -27,7 +28,7 @@ jobs:
         run: bun desktop/build.ts --bin winbin --icon desktop/icon.ico
       - name: Probar el programa
         run: |
-          export VDN_DATA="$RUNNER_TEMP/vdn" VDN_NO_OPEN=1
+          export VDN_DATA="$(cygpath -m "$RUNNER_TEMP")/vdn" VDN_NO_OPEN=1
           ./dist/VozDeLaNovia.exe > run.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:4747/api/desktop/status && break; sleep 1; done; echo
           curl -sf localhost:4747/ | grep -q "Configurar Voz de la Novia"
@@ -41,13 +42,17 @@ jobs:
           taskkill //F //IM VozDeLaNovia.exe || true
       - uses: actions/upload-artifact@v4
         with: { name: VozDeLaNovia, path: dist/VozDeLaNovia.exe }
+      - name: Versión
+        id: v
+        run: echo "v=$(tr -d '\r\n ' < desktop/VERSION)" >> "$GITHUB_OUTPUT"
       - name: Publicar en Releases
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: escritorio-v${{ steps.v.outputs.v }}
+          target_commitish: ${{ github.sha }}
           files: dist/VozDeLaNovia.exe
           make_latest: true
-          name: Voz de la Novia para Windows (${{ github.ref_name }})
+          name: Voz de la Novia para Windows ${{ steps.v.outputs.v }}
           body: |
             Programa de Windows de Voz de la Novia: funciona sin internet.
             Descarga VozDeLaNovia.exe y ábrelo. Si Windows muestra "Windows protegió su PC", toca "Más información" → "Ejecutar de todas formas".
