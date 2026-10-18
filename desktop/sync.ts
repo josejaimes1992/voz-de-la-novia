@@ -133,7 +133,7 @@ async function pull(full: boolean) {
     const lm = String(c.logo || "").match(/^\/marca\/(logo-[a-z0-9]{4,16}\.png)/); if (lm) await download("/marca/" + lm[1], `${C.brandDir}/${lm[1]}`);
     await putDoc("config", "church", c); C.setCfg(c); } } catch {}
   try { const s = await (await cloud("/api/proyector/estilo")).json(); if (s && s.font) {
-    const fm = String(s.img || "").match(/^\/fondo\/([a-f0-9]{24}\.jpg)$/); if (fm) await download("/fondo/" + fm[1], `${C.fondosDir}/${fm[1]}`);
+    for (const v of [s.img, s.obsBg]) { const fm = String(v || "").match(/^\/fondo\/([a-f0-9]{24}\.jpg)$/); if (fm) await download("/fondo/" + fm[1], `${C.fondosDir}/${fm[1]}`); }
     await putDoc("settings", "proj-style", s); C.setStyle(s); } } catch {}
   ST!.lastPull = Date.now(); ST!.needLogin = false; await saveState();
   if (full) await pullExtras();

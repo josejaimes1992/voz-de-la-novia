@@ -96,6 +96,8 @@ const OBS_BG={
 OBS_BG.azul=OBS_BG.oceano; OBS_BG.noche=OBS_BG.bruma; OBS_BG.celeste=OBS_BG.aurora; OBS_BG.purpura=OBS_BG.indigo; OBS_BG.dorado=OBS_BG.oro; OBS_BG.atardecer=OBS_BG.vino; OBS_BG.grafito=OBS_BG.carbon;
 function bvStyle(x){ ST=x||ST; const bg=document.getElementById('bv-bg'); if(!bg) return; const k=Q.get('fondo')||ST.obsBg||'aurora'; const dim=document.getElementById('bv-dim'), glow=document.getElementById('bv-glow');
   if(k==='templo'){ glow.innerHTML=''; bg.style.background=ST.img?`url("${ST.img}") center/cover no-repeat, ${ST.bg||'#000'}`:(ST.bg||'#000'); dim.style.cssText='position:absolute;inset:0;background:#000;opacity:'+(ST.img?(ST.dim??0.35):0); return; }
+  /* Foto subida por la iglesia: cubre todo el fondo, con un velo oscuro para que se lea el texto */
+  if(/^\/fondo\/[a-f0-9]{24}\.jpg$/.test(k)){ glow.innerHTML=''; bg.style.background=`url("${k}") center/cover no-repeat, #000`; dim.style.cssText='position:absolute;inset:0;background:#000;opacity:'+(ST.obsDim??0.45); return; }
   const P=OBS_BG[k]||OBS_BG.aurora; bg.style.background=P[0]; dim.style.opacity='0';
   glow.innerHTML=P[1].map(([c,x,y,sz])=>`<i style="left:${x-sz/2}%;top:${y-sz/2*1.78}%;width:${sz}%;height:${sz*1.78}%;background:radial-gradient(circle,${c} 0%,${c}cc 30%,transparent 70%)"></i>`).join(''); }
 let bvKey='';
