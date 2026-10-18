@@ -118,8 +118,9 @@ export async function sermonSearch(db: any, q: string) {
   for (const s of all) for (const p of s.paras) {
     if (!toks.every(t => p.nt.includes(t))) continue;
     const exact = p.nt.includes(phrase);
-    const i = Math.max(0, p.nt.indexOf(exact ? phrase : toks[0]) - 70);
-    paras.push({ id: s.id, code: s.code, title: s.title, n: p.n, exact, snip: (i > 0 ? "…" : "") + p.t.slice(i, i + 220) + (p.t.length > i + 220 ? "…" : "") });
+    /* Fragmento con la palabra buscada cerca del inicio (empieza en una palabra completa) */
+    let i = Math.max(0, p.nt.indexOf(exact ? phrase : toks[0]) - 90); if (i > 0) { const sp = p.t.indexOf(" ", i); if (sp > 0 && sp - i < 20) i = sp + 1; }
+    const L = 380; paras.push({ id: s.id, code: s.code, title: s.title, n: p.n, exact, snip: (i > 0 ? "…" : "") + p.t.slice(i, i + L) + (p.t.length > i + L ? "…" : "") });
     if (paras.length >= 400) break;
   }
   paras.sort((a, b) => (b.exact ? 1 : 0) - (a.exact ? 1 : 0));

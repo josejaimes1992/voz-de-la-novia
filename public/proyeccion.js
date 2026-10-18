@@ -29,7 +29,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot{display:grid;grid-template-columns:1fr 1fr 1.4fr 1.4fr;gap:8px;padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.pj-empty{color:var(--muted);padding:20px 0}.pjm-fq input{border-color:var(--accent)!important}.pjm-hits .pjm-hit .t{display:block}.pjm-hits .snip{display:block;font-size:12.5px;line-height:1.4;color:var(--muted);margin-top:4px;font-weight:400}.pjm-hits mark,.pjm-hl mark{background:rgba(233,196,90,.55);color:inherit;border-radius:3px;padding:0 1px}.pjw-v.pjm-hl{outline:2px solid var(--accent);outline-offset:-2px}
+.pj-empty{color:var(--muted);padding:20px 0}.pjm-in{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}.pjm-in input{flex:1;min-width:0;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.pjm-in input:focus{outline:none;border-color:var(--accent)}.pjm-inc{font-size:12px;color:var(--muted);min-width:44px;text-align:center}.pjw-v.pjm-match{background:color-mix(in srgb,var(--accent) 7%,transparent)}.pjw-v.pjm-cur{outline:2px solid var(--accent);outline-offset:-2px}.pjw-v.pjm-match mark{background:rgba(233,196,90,.6);color:inherit;border-radius:3px;padding:0 1px}.pjm-fq input{border-color:var(--accent)!important}.pjm-hits .pjm-hit{align-items:flex-start;padding:8px 10px}.pjm-hits .pjm-hit .t{display:block;white-space:normal}.pjm-hits .pjm-ti{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pjm-hits .snip{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px;line-height:1.45;color:var(--ink);margin-top:5px;font-weight:400;font-family:inherit}.pjm-hits mark,.pjm-hl mark{background:rgba(233,196,90,.55);color:inherit;border-radius:3px;padding:0 1px}.pjw-v.pjm-hl{outline:2px solid var(--accent);outline-offset:-2px}
 .pjw .pjw-grid .pjw-v[aria-current="true"]{background:#a8392f;color:#fff;box-shadow:inset 4px 0 0 #ff8a7f}.pjw .pjw-grid .pjw-v[aria-current="true"] .h,.pjw .pjw-grid .pjw-v[aria-current="true"] .h b{color:#ffe1dc}
 .pjw .pjw-grid .pjw-v[aria-current="true"] .h::after{content:"● en pantalla";font:800 9.5px var(--f-ui);letter-spacing:.08em;margin-left:8px;color:#fff;background:rgba(0,0,0,.25);border-radius:999px;padding:1px 7px}
 /* ---- Zonas del en vivo, cada una con su color: Vista previa (azul) · Pantalla (rojo) · Lista de hoy (dorado) ---- */
@@ -509,18 +509,34 @@ function pjMsgSearch(){ const q=(PJ.mf||'').trim(); if(q.length<3){ PJ.mfRes=nul
 function pjMsgHits(){ pjMsgSearch(); const R=PJ.mfRes||{};
   if(R.loading) return '<div class="pjw-scroll" id="pjm-list"><p class="pj-sug-h">Buscando en todos los mensajes…</p></div>';
   const P=R.paras||[]; if(!P.length) return `<div class="pjw-scroll" id="pjm-list"><p class="pj-sug-h">${R.err?'No se pudo buscar.':'No se encontró esa frase.'}</p></div>`;
-  return `<div class="pjw-scroll pjm-hits" id="pjm-list"><p class="pj-sug-h">${P.length}${R.more?'+':''} párrafo${P.length>1?'s':''} · clic para abrirlo</p>${P.map(h=>`<button class="pjw-row pjm-hit" data-act="pjm-hit" data-id="${esc(h.id)}" data-n="${esc(h.n)}"><span class="t" style="text-transform:none">${esc(h.title)}<small>${esc(h.code||'')} · Párrafo ${esc(h.n)}${h.exact?' · <b>frase exacta</b>':''}</small><span class="snip">${pjMark(h.snip,R.q)}</span></span></button>`).join('')}</div>`; }
+  return `<div class="pjw-scroll pjm-hits" id="pjm-list"><p class="pj-sug-h">${P.length}${R.more?'+':''} párrafo${P.length>1?'s':''} · clic para abrirlo</p>${P.map(h=>`<button class="pjw-row pjm-hit" data-act="pjm-hit" data-id="${esc(h.id)}" data-n="${esc(h.n)}"><span class="t" style="text-transform:none"><span class="pjm-ti">${esc(h.title)}</span><small>${esc(h.code||'')} · Párrafo ${esc(h.n)}${h.exact?' · <b>frase exacta</b>':''}</small><span class="snip">${pjMark(h.snip,R.q)}</span></span></button>`).join('')}</div>`; }
 function pjMsgListRefresh(){ const box=$('#pjm-list'); if(!box) return; const tmp=document.createElement('div'); tmp.innerHTML=pjMsgLib(); const nl=tmp.querySelector('#pjm-list'); if(nl){ box.className=nl.className; box.innerHTML=nl.innerHTML; } }
+/* Buscar dentro del Mensaje abierto: resalta, cuenta y salta entre los párrafos que tienen la frase */
+function pjInFind(jump){
+  const body=$('#pj-body'), s=typeof MS!=='undefined'&&MS.cur; if(!body||!s) return;
+  const q=(PJ.mi||'').trim(), nq=msNorm(q).replace(/\s+/g,' '); const hits=[];
+  body.querySelectorAll('.pjw-v[data-i]').forEach(el=>{ const i=+el.dataset.i, p=s.paras[i]; if(!p) return; const P=el.querySelector('p');
+    const ok=nq.length>=2&&msNorm(p.t).replace(/\s+/g,' ').includes(nq);
+    el.classList.toggle('pjm-match',ok); el.classList.remove('pjm-cur');
+    if(ok){ hits.push(el); P.innerHTML=pjMark(p.t,q); } else if(!(PJ.hit&&PJ.hit.id===s.id&&PJ.hit.i===i)) P.textContent=p.t; });
+  PJ.miHits=hits.length; if(PJ.miK==null||PJ.miK>=hits.length) PJ.miK=0;
+  const c=$('#pjm-inc'); if(c) c.textContent=nq.length<2?'':hits.length?`${PJ.miK+1} de ${hits.length}`:'0';
+  if(hits.length){ const el=hits[PJ.miK]; el.classList.add('pjm-cur'); if(jump) el.scrollIntoView({block:'center'}); }
+}
 function pjMsgCenter(r){
   const s=typeof MS!=='undefined'&&MS.cur; if(!s) return `<section class="pjw-sl"><div class="pjw-h">Mensaje</div><p class="pj-empty" style="padding:16px">${MS&&MS.curId?'Abriendo…':'Elige un mensaje a la izquierda.'}</p></section>`;
   const on=r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id?r.sermon.p:-1;
   return `<section class="pjw-sl"><div class="pjw-h"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">${esc(s.title)}</span><span class="sp"></span><span>${esc(s.code||'')}</span></div>
+    <div class="pjm-in"><input id="pjm-in" type="search" placeholder="🔎 Buscar palabra o frase en este mensaje" value="${esc(PJ.mi||'')}" autocomplete="off" aria-label="Buscar en este mensaje"><span id="pjm-inc" class="pjm-inc"></span><button type="button" class="btn sm" data-act="pjm-inmv" data-d="-1" title="Anterior (Mayús+Enter)">‹</button><button type="button" class="btn sm" data-act="pjm-inmv" data-d="1" title="Siguiente (Enter)">›</button></div>
     <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v${PJ.hit&&PJ.hit.id===s.id&&PJ.hit.i===i?' pjm-hl':''}" data-act="pjm-p" data-i="${i}" aria-current="${on===i}" title="Clic: proyectar · Doble clic: agregar a Citas"><span class="h">Párrafo ${esc(p.n)}<span class="pjc-add" data-act="pjc-add" data-i="${i}" role="button" title="Agregar a las citas del culto">＋ Cita</span></span><p>${PJ.hit&&PJ.hit.id===s.id&&PJ.hit.i===i?pjMark(p.t,PJ.hit.q):esc(p.t)}</p></button>`).join('')}</div></section>`;
 }
 function pjBindTabs(){
   const bq=$('#pjb-q'); if(bq){ bq.addEventListener('input',e=>{ PJ.bq=e.target.value; clearTimeout(PJ.bqt); PJ.bqt=setTimeout(()=>{ pjRender(); const n=$('#pjb-q'); if(n){ n.focus(); const l=n.value.length; try{ n.setSelectionRange(l,l); }catch{} } },250); });
     bq.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); const pr=bbParse(PJ.bq||''); if(!pr) return; BB.b=pr.b; BB.c=pr.c; PJ.bq=''; if(pr.v!=null){ BB.v=pr.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(); }); }
   const cs=$('#pjb-chsel'); if(cs) cs.addEventListener('change',e=>{ BB.c=+e.target.value; BB.v=null; pjRender(true); });
+  const mi=$('#pjm-in'); if(mi){ mi.addEventListener('input',e=>{ PJ.mi=e.target.value; PJ.miK=0; clearTimeout(PJ.mit); PJ.mit=setTimeout(()=>pjInFind(true),200); });
+    mi.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const n=PJ.miHits||0; if(!n) return; PJ.miK=((PJ.miK||0)+(e.shiftKey?-1:1)+n)%n; pjInFind(true); } if(e.key==='Escape'){ PJ.mi=''; mi.value=''; pjInFind(false); } }); }
+  if((PJ.mi||'').trim().length>=2) pjInFind(false);
   const mf=$('#pjm-f'); if(mf) mf.addEventListener('input',e=>{ PJ.mf=e.target.value; clearTimeout(PJ.mft); PJ.mft=setTimeout(()=>{ pjMsgSearch(); pjMsgListRefresh(); },300); });
   const mq=$('#pjm-q'); if(mq) mq.addEventListener('input',e=>{ PJ.mq=e.target.value; clearTimeout(PJ.mqt); PJ.mqt=setTimeout(()=>{ const box=$('#pjm-list'); if(box){ const tmp=document.createElement('div'); tmp.innerHTML=pjMsgLib(); const nl=tmp.querySelector('#pjm-list'); if(nl) box.innerHTML=nl.innerHTML; } },120); });
 }
@@ -599,6 +615,7 @@ document.addEventListener('click',ev=>{
     case 'pjb-go': BB.b=+ds.b; BB.c=+ds.c; PJ.bq=''; if(ds.v!==''){ BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(true); break;
     case 'pjb-v': BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); break;
     case 'pjm-open': (async()=>{ await msOpen(ds.id,0); pjRender(true); })(); break;
+    case 'pjm-inmv': { const n=PJ.miHits||0; if(n){ PJ.miK=((PJ.miK||0)+(+ds.d)+n)%n; pjInFind(true); } break; }
     case 'pjm-hit': (async()=>{ await msOpen(ds.id,0); const s=MS.cur; if(!s) return; const i=Math.max(0,s.paras.findIndex(p=>String(p.n)===String(ds.n)));
       PJ.hit={id:s.id,i,q:(PJ.mfRes&&PJ.mfRes.q)||PJ.mf||''}; MS.p=i; pjRender(true);
       setTimeout(()=>{ const el=document.querySelector(`#pj-body .pjw-v[data-i="${i}"]`); if(el) el.scrollIntoView({block:'center'}); },40);
