@@ -10,7 +10,9 @@ type Ctx = {
   publicUser: (u: any) => any; json: (d: unknown, s?: number) => Response;
 };
 type State = { mode: "cloud" | "local"; cloud?: string; token?: string; cloudUser?: any; localUserId?: number; pushedId?: number;
-  lastPull?: number; lastPush?: number; needLogin?: boolean };
+  lastPull?: number; lastPush?: number; needLogin?: boolean; srcIds?: string[] };
+/* De dónde baja la Biblia y los Mensajes una iglesia que usa el programa "solo en esta PC" */
+const SOURCE = (Bun.env.VDN_SOURCE || "https://web-production-2c736.up.railway.app").replace(/\/+$/, "");
 
 let C: Ctx; let ST: State | null = null;
 let syncing = false, online: boolean | null = null, lastError = "", lastTry = 0, sermonsProgress = "";
@@ -33,14 +35,20 @@ export async function desktopInit(ctx: Ctx) {
   C = ctx; await loadState();
   const rv = `${C.dataDir}/rvr1960.json.gz`;
   if (existsSync(rv)) { try { C.setRvr(new Uint8Array(readFileSync(rv))); } catch {} }
-  if (ST?.mode === "cloud") {
-    setTimeout(() => syncNow(true), 3000);
-    setInterval(() => { if (!syncing) syncNow(Date.now() - (ST?.lastPull ?? 0) > 5 * 60_000); }, 30_000);
-  }
+  if (ST) startLoop();
+}
+let looping = false;
+function startLoop() {
+  if (looping) return; looping = true;
+  setTimeout(() => syncNow(true), 1500);
+  /* Con nube: cada 30 s sube cambios y cada 5 min baja todo. Solo PC: cada 6 h revisa Biblia y Mensajes nuevos */
+  setInterval(() => { if (syncing || !ST) return;
+    if (ST.mode === "cloud") syncNow(Date.now() - (ST.lastPull ?? 0) > 5 * 60_000);
+    else if (Date.now() - (ST.lastPull ?? 0) > (online === false ? 60_000 : 6 * 3600_000)) syncNow(true); }, 30_000);
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=1" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=2" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -118,13 +126,17 @@ async function pull(full: boolean) {
   try { const s = await (await cloud("/api/proyector/estilo")).json(); if (s && s.font) {
     const fm = String(s.img || "").match(/^\/fondo\/([a-f0-9]{24}\.jpg)$/); if (fm) await download("/fondo/" + fm[1], `${C.fondosDir}/${fm[1]}`);
     await putDoc("settings", "proj-style", s); C.setStyle(s); } } catch {}
-  /* Biblia RVR1960 (si la nube de la iglesia la tiene) */
-  const rv = `${C.dataDir}/rvr1960.json.gz`;
-  if (full && !existsSync(rv)) { try { const v = await (await cloud("/biblia/versiones")).json();
-    if ((v.versions || []).some((x: any) => x.id === "RVR1960")) { const t = await (await cloud("/biblia/rvr1960.json", {}, 120000)).text(); JSON.parse(t);
-      const gz = Bun.gzipSync(new TextEncoder().encode(t)); writeFileSync(rv, gz); C.setRvr(gz); } } catch (e) { console.error("Biblia", e); } }
+  if (full) await pullBible();
   ST!.lastPull = Date.now(); ST!.needLogin = false; await saveState();
   if (full) await pullSermons();
+}
+/* Biblia RVR1960: se baja una vez y queda en la PC */
+async function pullBible() {
+  const rv = `${C.dataDir}/rvr1960.json.gz`; if (existsSync(rv)) return;
+  const v = await (await cloud("/biblia/versiones")).json();
+  if (!(v.versions || []).some((x: any) => x.id === "RVR1960")) return;
+  const t = await (await cloud("/biblia/rvr1960.json", {}, 180000)).text(); JSON.parse(t);
+  const gz = Bun.gzipSync(new TextEncoder().encode(t)); writeFileSync(rv, gz); C.setRvr(gz);
 }
 
 async function pullSermons() {
@@ -139,16 +151,25 @@ async function pullSermons() {
     try { const x = await cloud(`/api/sermons/${encodeURIComponent(s.id)}`, {}, 60000); if (x.ok) { const d = await x.json(); delete d.id; await putDoc("sermons", s.id, d); changed = true; } } catch {}
     done++; sermonsProgress = `${done} de ${done + todo.length}`; } };
   await Promise.all(Array.from({ length: 6 }, work));
-  for (const id of have.keys()) if (!want.has(id)) { await C.db`DELETE FROM docs WHERE col = 'sermons' AND id = ${id}`; changed = true; }
+  /* Con nube: la PC queda igual que la nube. Solo PC: se respetan los mensajes que la iglesia importó por su cuenta */
+  const mine = new Set(ST?.mode === "local" ? (ST.srcIds || []) : have.keys());
+  for (const id of have.keys()) if (mine.has(id) && !want.has(id)) { await C.db`DELETE FROM docs WHERE col = 'sermons' AND id = ${id}`; changed = true; }
+  if (ST?.mode === "local") { ST.srcIds = [...want]; await saveState(); }
   sermonsProgress = ""; if (changed) C.resetIndex();
 }
 
 export async function syncNow(full = false) {
-  if (!ST || ST.mode !== "cloud" || syncing) return;
+  if (!ST || syncing) return;
   syncing = true; lastTry = Date.now();
   try {
-    await push();
-    await pull(full);
+    if (ST.mode === "local") {
+      if (!ST.cloud) ST.cloud = SOURCE;
+      await pullBible(); await pullSermons();
+      ST.lastPull = Date.now(); await saveState();
+    } else {
+      await push();
+      await pull(full);
+    }
     online = true; lastError = "";
   } catch (e: any) {
     const msg = String(e?.message || e);
@@ -161,7 +182,7 @@ async function status() {
   const nUsers = Number((await C.db`SELECT count(*) AS n FROM users`)[0].n);
   const pend = ST?.mode === "cloud" ? (await pendingRows()).items.length : 0;
   return { configured: nUsers > 0, mode: ST?.mode ?? null, cloud: ST?.cloud ?? null, user: ST?.cloudUser?.username ?? null,
-    online, syncing, pending: pend, lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: lastError, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
+    online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: lastError, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
 }
 
 async function newSession(uid: number) {
@@ -197,15 +218,15 @@ export async function desktopRoute(req: Request, p: string): Promise<Response | 
       ST = { mode: "cloud", cloud: url, token: lr.token, cloudUser: cu, localUserId: nu.id, pushedId: 0 };
       await saveState();
       try { await pull(false); online = true; } catch (e: any) { lastError = String(e?.message || e); }
-      setTimeout(() => syncNow(true), 500);
-      setInterval(() => { if (!syncing) syncNow(Date.now() - (ST?.lastPull ?? 0) > 5 * 60_000); }, 30_000);
+      startLoop();
       return J({ token: await newSession(nu.id), user: C.publicUser(nu) });
     }
     const church = String(b.church ?? "").trim().slice(0, 80) || "Mi iglesia";
     const name = (String(b.name ?? "").trim() || username).toUpperCase().slice(0, 40);
     const [nu] = await C.db`INSERT INTO users (username, name, full_name, role, pass_hash, created_at, updated_at) VALUES (${username}, ${name}, ${""}, ${"admin"}, ${await Bun.password.hash(password)}, ${Date.now()}, ${Date.now()}) RETURNING *`;
-    ST = { mode: "local" }; await saveState();
+    ST = { mode: "local", cloud: SOURCE, srcIds: [] }; await saveState();
     const cfg = { name: church, logo: "/vdn-emblem.jpg?v=1" }; await putDoc("config", "church", cfg); C.setCfg(cfg);
+    startLoop();
     return J({ token: await newSession(nu.id), user: C.publicUser(nu) });
   }
   if (p === "/api/desktop/sync" && req.method === "POST") {

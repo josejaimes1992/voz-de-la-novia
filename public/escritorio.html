@@ -36,7 +36,7 @@ button.go:disabled{opacity:.6;cursor:wait}
 
 <div class="opts">
   <button type="button" class="opt" data-m="cloud"><span class="ic">☁️</span><b>Conectar con la nube de mi iglesia</b><span>Baja las alabanzas, programas, mensajes y la Biblia de tu iglesia. Lo que cambies sin internet se sube solo cuando vuelva la conexión.</span></button>
-  <button type="button" class="opt" data-m="local"><span class="ic">💻</span><b>Usar solo en esta PC</b><span>Empieza vacío para tu iglesia: sube tus propias letras. Incluye la Biblia Reina-Valera 1909.</span></button>
+  <button type="button" class="opt" data-m="local"><span class="ic">💻</span><b>Usar solo en esta PC</b><span>Para tu iglesia: empieza sin alabanzas para que subas las tuyas. Incluye la Biblia RVR1960 y los Mensajes, que se bajan solos.</span></button>
 </div>
 
 <form id="f" hidden autocomplete="off">
@@ -62,7 +62,7 @@ const $=s=>document.querySelector(s);
 document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ mode=b.dataset.m;
   document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('on',x===b));
   $('#f').hidden=false; $('#cloud-f').hidden=mode!=='cloud'; $('#local-f').hidden=mode!=='local';
-  $('#hint').textContent=mode==='cloud'?'Usa el mismo usuario y contraseña con que entras en la página de tu iglesia. La primera vez necesitas internet.':'Este será el usuario administrador del programa en esta PC.';
+  $('#hint').textContent=mode==='cloud'?'Usa el mismo usuario y contraseña con que entras en la página de tu iglesia. La primera vez necesitas internet.':'Este será el usuario administrador del programa en esta PC. La primera vez necesitas internet para bajar la Biblia RVR1960 y los Mensajes; después funciona sin conexión.';
   $('#go').textContent=mode==='cloud'?'Conectar y bajar todo':'Empezar';
   setTimeout(()=>(mode==='cloud'?$('#url'):$('#church')).focus(),20); });
 $('#f').onsubmit=async e=>{ e.preventDefault(); const err=$('#err'); err.hidden=true; const go=$('#go'); go.disabled=true; const t=go.textContent; go.textContent=mode==='cloud'?'Conectando y bajando…':'Preparando…';
