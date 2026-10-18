@@ -4,5 +4,5 @@
   "description": "La app (servida en localhost) puede pedir abrir el proyector y enlaces externos",
   "windows": ["main", "proyector"],
   "remote": { "urls": ["http://localhost:4747/*", "http://127.0.0.1:4747/*"] },
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "allow-open-external", "allow-open-projector", "allow-toggle-fullscreen"]
 }

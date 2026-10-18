@@ -31,7 +31,7 @@ fn start_server() -> Result<Option<Child>, String> {
     let dir = exe.parent().ok_or("sin carpeta")?;
     let srv = dir.join(if cfg!(windows) { "vdn-server.exe" } else { "vdn-server" });
     let mut c = Command::new(&srv);
-    c.env("VDN_NO_OPEN", "1").env("VDN_NATIVE", "1").env("VDN_VERSION", env!("CARGO_PKG_VERSION"));
+    c.env("VDN_NO_OPEN", "1").env("VDN_NATIVE", "1").env("VDN_PARENT_PID", std::process::id().to_string()).env("VDN_VERSION", env!("CARGO_PKG_VERSION"));
     if let Ok(log) = std::fs::File::create(data_dir().join("servidor.log")) {
         if let Ok(l2) = log.try_clone() { c.stdout(log).stderr(l2); }
     }

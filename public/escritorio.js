@@ -15,14 +15,20 @@
     else if(S.online===false){ dot='#ff8a7a'; txt='Sin internet'+(S.pending?` · ${S.pending} cambio${S.pending>1?'s':''} por subir`:''); }
     else if(S.pending){ dot='#e9c45a'; txt=`${S.pending} cambio${S.pending>1?'s':''} por subir`; }
     if(S.sermons) txt+=` · mensajes ${S.sermons}`;
+    if(S.libros) txt+=` · material ${S.libros}`;
+    if(S.error&&!S.syncing&&S.online!==false){ dot='#ff8a7a'; txt+=' · ⚠ revisar'; }
     el.innerHTML=`<span style="color:${dot}">●</span> ${txt}`;
     el.title=`Nube: ${S.cloud||''}\nÚltima bajada: ${ago(S.lastPull)}\nÚltima subida: ${ago(S.lastPush)}${S.error?`\n${S.error}`:''}\n\nClic para sincronizar ahora.`;
   }
   const up=document.createElement('button'); up.type='button'; up.hidden=true;
   up.style.cssText='position:fixed;left:10px;bottom:46px;z-index:9000;font:700 12px/1 system-ui,Segoe UI,sans-serif;border-radius:999px;padding:7px 11px;border:0;background:#e9c45a;color:#14110a;cursor:pointer';
   document.body.appendChild(up);
-  up.onclick=()=>{ const u='https://web-production-2c736.up.railway.app/descargar'; if(window.vdnNative) vdnNative.openExternal(u); else window.open(u,'_blank'); };
-  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); up.hidden=!S.update; if(S.update) up.textContent=`⬆ Nueva versión ${S.update} — descargar`; }catch{} }
+  up.onclick=async()=>{ const t=tok(); if(!t){ alert('Ingresa con tu usuario para actualizar.'); return; }
+    const r=await fetch('/api/desktop/update',{method:'POST',headers:{authorization:'Bearer '+t}}); if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'No se pudo.'); return; }
+    up.disabled=true; const iv=setInterval(async()=>{ try{ const u=await (await fetch('/api/desktop/update')).json();
+      if(u.error){ clearInterval(iv); up.disabled=false; up.textContent='⚠ '+u.error+' — reintentar'; return; }
+      up.textContent=u.busy?`⬇ Descargando ${u.pct}%…`:(u.msg||'Listo'); if(!u.busy){ clearInterval(iv); } }catch{} },700); };
+  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); if(!up.disabled){ up.hidden=!S.update; if(S.update) up.textContent=`⬆ Nueva versión ${S.update} — instalar`; } }catch{} }
   /* Menú pequeño: sincronizar o empezar de nuevo */
   const menu=document.createElement('div'); menu.hidden=true;
   menu.style.cssText='position:fixed;left:10px;bottom:46px;z-index:9001;background:#141416;color:#efece4;border:1px solid #2a2a2e;border-radius:12px;padding:6px;display:grid;gap:4px;min-width:260px;box-shadow:0 10px 30px rgba(0,0,0,.4);font:500 13px/1.3 system-ui,Segoe UI,sans-serif';

@@ -46,6 +46,9 @@ Object.assign(process.env, {
 });
 if (existsSync(`${APP}/bin`)) process.env.VDN_BIN = `${APP}/bin`;
 if (!process.env.VDN_VERSION) process.env.VDN_VERSION = APP_VERSION;
+/* Si lo abrió el programa con ventana propia y ese programa se cierra, el servidor también se cierra */
+const PARENT = Number(Bun.env.VDN_PARENT_PID || 0);
+if (PARENT) setInterval(() => { try { process.kill(PARENT, 0); } catch { process.exit(0); } }, 700);
 
 if (isWin) process.stdout.write("\x1b]0;Voz de la Novia\x07");
 console.log("\n  Voz de la Novia — programa de escritorio\n  ========================================\n");

@@ -10,7 +10,7 @@ type Ctx = {
   publicUser: (u: any) => any; json: (d: unknown, s?: number) => Response;
 };
 type State = { mode: "cloud" | "local"; cloud?: string; token?: string; cloudUser?: any; localUserId?: number; pushedId?: number;
-  lastPull?: number; lastPush?: number; needLogin?: boolean; srcIds?: string[] };
+  lastPull?: number; lastPush?: number; needLogin?: boolean; srcIds?: string[]; srcLibros?: string[] };
 /* De dónde baja la Biblia y los Mensajes una iglesia que usa el programa "solo en esta PC" */
 /* Aviso de versión nueva del programa (se revisa en GitHub cada 6 horas) */
 const VERSION = Bun.env.VDN_VERSION || "";
@@ -57,7 +57,7 @@ function startLoop() {
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=4" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=5" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -135,9 +135,41 @@ async function pull(full: boolean) {
   try { const s = await (await cloud("/api/proyector/estilo")).json(); if (s && s.font) {
     const fm = String(s.img || "").match(/^\/fondo\/([a-f0-9]{24}\.jpg)$/); if (fm) await download("/fondo/" + fm[1], `${C.fondosDir}/${fm[1]}`);
     await putDoc("settings", "proj-style", s); C.setStyle(s); } } catch {}
-  if (full) await pullBible();
   ST!.lastPull = Date.now(); ST!.needLogin = false; await saveState();
-  if (full) await pullSermons();
+  if (full) await pullExtras();
+}
+/* Biblia, Mensajes y Material de Interés: cada parte por separado, para que un error en una no frene a las otras */
+let partErrors: string[] = [];
+async function pullExtras() {
+  partErrors = [];
+  const step = async (name: string, f: () => Promise<any>) => { try { await f(); } catch (e: any) { const m = `${name}: ${String(e?.message || e).slice(0, 160)}`; partErrors.push(m); console.error("Sincronizar", m); } };
+  await step("Biblia", pullBible);
+  await step("Mensajes", pullSermons);
+  await step("Material de Interés", pullLibros);
+}
+/* Material de Interés (PDF): se baja el archivo y las páginas se dibujan en esta PC */
+let librosProgress = "";
+async function pullLibros() {
+  const r = await cloud("/api/libros", {}, 60000); if (!r.ok) throw new Error("lista " + r.status);
+  const list: any[] = (await r.json()).libros || [];
+  const dir = `${C.dataDir}/libros`; ensureDir(dir);
+  const local = await C.db`SELECT id FROM docs WHERE col = 'libros'`; const have = new Set<string>(local.map((x: any) => x.id));
+  const want = new Set(list.map(b => b.id)); let i = 0;
+  for (const b of list) {
+    i++; if (!/^[a-f0-9]{16}$/.test(b.id)) continue;
+    const f = `${dir}/${b.id}/doc.pdf`;
+    if (!existsSync(f)) {
+      librosProgress = `${i} de ${list.length}`;
+      const x = await cloud(`/libro/${b.id}.pdf?s=${encodeURIComponent(b.sig)}`, {}, 300000); if (!x.ok) continue;
+      ensureDir(`${dir}/${b.id}`); writeFileSync(f, new Uint8Array(await x.arrayBuffer()));
+    }
+    const data = { title: b.title, author: b.author, cat: b.cat, desc: b.desc, public: b.public, pages: b.pages, size: b.size, orig: b.orig, by: b.by, at: b.at };
+    await putDoc("libros", b.id, data);
+  }
+  const mine = new Set(ST?.mode === "local" ? (ST.srcLibros || []) : have);
+  for (const id of have) if (mine.has(id) && !want.has(id)) { await C.db`DELETE FROM docs WHERE col = 'libros' AND id = ${id}`; try { require("node:fs").rmSync(`${dir}/${id}`, { recursive: true, force: true }); } catch {} }
+  if (ST?.mode === "local") { ST.srcLibros = [...want]; await saveState(); }
+  librosProgress = "";
 }
 /* Biblia RVR1960: se baja una vez y queda en la PC */
 async function pullBible() {
@@ -173,7 +205,7 @@ export async function syncNow(full = false) {
   try {
     if (ST.mode === "local") {
       if (!ST.cloud) ST.cloud = SOURCE;
-      await pullBible(); await pullSermons();
+      await pullExtras();
       ST.lastPull = Date.now(); await saveState();
     } else {
       await push();
@@ -193,7 +225,7 @@ async function status() {
   const pend = ST?.mode === "cloud" ? (await pendingRows()).items.length : 0;
   return { configured: nUsers > 0, mode: ST?.mode ?? null, cloud: ST?.cloud ?? null, user: ST?.cloudUser?.username ?? null,
     version: VERSION, update: latest && vnum(latest) > vnum(VERSION) ? latest : null, native: Bun.env.VDN_NATIVE === "1",
-    online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: lastError, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
+    online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: [lastError, ...partErrors].filter(Boolean).join(" · "), libros: librosProgress, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
 }
 
 async function newSession(uid: number) {
@@ -266,9 +298,47 @@ export async function desktopRoute(req: Request, p: string): Promise<Response | 
       ST.token = lr.token; ST.cloudUser = lr.user; ST.needLogin = false; await saveState(); syncNow(true); return J({ ok: true });
     } catch { return J({ error: "Sin conexión con la nube." }, 400); }
   }
+  /* Abrir un enlace en el navegador normal de Windows (WhatsApp, página de descarga…) */
+  if (p === "/api/desktop/open" && req.method === "POST") {
+    const b = await req.json().catch(() => ({})); const u = String(b.url ?? "");
+    if (!/^https?:\/\/[^\s"]+$/i.test(u)) return J({ error: "bad_url" }, 400);
+    openExternal(u); return J({ ok: true });
+  }
+  /* Actualizar: baja el instalador nuevo y lo abre */
+  if (p === "/api/desktop/update" && req.method === "POST") {
+    if (!(await localUser(req))) return J({ error: "Ingresa con tu usuario para actualizar." }, 401);
+    if (!upd.busy) runUpdate();
+    return J({ ok: true });
+  }
+  if (p === "/api/desktop/update" && req.method === "GET") return J(upd);
   /* Audios: no se guardan en la PC; si hay internet se escuchan desde la nube */
   const am = p.match(/^\/audio\/([a-f0-9]{24}\.[a-z0-9]+)$/);
   if (am && ST?.mode === "cloud" && !existsSync(`${C.dataDir}/audio/${am[1]}`)) return Response.redirect(`${ST.cloud}/audio/${am[1]}`, 302);
   return null;
+}
+function openExternal(u: string) {
+  try {
+    if (process.platform === "win32") Bun.spawn(["rundll32", "url.dll,FileProtocolHandler", u], { stdout: "ignore", stderr: "ignore", windowsHide: true } as any);
+    else Bun.spawn([process.platform === "darwin" ? "open" : "xdg-open", u], { stdout: "ignore", stderr: "ignore" });
+  } catch (e) { console.error("abrir enlace", e); }
+}
+const upd: { busy: boolean; pct: number; msg: string; error: string } = { busy: false, pct: 0, msg: "", error: "" };
+async function runUpdate() {
+  Object.assign(upd, { busy: true, pct: 0, msg: "Descargando la nueva versión…", error: "" });
+  try {
+    const native = Bun.env.VDN_NATIVE === "1";
+    const name = native ? "VozDeLaNovia-Setup.exe" : "VozDeLaNovia.exe";
+    const r = await fetch(`https://github.com/josejaimes1992/voz-de-la-novia/releases/latest/download/${name}`, { signal: AbortSignal.timeout(15 * 60_000) });
+    if (!r.ok || !r.body) throw new Error("descarga " + r.status);
+    const total = Number(r.headers.get("content-length")) || 0; const parts: Uint8Array[] = []; let got = 0;
+    for await (const ch of r.body as any) { parts.push(ch); got += ch.length; if (total) upd.pct = Math.round(got * 100 / total); }
+    const dir = native ? require("node:os").tmpdir() : `${Bun.env.USERPROFILE || Bun.env.HOME}/Downloads`;
+    const out = `${dir.replace(/\\/g, "/")}/${native ? `VozDeLaNovia-Setup-${latest || "nueva"}.exe` : "VozDeLaNovia.exe"}`;
+    ensureDir(dir); writeFileSync(out, Buffer.concat(parts));
+    upd.pct = 100;
+    if (native) { upd.msg = "Abriendo el instalador… acepta cerrar Voz de la Novia cuando lo pida."; openExternal(out); }
+    else { upd.msg = `Listo: se guardó en Descargas (${out.split("/").pop()}). Cierra este programa y ábrelo desde ahí.`; openExternal(dir); }
+  } catch (e: any) { upd.error = "No se pudo descargar: " + String(e?.message || e); upd.msg = ""; }
+  finally { upd.busy = false; }
 }
 export function ensureDir(d: string) { try { mkdirSync(d, { recursive: true }); } catch {} }
