@@ -57,7 +57,7 @@ function startLoop() {
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=3" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=4" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -243,6 +243,20 @@ export async function desktopRoute(req: Request, p: string): Promise<Response | 
   if (p === "/api/desktop/sync" && req.method === "POST") {
     if (!(await localUser(req))) return J({ error: "unauthorized" }, 401);
     await syncNow(true); return J(await status());
+  }
+  /* Empezar de nuevo: vuelve a la pantalla de bienvenida (p. ej. para pasar de "solo esta PC" a la nube de la iglesia).
+     Se conservan la Biblia y los Mensajes ya bajados. */
+  if (p === "/api/desktop/reset" && req.method === "POST") {
+    const u = await localUser(req); if (!u || u.role !== "admin") return J({ error: "Solo el administrador puede hacerlo." }, 403);
+    const b = await req.json().catch(() => ({}));
+    if (!(await Bun.password.verify(String(b.password ?? ""), u.pass_hash))) return J({ error: "Contraseña incorrecta." }, 400);
+    await C.db.begin(async (tx: any) => {
+      await tx`DELETE FROM sessions`; await tx`DELETE FROM changes`; await tx`DELETE FROM user_log`;
+      await tx`DELETE FROM docs WHERE col IN ('songs', 'programs', 'trash', 'desktop', 'config', 'settings')`;
+      await tx`DELETE FROM users`;
+    });
+    ST = null; C.setCfg({}); online = null; lastError = "";
+    return J({ ok: true });
   }
   if (p === "/api/desktop/relogin" && req.method === "POST") {
     const u = await localUser(req); if (!u || !ST || ST.mode !== "cloud") return J({ error: "unauthorized" }, 401);
