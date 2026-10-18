@@ -20,6 +20,7 @@ const id = h.digest("hex").slice(0, 10);
 let src = "/* Generado por desktop/build.ts — no editar */\n";
 files.forEach((f, i) => { src += `import a${i} from "../${f}" with { type: "file" };\n`; });
 extra.forEach(([, f], i) => { src += `import b${i} from ${JSON.stringify(rel(f))} with { type: "file" };\n`; });
+src += `export const APP_VERSION = ${JSON.stringify(readFileSync(root + "desktop/VERSION", "utf8").trim())};\n`;
 src += `export const BUILD_ID = "${id}";\nexport const ASSETS: [string, string][] = [\n${files.map((f, i) => `  [${JSON.stringify(f)}, a${i}],`).join("\n")}\n${extra.map(([r], i) => `  [${JSON.stringify(r)}, b${i}],`).join("\n")}\n];\n`;
 writeFileSync(root + "desktop/assets.gen.ts", src);
 console.log(`${files.length} archivos · versión ${id}`);

@@ -2,3 +2,7 @@ node_modules
 .env
 dist/
 desktop/assets.gen.ts
+
+desktop/tauri/src-tauri/target/
+desktop/tauri/src-tauri/gen/
+desktop/tauri/src-tauri/binaries/*.exe

@@ -616,6 +616,8 @@ document.addEventListener('pointerdown',ev=>{
 
 /* Abre la pantalla del proyector; si ya se eligió el monitor externo, la abre directamente allí */
 async function openProyector(){
+  /* Programa de Windows: ventana propia, directo en la pantalla 2 y a pantalla completa */
+  if(window.__VDN_NATIVE__&&window.vdnNative){ try{ await vdnNative.invoke('open_projector'); }catch(e){ toast('No se pudo abrir la pantalla del proyector.'); } return; }
   let feat='';
   try{ if('getScreenDetails' in window){ const st=await navigator.permissions.query({name:'window-management'}).catch(()=>null);
     if(st&&st.state==='granted'){ const sd=await window.getScreenDetails(); let saved=null; try{ saved=localStorage.getItem('vdn-screen'); }catch{}

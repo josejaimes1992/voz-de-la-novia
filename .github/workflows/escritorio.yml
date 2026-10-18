@@ -44,8 +44,35 @@ jobs:
           ls "$VDN_DATA"/app-*/bin/pdftotext.exe && "$VDN_DATA"/app-*/bin/pdftotext.exe -v
           cat run.log
           taskkill //F //IM VozDeLaNovia.exe || true
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/tauri/src-tauri }
+      - name: Programa con ventana propia (Tauri)
+        run: |
+          set -o pipefail
+          V=$(tr -d '\r\n ' < desktop/VERSION)
+          bun -e "const f='desktop/tauri/src-tauri/tauri.conf.json';const j=JSON.parse(await Bun.file(f).text());j.version='$V';await Bun.write(f,JSON.stringify(j,null,2));const c='desktop/tauri/src-tauri/Cargo.toml';await Bun.write(c,(await Bun.file(c).text()).replace(/^version = \".*\"/m,'version = \"$V\"'))"
+          cp dist/VozDeLaNovia.exe desktop/tauri/src-tauri/binaries/vdn-server-x86_64-pc-windows-msvc.exe
+          cd desktop/tauri
+          npx --yes @tauri-apps/cli@2 build 2>&1 | tee ../../tauri.log || { tail -n 80 ../../tauri.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+          cd ../..
+          cp desktop/tauri/src-tauri/target/release/bundle/nsis/*-setup.exe dist/VozDeLaNovia-Setup.exe
+          ls -la dist
+      - name: Probar el instalador
+        run: |
+          trap 'c=$?; [ $c -ne 0 ] && { echo "::error::falló la prueba del instalador (código $c)"; L="$(cygpath -u "$LOCALAPPDATA")/VozDeLaNovia/servidor.log"; [ -f "$L" ] && while IFS= read -r l; do echo "::error::$l"; done < "$L"; ls -R "$(cygpath -u "$LOCALAPPDATA")/Voz de la Novia" | head -30 | while IFS= read -r l; do echo "::error::$l"; done; }' EXIT
+          set -e
+          ./dist/VozDeLaNovia-Setup.exe //S
+          sleep 5
+          APP="$(cygpath -u "$LOCALAPPDATA")/Voz de la Novia"
+          ls "$APP"
+          "$APP/VozDeLaNovia.exe" &
+          for i in $(seq 1 60); do curl -sf localhost:4747/api/desktop/status && break; sleep 1; done; echo
+          curl -sf localhost:4747/api/desktop/status | grep -q '"native":true'
+          tasklist | grep -i -E "vozdelanovia|vdn-server"
+          taskkill //F //IM VozDeLaNovia.exe || true
+          taskkill //F //IM vdn-server.exe || true
       - uses: actions/upload-artifact@v4
-        with: { name: VozDeLaNovia, path: dist/VozDeLaNovia.exe }
+        with: { name: VozDeLaNovia, path: "dist/*.exe" }
       - name: Versión
         id: v
         run: echo "v=$(tr -d '\r\n ' < desktop/VERSION)" >> "$GITHUB_OUTPUT"
@@ -54,9 +81,12 @@ jobs:
         with:
           tag_name: escritorio-v${{ steps.v.outputs.v }}
           target_commitish: ${{ github.sha }}
-          files: dist/VozDeLaNovia.exe
+          files: |
+            dist/VozDeLaNovia-Setup.exe
+            dist/VozDeLaNovia.exe
           make_latest: true
           name: Voz de la Novia para Windows ${{ steps.v.outputs.v }}
           body: |
             Programa de Windows de Voz de la Novia: funciona sin internet.
-            Descarga VozDeLaNovia.exe y ábrelo. Si Windows muestra "Windows protegió su PC", toca "Más información" → "Ejecutar de todas formas".
+            Recomendado: VozDeLaNovia-Setup.exe (instalador, ventana propia, ícono en el menú Inicio).
+            VozDeLaNovia.exe es la versión portátil (se abre en el navegador, sin instalar). Si Windows muestra "Windows protegió su PC", toca "Más información" → "Ejecutar de todas formas".

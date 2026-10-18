@@ -18,7 +18,11 @@
     el.innerHTML=`<span style="color:${dot}">●</span> ${txt}`;
     el.title=`Nube: ${S.cloud||''}\nÚltima bajada: ${ago(S.lastPull)}\nÚltima subida: ${ago(S.lastPush)}${S.error?`\n${S.error}`:''}\n\nClic para sincronizar ahora.`;
   }
-  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); }catch{} }
+  const up=document.createElement('button'); up.type='button'; up.hidden=true;
+  up.style.cssText='position:fixed;left:10px;bottom:46px;z-index:9000;font:700 12px/1 system-ui,Segoe UI,sans-serif;border-radius:999px;padding:7px 11px;border:0;background:#e9c45a;color:#14110a;cursor:pointer';
+  document.body.appendChild(up);
+  up.onclick=()=>{ const u='https://web-production-2c736.up.railway.app/descargar'; if(window.vdnNative) vdnNative.openExternal(u); else window.open(u,'_blank'); };
+  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); up.hidden=!S.update; if(S.update) up.textContent=`⬆ Nueva versión ${S.update} — descargar`; }catch{} }
   el.onclick=async()=>{
     if(S.mode!=='cloud'&&S.mode!=='local') return;
     const t=tok(); if(!t){ alert('Ingresa con tu usuario para sincronizar.'); return; }

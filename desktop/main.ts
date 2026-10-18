@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { randomBytes } from "node:crypto";
-import { ASSETS, BUILD_ID } from "./assets.gen.ts";
+import { ASSETS, BUILD_ID, APP_VERSION } from "./assets.gen.ts";
 
 const PORT = Number(Bun.env.VDN_PORT || 4747);
 const URL0 = `http://localhost:${PORT}/`;
@@ -45,6 +45,7 @@ Object.assign(process.env, {
   TOKEN_SECRET: readFileSync(secretF, "utf8").trim(), SEED_SONGS: "0", INITIAL_PASSWORD: "",
 });
 if (existsSync(`${APP}/bin`)) process.env.VDN_BIN = `${APP}/bin`;
+if (!process.env.VDN_VERSION) process.env.VDN_VERSION = APP_VERSION;
 
 if (isWin) process.stdout.write("\x1b]0;Voz de la Novia\x07");
 console.log("\n  Voz de la Novia — programa de escritorio\n  ========================================\n");

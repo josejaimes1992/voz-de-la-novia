@@ -197,6 +197,8 @@ function drawMap(){
 }
 function updGo(){ const b=$('#go'); if(b&&SD&&SD.screens[selIdx]) b.textContent=`Proyectar en pantalla ${selIdx+1}${SD.screens[selIdx].isPrimary?' (principal)':''}`; }
 function full(){
+  /* Programa de Windows: la ventana misma pasa a pantalla completa */
+  if(window.__VDN_NATIVE__&&window.vdnNative){ if(!isFull()) vdnNative.invoke('toggle_fullscreen'); return; }
   const d=document.documentElement; if(document.fullscreenElement) return;
   const plain=()=>{ try{ const p=(d.requestFullscreen||d.webkitRequestFullscreen).call(d); if(p&&p.catch) p.catch(()=>{}); }catch{} };
   const scr=SD&&SD.screens[selIdx];

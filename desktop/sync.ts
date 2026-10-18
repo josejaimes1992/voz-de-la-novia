@@ -12,6 +12,15 @@ type Ctx = {
 type State = { mode: "cloud" | "local"; cloud?: string; token?: string; cloudUser?: any; localUserId?: number; pushedId?: number;
   lastPull?: number; lastPush?: number; needLogin?: boolean; srcIds?: string[] };
 /* De dónde baja la Biblia y los Mensajes una iglesia que usa el programa "solo en esta PC" */
+/* Aviso de versión nueva del programa (se revisa en GitHub cada 6 horas) */
+const VERSION = Bun.env.VDN_VERSION || "";
+let latest = "", latestAt = 0;
+const vnum = (v: string) => v.split(".").map(n => parseInt(n) || 0).reduce((a, n) => a * 1000 + n, 0);
+async function checkUpdate() {
+  if (!VERSION || Date.now() - latestAt < 6 * 3600_000) return; latestAt = Date.now();
+  try { const r = await fetch("https://api.github.com/repos/josejaimes1992/voz-de-la-novia/releases/latest", { headers: { "user-agent": "voz-de-la-novia", accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(10000) });
+    const d: any = await r.json(); const v = String(d.tag_name || "").replace(/^escritorio-v/, ""); if (/^\d+\.\d+\.\d+$/.test(v)) latest = v; } catch { latestAt = 0; }
+}
 const SOURCE = (Bun.env.VDN_SOURCE || "https://web-production-2c736.up.railway.app").replace(/\/+$/, "");
 
 let C: Ctx; let ST: State | null = null;
@@ -48,7 +57,7 @@ function startLoop() {
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=2" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=3" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -179,9 +188,11 @@ export async function syncNow(full = false) {
 }
 
 async function status() {
+  checkUpdate();
   const nUsers = Number((await C.db`SELECT count(*) AS n FROM users`)[0].n);
   const pend = ST?.mode === "cloud" ? (await pendingRows()).items.length : 0;
   return { configured: nUsers > 0, mode: ST?.mode ?? null, cloud: ST?.cloud ?? null, user: ST?.cloudUser?.username ?? null,
+    version: VERSION, update: latest && vnum(latest) > vnum(VERSION) ? latest : null, native: Bun.env.VDN_NATIVE === "1",
     online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: lastError, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
 }
 
