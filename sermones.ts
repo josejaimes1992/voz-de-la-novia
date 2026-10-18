@@ -109,8 +109,10 @@ async function index(db: any): Promise<Idx[]> {
 }
 export async function sermonList(db: any) { return (await index(db)).map(s => ({ id: s.id, code: s.code, title: s.title, place: s.place, n: s.paras.length })); }
 export async function sermonSearch(db: any, q: string) {
-  const toks = norm(q).split(/[^a-z0-9ñ-]+/).filter(t => t.length > 1); if (!toks.length) return { titles: [], paras: [] };
-  const all = await index(db); const phrase = toks.join(" ");
+  const all0 = norm(q).split(/[^a-z0-9ñ-]+/).filter(t => t.length > 1); if (!all0.length) return { titles: [], paras: [] };
+  /* Las palabras cortas (de, la, el…) no se exigen sueltas, pero sí cuentan para la frase exacta */
+  const long = all0.filter(t => t.length > 2); const toks = long.length ? long : all0;
+  const all = await index(db); const phrase = all0.join(" ");
   const titles = all.filter(s => toks.every(t => s.tn.includes(t))).slice(0, 30).map(s => ({ id: s.id, code: s.code, title: s.title, place: s.place, n: s.paras.length }));
   const paras: any[] = [];
   for (const s of all) for (const p of s.paras) {

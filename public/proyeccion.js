@@ -29,7 +29,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot{display:grid;grid-template-columns:1fr 1fr 1.4fr 1.4fr;gap:8px;padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.pj-empty{color:var(--muted);padding:20px 0}
+.pj-empty{color:var(--muted);padding:20px 0}.pjm-fq input{border-color:var(--accent)!important}.pjm-hits .pjm-hit .t{display:block}.pjm-hits .snip{display:block;font-size:12.5px;line-height:1.4;color:var(--muted);margin-top:4px;font-weight:400}.pjm-hits mark,.pjm-hl mark{background:rgba(233,196,90,.55);color:inherit;border-radius:3px;padding:0 1px}.pjw-v.pjm-hl{outline:2px solid var(--accent);outline-offset:-2px}
 .pjw .pjw-grid .pjw-v[aria-current="true"]{background:#a8392f;color:#fff;box-shadow:inset 4px 0 0 #ff8a7f}.pjw .pjw-grid .pjw-v[aria-current="true"] .h,.pjw .pjw-grid .pjw-v[aria-current="true"] .h b{color:#ffe1dc}
 .pjw .pjw-grid .pjw-v[aria-current="true"] .h::after{content:"● en pantalla";font:800 9.5px var(--f-ui);letter-spacing:.08em;margin-left:8px;color:#fff;background:rgba(0,0,0,.25);border-radius:999px;padding:1px 7px}
 /* ---- Zonas del en vivo, cada una con su color: Vista previa (azul) · Pantalla (rojo) · Lista de hoy (dorado) ---- */
@@ -487,19 +487,41 @@ function pjFoundHtml(){ const F=PJ.found||[]; if(!F.length) return '';
 function pjMsgLib(){
   if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
   const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
+  const fq=(PJ.mf||'').trim();
   return `<div class="pjw-q"><input id="pjm-q" type="search" placeholder="Buscar mensaje por título o código" value="${esc(PJ.mq||'')}" autocomplete="off" aria-label="Buscar mensaje"></div>
-    <div class="pjw-scroll" id="pjm-list">${L.slice(0,400).map(x=>`<button class="pjw-row${MS.curId===x.id?' sel':''}" data-act="pjm-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title)}<small>${esc(x.code||'')}${x.place?' · '+esc(x.place):''}</small></span></button>`).join('')||'<p class="pj-sug-h">Sin resultados.</p>'}</div>`;
+    <div class="pjw-q pjm-fq"><input id="pjm-f" type="search" placeholder="🔎 Buscar frase o palabras en todos los mensajes" value="${esc(PJ.mf||'')}" autocomplete="off" aria-label="Buscar frase en los mensajes"></div>
+    ${fq.length>=3?pjMsgHits():`<div class="pjw-scroll" id="pjm-list">${L.slice(0,400).map(x=>`<button class="pjw-row${MS.curId===x.id?' sel':''}" data-act="pjm-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title)}<small>${esc(x.code||'')}${x.place?' · '+esc(x.place):''}</small></span></button>`).join('')||'<p class="pj-sug-h">Sin resultados.</p>'}</div>`}`;
 }
+/* Búsqueda por frase o palabras dentro de todos los Mensajes */
+function pjMark(text,q){
+  const toks=msNorm(q||'').split(/[^a-z0-9ñ]+/).filter(t=>t.length>1); if(!toks.length) return esc(text);
+  const t=String(text||''); const n=[...t].map(c=>(c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()[0])||c).join('');
+  const hit=new Array(t.length).fill(false); const ph=toks.join(' '); let k=n.indexOf(ph);
+  while(k>=0){ for(let x=k;x<k+ph.length;x++) hit[x]=true; k=n.indexOf(ph,k+ph.length); }
+  const isW=c=>/[a-z0-9ñ]/.test(c||'');
+  for(const w of toks){ if(w.length<3) continue; let i=n.indexOf(w); while(i>=0){ if(!isW(n[i-1])) for(let x=i;x<i+w.length;x++) hit[x]=true; i=n.indexOf(w,i+w.length); } }
+  let out='', on=false; for(let i=0;i<t.length;i++){ if(hit[i]!==on){ out+=on?'</mark>':'<mark>'; on=hit[i]; } out+=esc(t[i]); } return out+(on?'</mark>':'');
+}
+function pjMsgSearch(){ const q=(PJ.mf||'').trim(); if(q.length<3){ PJ.mfRes=null; return; } if(PJ.mfRes&&PJ.mfRes.q===q) return;
+  const my=PJ.mfSeq=(PJ.mfSeq||0)+1; PJ.mfRes={q,loading:true};
+  api('/api/sermons/search?q='+encodeURIComponent(q)).then(d=>{ if(my!==PJ.mfSeq) return; PJ.mfRes={q,paras:d.paras||[],more:!!d.more}; pjMsgListRefresh(); })
+    .catch(()=>{ if(my===PJ.mfSeq){ PJ.mfRes={q,paras:[],err:true}; pjMsgListRefresh(); } }); }
+function pjMsgHits(){ pjMsgSearch(); const R=PJ.mfRes||{};
+  if(R.loading) return '<div class="pjw-scroll" id="pjm-list"><p class="pj-sug-h">Buscando en todos los mensajes…</p></div>';
+  const P=R.paras||[]; if(!P.length) return `<div class="pjw-scroll" id="pjm-list"><p class="pj-sug-h">${R.err?'No se pudo buscar.':'No se encontró esa frase.'}</p></div>`;
+  return `<div class="pjw-scroll pjm-hits" id="pjm-list"><p class="pj-sug-h">${P.length}${R.more?'+':''} párrafo${P.length>1?'s':''} · clic para abrirlo</p>${P.map(h=>`<button class="pjw-row pjm-hit" data-act="pjm-hit" data-id="${esc(h.id)}" data-n="${esc(h.n)}"><span class="t" style="text-transform:none">${esc(h.title)}<small>${esc(h.code||'')} · Párrafo ${esc(h.n)}${h.exact?' · <b>frase exacta</b>':''}</small><span class="snip">${pjMark(h.snip,R.q)}</span></span></button>`).join('')}</div>`; }
+function pjMsgListRefresh(){ const box=$('#pjm-list'); if(!box) return; const tmp=document.createElement('div'); tmp.innerHTML=pjMsgLib(); const nl=tmp.querySelector('#pjm-list'); if(nl){ box.className=nl.className; box.innerHTML=nl.innerHTML; } }
 function pjMsgCenter(r){
   const s=typeof MS!=='undefined'&&MS.cur; if(!s) return `<section class="pjw-sl"><div class="pjw-h">Mensaje</div><p class="pj-empty" style="padding:16px">${MS&&MS.curId?'Abriendo…':'Elige un mensaje a la izquierda.'}</p></section>`;
   const on=r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id?r.sermon.p:-1;
   return `<section class="pjw-sl"><div class="pjw-h"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">${esc(s.title)}</span><span class="sp"></span><span>${esc(s.code||'')}</span></div>
-    <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v" data-act="pjm-p" data-i="${i}" aria-current="${on===i}" title="Clic: proyectar · Doble clic: agregar a Citas"><span class="h">Párrafo ${esc(p.n)}<span class="pjc-add" data-act="pjc-add" data-i="${i}" role="button" title="Agregar a las citas del culto">＋ Cita</span></span><p>${esc(p.t)}</p></button>`).join('')}</div></section>`;
+    <div class="pjw-scroll" id="pj-body">${s.paras.map((p,i)=>`<button class="pjw-v${PJ.hit&&PJ.hit.id===s.id&&PJ.hit.i===i?' pjm-hl':''}" data-act="pjm-p" data-i="${i}" aria-current="${on===i}" title="Clic: proyectar · Doble clic: agregar a Citas"><span class="h">Párrafo ${esc(p.n)}<span class="pjc-add" data-act="pjc-add" data-i="${i}" role="button" title="Agregar a las citas del culto">＋ Cita</span></span><p>${PJ.hit&&PJ.hit.id===s.id&&PJ.hit.i===i?pjMark(p.t,PJ.hit.q):esc(p.t)}</p></button>`).join('')}</div></section>`;
 }
 function pjBindTabs(){
   const bq=$('#pjb-q'); if(bq){ bq.addEventListener('input',e=>{ PJ.bq=e.target.value; clearTimeout(PJ.bqt); PJ.bqt=setTimeout(()=>{ pjRender(); const n=$('#pjb-q'); if(n){ n.focus(); const l=n.value.length; try{ n.setSelectionRange(l,l); }catch{} } },250); });
     bq.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); const pr=bbParse(PJ.bq||''); if(!pr) return; BB.b=pr.b; BB.c=pr.c; PJ.bq=''; if(pr.v!=null){ BB.v=pr.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(); }); }
   const cs=$('#pjb-chsel'); if(cs) cs.addEventListener('change',e=>{ BB.c=+e.target.value; BB.v=null; pjRender(true); });
+  const mf=$('#pjm-f'); if(mf) mf.addEventListener('input',e=>{ PJ.mf=e.target.value; clearTimeout(PJ.mft); PJ.mft=setTimeout(()=>{ pjMsgSearch(); pjMsgListRefresh(); },300); });
   const mq=$('#pjm-q'); if(mq) mq.addEventListener('input',e=>{ PJ.mq=e.target.value; clearTimeout(PJ.mqt); PJ.mqt=setTimeout(()=>{ const box=$('#pjm-list'); if(box){ const tmp=document.createElement('div'); tmp.innerHTML=pjMsgLib(); const nl=tmp.querySelector('#pjm-list'); if(nl) box.innerHTML=nl.innerHTML; } },120); });
 }
 (function(){ const _r=window.render; if(typeof _r!=='function') return;
@@ -577,6 +599,10 @@ document.addEventListener('click',ev=>{
     case 'pjb-go': BB.b=+ds.b; BB.c=+ds.c; PJ.bq=''; if(ds.v!==''){ BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); } pjRender(true); break;
     case 'pjb-v': BB.v=+ds.v; BB.live=true; bbProject().then(()=>pjRender()); break;
     case 'pjm-open': (async()=>{ await msOpen(ds.id,0); pjRender(true); })(); break;
+    case 'pjm-hit': (async()=>{ await msOpen(ds.id,0); const s=MS.cur; if(!s) return; const i=Math.max(0,s.paras.findIndex(p=>String(p.n)===String(ds.n)));
+      PJ.hit={id:s.id,i,q:(PJ.mfRes&&PJ.mfRes.q)||PJ.mf||''}; MS.p=i; pjRender(true);
+      setTimeout(()=>{ const el=document.querySelector(`#pj-body .pjw-v[data-i="${i}"]`); if(el) el.scrollIntoView({block:'center'}); },40);
+      document.querySelectorAll('.pjm-hit.sel').forEach(x=>x.classList.remove('sel')); })(); break;
     case 'pjm-p': MS.p=+ds.i; MS.part=0; MS.auto=0; msProject().then(()=>pjRender()); break;
     case 'pj-peekadd': if(PJ.peek){ pjAdd(PJ.peek,false); PJ.peek=null; pjRender(true); } break;
     case 'pj-peekshow': if(PJ.peek){ const id=PJ.peek; PJ.peek=null; pjAdd(id,false); pjShow(+ds.i); pjRender(true); } break;
