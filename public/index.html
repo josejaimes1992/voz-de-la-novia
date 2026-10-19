@@ -613,7 +613,7 @@ let lastSig='';
 async function loadData(){
   try{
     const d=await api('/api/data'); const sig=JSON.stringify(d); if(sig===lastSig) return; lastSig=sig;
-    S.songs=new Map(d.songs.map(x=>[x.id,x])); S.programs=new Map(d.programs.map(x=>[x.id,x])); for(const x of S.sharedProgs||[]) S.programs.set(x.id,x); S.error=false; S.mode='api'; onData();
+    S.songs=new Map(d.songs.map(x=>[x.id,x])); S.programs=new Map(d.programs.map(x=>[x.id,x])); S.playlists=new Map((d.playlists||[]).map(x=>[x.id,x])); for(const x of S.sharedProgs||[]) S.programs.set(x.id,x); S.error=false; S.mode='api'; onData();
   }catch(e){ if(S.mode==='loading'){ S.mode='api'; S.error=true; render(); } }
 }
 async function initStore(){
@@ -775,7 +775,7 @@ function viewSongsInner(){
         <button class="btn ghost" data-act="open-excel">▦ Excel</button>
         ${S.isAdmin?'<button class="btn ghost" data-act="go-trash">🗑 Papelera</button>':''}</div></details></div>`:''}
   </div>
-  <div class="chips"><button class="chip aud-chip" data-act="audio-only" aria-pressed="${V.audioOnly}">🎧 Con audio<small>${songs.filter(s=>(s.audio||[]).length).length}</small></button>${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
+  <div class="chips"><button class="chip aud-chip" data-act="audio-only" aria-pressed="${V.audioOnly}">🎧 Con audio<small>${songs.filter(s=>(s.audio||[]).length).length}</small></button><button class="chip rp-chip" data-act="rp-open" title="Reproducir alabanzas con audio y armar playlists">▶ Reproductor</button>${S.canWrite?`<button class="chip" data-act="missing" aria-pressed="${V.missingOnly}">Falta original<small>${songs.filter(s=>!(s.bodyPro&&s.bodyPro.trim())).length}</small></button>`:''}<button class="chip" data-act="key" data-k="all" aria-pressed="${V.key==='all'}">Todos<small>${songs.length}</small></button>
   ${order.map(c=>`<button class="chip kchip" data-act="key" data-k="${c}" aria-pressed="${V.key===c}"${c==='?'?'':kc(parseKey(c))}>${esc(disp(c))}<small>${counts.get(c)}</small></button>`).join('')}</div><div id="song-res">`;
   if(!songs.length) return h+`<div class="empty"><b>El cancionero está vacío</b>El director puede agregar la primera canción con “Nueva canción”. También puedes importar muchas a la vez desde Word, PDF o ChordPro con “Importar”.</div></div>`;
   if(!filtered.length) return h+`<div class="empty"><b>Sin resultados</b>${V.qmode==='title'?'Ningún nombre coincide. Prueba buscar en “Letra” o en “Todo”.':'Prueba con otra palabra, revisa la ortografía o quita el filtro de tono.'}</div></div>`;
@@ -1345,7 +1345,8 @@ render(); initStore(); loadSharedFromUrl(); if(window.Acordes) Acordes.load().th
 <script src="/equipo.js?v=5"></script>
 <script src="/placer.js?v=2"></script>
 <script src="/afinador.js?v=1"></script>
-<script src="/audios.js?v=2"></script>
+<script src="/audios.js?v=3"></script>
+<script src="/reproductor.js?v=1"></script>
 <script src="/seleccion.js?v=1"></script>
 <script src="/proyeccion.js?v=42"></script>
 <script src="/biblia.js?v=10"></script>

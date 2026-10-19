@@ -57,7 +57,7 @@ try { mkdirSync(AUDIO_DIR, { recursive: true }); } catch (e) { console.error("No
 const AUDIO_TYPES: Record<string, string> = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/ogg": "ogg", "audio/webm": "webm", "audio/flac": "flac", "audio/x-flac": "flac", "audio/3gpp": "3gp", "audio/amr": "amr" };
 const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", webm: "audio/webm", flac: "audio/flac", "3gp": "audio/3gpp", amr: "audio/amr" };
 const AUDIO_RE = /^[a-f0-9]{24}\.(mp3|m4a|aac|wav|ogg|webm|flac|3gp|amr)$/;
-const COLS = new Set(["songs", "programs"]);
+const COLS = new Set(["songs", "programs", "playlists"]);
 const ID_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
 const USER_RE = /^[a-z0-9._-]{2,30}$/;
 const ROLES = new Set(["admin", "moderator"]);
@@ -100,7 +100,7 @@ async function upsert(tx: any, user: User, col: string, id: string, data: any, a
     }
   }
   if (before) { if (before.createdBy) data.createdBy = before.createdBy; if (before.createdAt) data.createdAt = before.createdAt; }
-  if (col === "programs") {
+  if (col === "programs" || col === "playlists") {
     if (before && before.ownerId != null && before.ownerId !== user.id && action !== "restore") throw new Error("forbidden");
     data.ownerId = before?.ownerId ?? user.id; data.owner = before?.owner ?? user.name;
     if (!("shareToken" in data) && before?.shareToken) data.shareToken = before.shareToken; else if (data.shareToken === null) delete data.shareToken;
@@ -159,7 +159,7 @@ async function logUser(actor: User, target: { id: number; name: string }, action
 
 const HTML = await Bun.file(appPath("./public/index.html")).text();
 const LOGO = Bun.file(appPath("./public/logo.jpg"));
-const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8", "/auditoria.js": "text/javascript; charset=utf-8" };
+const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/reproductor.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8", "/auditoria.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
 type Proj = { mode: "text" | "black" | "logo"; sub?: number; subs?: number; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
@@ -474,11 +474,11 @@ const SERVER = Bun.serve({
         return new Response(req.method === "HEAD" ? null : file, { headers: { ...base, "content-length": String(size) } });
       }
       if (p === "/api/data" && req.method === "GET") {
-        const rows = await db`SELECT col, id, data FROM docs WHERE col IN ('songs', 'programs')`;
+        const rows = await db`SELECT col, id, data FROM docs WHERE col IN ('songs', 'programs', 'playlists')`;
         const u = await currentUser(req);
-        const out: Record<string, unknown[]> = { songs: [], programs: [] };
+        const out: Record<string, unknown[]> = { songs: [], programs: [], playlists: [] };
         /* Los programas son privados: cada usuario ve solo los suyos (y los antiguos sin dueño) */
-        for (const r of rows) { const d = parseJ(r.data); if (r.col === "programs" && (!u || (d.ownerId != null && d.ownerId !== u.id))) continue; if (out[r.col]) out[r.col].push({ ...d, id: r.id }); }
+        for (const r of rows) { const d = parseJ(r.data); if (r.col === "programs" && (!u || (d.ownerId != null && d.ownerId !== u.id))) continue; if (r.col === "playlists" && (!u || d.ownerId !== u.id)) continue; if (out[r.col]) out[r.col].push({ ...d, id: r.id }); }
         return json(out);
       }
 
@@ -960,12 +960,12 @@ const SERVER = Bun.serve({
         await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'programs' AND id = ${spm[1]}`;
         return json({ token: d.shareToken || null });
       }
-      const m = p.match(/^\/api\/(songs|programs)\/([^/]+)$/);
+      const m = p.match(/^\/api\/(songs|programs|playlists)\/([^/]+)$/);
       if (m) {
         const col = m[1], id = decodeURIComponent(m[2]);
         if (!COLS.has(col) || !ID_RE.test(id)) return json({ error: "bad_path" }, 400);
         if (!user) return json({ error: "unauthorized" }, 401);
-        if (col === "programs") { const pr = await db`SELECT data FROM docs WHERE col = 'programs' AND id = ${id}`; const od = pr[0] ? parseJ(pr[0].data) : null; if (od && od.ownerId != null && od.ownerId !== user.id) return json({ error: "forbidden" }, 403); }
+        if (col === "programs" || col === "playlists") { const pr = await db`SELECT data FROM docs WHERE col = ${col} AND id = ${id}`; const od = pr[0] ? parseJ(pr[0].data) : null; if (od && od.ownerId != null && od.ownerId !== user.id) return json({ error: "forbidden" }, 403); }
         if (req.method === "PUT") {
           const text = await req.text();
           if (text.length > 400_000) return json({ error: "too_large" }, 413);

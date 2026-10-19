@@ -73,7 +73,7 @@ const cleanUrl = (u: string) => { let s = String(u || "").trim().replace(/\/+$/,
 
 async function pendingRows() {
   const from = ST?.pushedId ?? 0;
-  const rows = await C.db`SELECT id, col, doc_id FROM changes WHERE id > ${from} AND col IN ('songs', 'programs') ORDER BY id`;
+  const rows = await C.db`SELECT id, col, doc_id FROM changes WHERE id > ${from} AND col IN ('songs', 'programs', 'playlists') ORDER BY id`;
   const last = rows.length ? Number(rows[rows.length - 1].id) : from;
   const seen = new Map<string, { col: string; id: string }>();
   for (const r of rows) seen.set(r.col + ":" + r.doc_id, { col: r.col, id: r.doc_id });
@@ -83,11 +83,11 @@ async function pendingRows() {
 async function push() {
   const { items, last } = await pendingRows();
   if (!items.length) return 0;
-  const writes: any[] = [], trash: string[] = [], dels: string[] = [];
+  const writes: any[] = [], trash: string[] = [], dels: [string, string][] = [];
   for (const it of items) {
     const r = await C.db`SELECT data FROM docs WHERE col = ${it.col} AND id = ${it.id}`;
     if (r[0]) { const d = parseJ(r[0].data); delete d.ownerId; delete d.owner; delete d.audio; writes.push({ col: it.col, id: it.id, data: d }); }
-    else if (it.col === "songs") trash.push(it.id); else dels.push(it.id);
+    else if (it.col === "songs") trash.push(it.id); else dels.push([it.col, it.id]);
   }
   for (let i = 0; i < writes.length; i += 100) {
     const chunk = writes.slice(i, i + 100);
@@ -99,7 +99,7 @@ async function push() {
     const r = await cloud("/api/trash", { method: "POST", body: JSON.stringify({ ids: trash.slice(i, i + 400) }) });
     if (!r.ok && r.status !== 403) throw new Error("papelera " + r.status);
   }
-  for (const id of dels) { const r = await cloud(`/api/programs/${encodeURIComponent(id)}`, { method: "DELETE" }); if (!r.ok && r.status !== 404 && r.status !== 403) throw new Error("borrar " + r.status); }
+  for (const [dcol, id] of dels) { const r = await cloud(`/api/${dcol}/${encodeURIComponent(id)}`, { method: "DELETE" }); if (!r.ok && r.status !== 404 && r.status !== 403) throw new Error("borrar " + r.status); }
   ST!.pushedId = last; ST!.lastPush = Date.now(); await saveState();
   return items.length;
 }
@@ -115,12 +115,12 @@ async function pull(full: boolean) {
   const { items: pend } = await pendingRows(); const busy = new Set(pend.map(x => x.col + ":" + x.id));
   const cu = ST!.cloudUser?.id, lu = ST!.localUserId;
   await C.db.begin(async (tx: any) => {
-    for (const col of ["songs", "programs"]) {
+    for (const col of ["songs", "programs", "playlists"]) {
       const list: any[] = d[col] || []; const ids = new Set<string>();
       for (const it of list) {
         const id = String(it.id); ids.add(id); if (busy.has(col + ":" + id)) continue;
         const data = { ...it }; delete data.id;
-        if (col === "programs") { if (data.ownerId != null && data.ownerId === cu) data.ownerId = lu; else if (data.ownerId != null) continue; }
+        if (col !== "songs") { if (data.ownerId != null && data.ownerId === cu) data.ownerId = lu; else if (data.ownerId != null) continue; }
         await tx`INSERT INTO docs (col, id, data, updated_at) VALUES (${col}, ${id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})
                  ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
       }

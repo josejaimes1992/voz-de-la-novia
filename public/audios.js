@@ -7,7 +7,7 @@ function audioSection(s,compact){
   const list=s.audio||[];
   if(!list.length&&!S.canWrite) return '';
   return `<section class="aud" aria-label="Audios de la canción">
-    <div class="aud-h"><b>Audios</b>${S.canWrite?`<label class="btn" style="cursor:pointer">＋ Subir audio<input type="file" accept="${AUD_ACCEPT}" data-aud-up="${esc(s.id)}" hidden></label>`:''}</div>
+    <div class="aud-h"><b>Audios</b>${list.length?`<button class="btn sm" data-act="rp-song" data-s="${esc(s.id)}" title="Escuchar en el reproductor (sigue sonando con la pantalla apagada)">▶ Reproductor</button><button class="btn sm" data-act="rp-pick" data-s="${esc(s.id)}">＋ Playlist</button>`:''}${S.canWrite?`<label class="btn" style="cursor:pointer">＋ Subir audio<input type="file" accept="${AUD_ACCEPT}" data-aud-up="${esc(s.id)}" hidden></label>`:''}</div>
     <div id="aud-prog" class="muted" style="font-size:13px" hidden></div>
     ${list.length?list.map(a=>`<div class="aud-row">
       <div class="aud-meta"><b>${esc(a.name)}</b><small class="muted">${esc(a.by||'')} · ${esc(fmtWhen(a.at))}${a.duration?' · '+Math.floor(a.duration/60)+':'+String(a.duration%60).padStart(2,'0'):''} · ${audSize(a.size||0)}${a.original&&a.original>a.size*1.2?` (comprimido de ${audSize(a.original)})`:''}</small></div>
