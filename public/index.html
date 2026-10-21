@@ -363,6 +363,8 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 .live-body{flex:1;overflow:auto;padding:20px 16px 40px}
 .live-body .sheet{margin:0 auto;font-size:calc(24px * var(--lyric))}
 .live-bot{display:flex;gap:8px;padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
+.items .item[data-pi]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.items .item[data-pi] input,.items .item[data-pi] select{-webkit-user-select:text;user-select:text}
+.items .item.dg-wait{transition:transform .35s ease;transform:scale(.98)}body.dg-on{overflow:hidden;touch-action:none}
 .drag-h{cursor:grab;touch-action:none;user-select:none;display:flex;flex-direction:column;align-items:center;line-height:1;gap:2px}.drag-h i{font-style:normal;opacity:.45;font-size:16px}
 .item.dragging{position:relative;z-index:5;box-shadow:0 12px 30px rgba(0,0,0,.25);border-color:var(--accent);cursor:grabbing}.items.drag-on .item:not(.dragging){transition:transform .15s}
 .btn.live-send{background:#c0392b;border-color:#c0392b;color:#fff}
@@ -1050,24 +1052,47 @@ function viewProgram(){
   ${w?(V.confirm==='del-prog'?`<span class="confirm">¿Borrar este programa? <button class="btn danger" data-act="del-prog-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="del-prog">Borrar programa</button> <button class="btn ghost" data-act="dup-prog">Duplicar programa</button>`):''}`;
 }
 
-/* Arrastrar para ordenar el programa (mouse y dedo) */
-document.addEventListener('pointerdown',e=>{
-  const h=e.target.closest('.drag-h'); if(!h) return; const item=h.closest('.item[data-pi]'); if(!item) return; const list=item.parentElement;
-  const items=[...list.querySelectorAll(':scope > .item[data-pi]')]; if(items.length<2) return; e.preventDefault();
+/* Arrastrar para ordenar el programa:
+   · en el celular: mantener presionada la tarjeta (en cualquier parte que no sea un campo o botón) y arrastrar
+   · en la PC: arrastrar desde cualquier parte libre de la tarjeta (o desde ⠿) */
+const DG={on:false};
+function dgSkip(t){ return !!t.closest('input,select,textarea,button,a,[data-act]'); }
+function dgStart(item,clientY,pid,src){
+  const list=item.parentElement; const items=[...list.querySelectorAll(':scope > .item[data-pi]')]; if(items.length<2) return;
   const from=items.indexOf(item); const sy0=scrollY; const R=items.map(x=>{ const r=x.getBoundingClientRect(); return {top:r.top+sy0,h:r.height}; });
-  const gap=R.length>1?Math.max(0,R[1].top-(R[0].top+R[0].h)):8; const y0=e.clientY+sy0; let to=from, auto=0, lastY=e.clientY;
-  item.classList.add('dragging'); list.classList.add('drag-on'); try{ h.setPointerCapture(e.pointerId); }catch{}
-  const place=()=>{ const py=lastY+scrollY, dy=py-y0; item.style.transform=`translateY(${dy}px)`; const cy=R[from].top+R[from].h/2+dy; to=from;
+  const gap=R.length>1?Math.max(0,R[1].top-(R[0].top+R[0].h)):8; const y0=clientY+sy0; let to=from, raf=0, lastY=clientY;
+  DG.on=true; item.classList.add('dragging'); list.classList.add('drag-on'); document.body.classList.add('dg-on'); try{ navigator.vibrate&&navigator.vibrate(25); }catch{}
+  try{ window.getSelection().removeAllRanges(); }catch{}
+  const place=()=>{ const dy=lastY+scrollY-y0; item.style.transform=`translateY(${dy}px) scale(1.02)`; const cy=R[from].top+R[from].h/2+dy; to=from;
     for(let k=0;k<items.length;k++){ if(k===from) continue; const mid=R[k].top+R[k].h/2; if(k<from&&cy<mid){ to=k; break; } }
     if(to===from) for(let k=items.length-1;k>from;k--){ const mid=R[k].top+R[k].h/2; if(cy>mid){ to=k; break; } }
     const hh=R[from].h+gap; items.forEach((x,k)=>{ if(x===item) return; let s=0; if(from<to&&k>from&&k<=to) s=-hh; if(from>to&&k>=to&&k<from) s=hh; x.style.transform=s?`translateY(${s}px)`:''; }); };
-  const tick=()=>{ if(!item.classList.contains('dragging')) return; const m=60; const v=lastY<m?-(m-lastY)/4:lastY>innerHeight-m?(lastY-(innerHeight-m))/4:0; if(v){ scrollBy(0,v); place(); } auto=requestAnimationFrame(tick); }; auto=requestAnimationFrame(tick);
-  const mv=ev=>{ lastY=ev.clientY; place(); };
-  const up=async()=>{ removeEventListener('pointermove',mv); removeEventListener('pointerup',up); removeEventListener('pointercancel',up); cancelAnimationFrame(auto);
-    item.classList.remove('dragging'); list.classList.remove('drag-on'); items.forEach(x=>x.style.transform='');
+  const tick=()=>{ if(!DG.on) return; const m=70; const v=lastY<m?-(m-lastY)/4:lastY>innerHeight-m?(lastY-(innerHeight-m))/4:0; if(v){ scrollBy(0,v); place(); } raf=requestAnimationFrame(tick); }; raf=requestAnimationFrame(tick);
+  const mv=ev=>{ if(pid!=null&&ev.pointerId!==pid) return; lastY=ev.clientY; place(); };
+  const tm=ev=>{ ev.preventDefault(); };
+  const up=async()=>{ removeEventListener('pointermove',mv); removeEventListener('pointerup',up); removeEventListener('pointercancel',up); removeEventListener('touchmove',tm); cancelAnimationFrame(raf);
+    DG.on=false; item.classList.remove('dragging'); list.classList.remove('drag-on'); document.body.classList.remove('dg-on'); items.forEach(x=>x.style.transform='');
     if(to!==from){ const p=JSON.parse(JSON.stringify(S.programs.get(V.programId))); const [it]=p.items.splice(from,1); p.items.splice(to,0,it); S.programs.set(p.id,p); render(); await writeDoc('programs',p); render(); } };
-  addEventListener('pointermove',mv); addEventListener('pointerup',up); addEventListener('pointercancel',up);
+  addEventListener('pointermove',mv); addEventListener('pointerup',up); addEventListener('pointercancel',up); addEventListener('touchmove',tm,{passive:false});
+  place();
+}
+document.addEventListener('pointerdown',e=>{
+  const item=e.target.closest('.items .item[data-pi]'); if(!item||DG.on||!item.querySelector('.drag-h')) return;
+  const onHandle=!!e.target.closest('.drag-h'); if(!onHandle&&dgSkip(e.target)) return;
+  const x0=e.clientX, y0=e.clientY, pid=e.pointerId;
+  if(e.pointerType==='mouse'){
+    if(onHandle){ e.preventDefault(); dgStart(item,y0,pid); return; }
+    const mv=ev=>{ if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>6){ off(); window.getSelection()?.removeAllRanges(); dgStart(item,ev.clientY,pid); } };
+    const off=()=>{ removeEventListener('pointermove',mv); removeEventListener('pointerup',off); };
+    addEventListener('pointermove',mv); addEventListener('pointerup',off); return; }
+  /* dedo: mantener presionado ~0,35 s sin mover */
+  item.classList.add('dg-wait'); let y=y0;
+  const t=setTimeout(()=>{ off(); dgStart(item,y,pid); },onHandle?120:350);
+  const mv=ev=>{ if(ev.pointerId!==pid) return; y=ev.clientY; if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>10){ off(); } };
+  const off=()=>{ clearTimeout(t); item.classList.remove('dg-wait'); removeEventListener('pointermove',mv); removeEventListener('pointerup',off); removeEventListener('pointercancel',off); };
+  addEventListener('pointermove',mv); addEventListener('pointerup',off); addEventListener('pointercancel',off);
 });
+document.addEventListener('contextmenu',e=>{ if(e.target.closest('.items .item[data-pi]')&&!e.target.closest('input,textarea')) e.preventDefault(); });
 /* ============ Modales ============ */
 function openPicker(){
   const root=$('#modal-root');
@@ -1151,9 +1176,20 @@ function renderLive(){
   keepAwake(true); document.body.classList.add('live-on'); liveFollowConnect();
   const stp=$('#live-strip'); if(stp){ const on=stp.querySelector('.on'); if(on) stp.scrollLeft=Math.max(0,on.offsetLeft-stp.clientWidth/2+on.offsetWidth/2); }
   const lf=$('#live-q'); if(lf){ lf.addEventListener('input',()=>{ V.live.fq=lf.value; clearTimeout(V.live.fqt); V.live.fqt=setTimeout(()=>{ const ls=$('#live-ls'); if(ls){ const t=document.createElement('div'); t.innerHTML=liveFindHtml(k,shift); const n=t.querySelector('#live-ls'); if(n) ls.innerHTML=n.innerHTML; } },180); }); if(V.live.findFocus){ lf.focus(); V.live.findFocus=false; } }
-  const b=$('#live-body'); let sx=null,sy=null; b.scrollTop=keepScroll;
-  b.addEventListener('touchstart',ev=>{ sx=ev.touches[0].clientX; sy=ev.touches[0].clientY; },{passive:true});
-  b.addEventListener('touchend',ev=>{ if(sx==null) return; const dx=ev.changedTouches[0].clientX-sx, dy=ev.changedTouches[0].clientY-sy; if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.5) liveGo(dx<0?1:-1); sx=null; },{passive:true});
+  const b=$('#live-body'); b.scrollTop=keepScroll; liveSwipe(b);
+}
+/* Deslizar la letra a la izquierda = siguiente alabanza; a la derecha = anterior (la letra sigue al dedo) */
+function liveSwipe(b){
+  let sx=null, sy=null, mode=null, dx=0; const inner=()=>b.firstElementChild?b:null;
+  b.addEventListener('touchstart',ev=>{ if(ev.touches.length!==1) return; sx=ev.touches[0].clientX; sy=ev.touches[0].clientY; mode=null; dx=0; b.style.transition='none'; },{passive:true});
+  b.addEventListener('touchmove',ev=>{ if(sx==null) return; const x=ev.touches[0].clientX-sx, y=ev.touches[0].clientY-sy;
+    if(!mode){ if(Math.abs(x)>12&&Math.abs(x)>Math.abs(y)*1.2) mode='h'; else if(Math.abs(y)>12) mode='v'; }
+    if(mode==='h'){ ev.preventDefault(); const E=liveEntries(); const can=(x<0&&V.live.idx<E.length-1)||(x>0&&V.live.idx>0); dx=can?x:x*0.25; b.style.transform=`translateX(${dx}px)`; b.style.opacity=String(Math.max(.35,1-Math.abs(dx)/(innerWidth*1.2))); } },{passive:false});
+  const end=()=>{ if(sx==null) return; sx=null; if(mode!=='h'){ return; } const E=liveEntries(); const go=Math.abs(dx)>Math.min(110,innerWidth*0.22)?(dx<0?1:-1):0; const ok=go&&V.live.idx+go>=0&&V.live.idx+go<E.length;
+    b.style.transition='transform .18s ease,opacity .18s ease';
+    if(ok){ b.style.transform=`translateX(${go>0?-innerWidth:innerWidth}px)`; b.style.opacity='0'; setTimeout(()=>{ liveGo(go); const nb=$('#live-body'); if(nb){ nb.style.transition='none'; nb.style.transform=`translateX(${go>0?innerWidth*0.4:-innerWidth*0.4}px)`; nb.style.opacity='0'; requestAnimationFrame(()=>{ nb.style.transition='transform .2s ease,opacity .2s ease'; nb.style.transform=''; nb.style.opacity=''; }); } },170); }
+    else { b.style.transform=''; b.style.opacity=''; } };
+  b.addEventListener('touchend',end,{passive:true}); b.addEventListener('touchcancel',end,{passive:true});
 }
 function liveGo(d){ const E=liveEntries(); const n=V.live.idx+d; if(n<0||n>=E.length) return; V.live.idx=n; V.live.extra=0; V.live.capo=null; V.live.speed=0; stopMetro(); renderLive(); $('#live-body')?.scrollTo(0,0); }
 document.addEventListener('keydown',e=>{ if(!V.live) return; if(e.key==='ArrowRight'||e.key==='PageDown') liveGo(1); else if(e.key==='ArrowLeft'||e.key==='PageUp') liveGo(-1); else if(e.key==='Escape'){ V.live=null; renderLive(); } });
