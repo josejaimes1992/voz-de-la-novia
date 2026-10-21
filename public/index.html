@@ -367,6 +367,8 @@ textarea.body{font-family:var(--f-mono);font-size:14px;line-height:1.6;min-heigh
 .item.dragging{position:relative;z-index:5;box-shadow:0 12px 30px rgba(0,0,0,.25);border-color:var(--accent);cursor:grabbing}.items.drag-on .item:not(.dragging){transition:transform .15s}
 .btn.live-send{background:#c0392b;border-color:#c0392b;color:#fff}
 body.live-on .ch-fab,body.live-on .rp-bar,body.live-on #dk-sync{display:none!important}
+.live-fw{opacity:.45;position:relative}.live-fw.on{opacity:1}.live-fw.on::after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:#e74c3c;box-shadow:0 0 0 0 rgba(231,76,60,.6);animation:lvp 1.6s infinite}
+@keyframes lvp{0%{box-shadow:0 0 0 0 rgba(231,76,60,.6)}70%{box-shadow:0 0 0 8px rgba(231,76,60,0)}100%{box-shadow:0 0 0 0 rgba(231,76,60,0)}}
 .live-bot2{display:grid;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--surface)}
 .live-next{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:14px;padding:10px 14px;background:var(--accent);color:var(--accent-ink,#fff);font:inherit;cursor:pointer;text-align:left}
 .live-next .t{flex:1;min-width:0}.live-next small{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;opacity:.85}.live-next b{display:block;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1088,6 +1090,24 @@ function closeModal(){ $('#modal-root').innerHTML=''; }
 /* ============ Modo en vivo ============ */
 let wakeLock=null;
 async function keepAwake(on){ try{ if(on && navigator.wakeLock && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); } else if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; } }catch{ wakeLock=null; } }
+/* Seguir a la cabina: cuando se proyecta otra alabanza, el teléfono de los músicos cambia solo a esa */
+const LF={ws:null,t:null,last:null};
+function liveFollowConnect(){ if(LF.ws&&LF.ws.readyState<2) return; clearTimeout(LF.t);
+  let ws; try{ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'); }catch{ return; } LF.ws=ws;
+  LF.first=true; ws.onmessage=ev=>{ if(ev.data==='pong') return; let d; try{ d=JSON.parse(ev.data); }catch{ return; } if(d._sung&&window.setSung){ try{ setSung(d._sung); }catch{} } if(d._ver||d._style||d._sung) return; const f=LF.first; LF.first=false; liveFollowApply(d,f); };
+  ws.onclose=()=>{ LF.ws=null; if(V.live) LF.t=setTimeout(liveFollowConnect,3000); }; ws.onerror=()=>{ try{ ws.close(); }catch{} }; }
+function liveFollowStop(){ clearTimeout(LF.t); if(LF.ws){ const w=LF.ws; LF.ws=null; w.onclose=null; try{ w.close(); }catch{} } }
+function liveFollowApply(d,first){
+  if(!V.live||V.live.follow===false||!d||d.mode!=='text'||!d.songId) return;
+  const key=d.songId+'|'+(d.at||''); if(LF.last===key) return; LF.last=key;
+  const E=liveEntries(); let j=E.findIndex(x=>x.song.id===d.songId);
+  if(j<0){ const s=S.songs.get(d.songId); if(!s||first) return;
+    if(!V.live.items){ const p=V.live.programId?S.programs.get(V.live.programId):null; V.live.items=p?(p.items||[]).map(x=>({...x})):(V.live.songId?[{songId:V.live.songId,key:null,note:''}]:[]); }
+    V.live.items.splice(V.live.idx+1,0,{songId:s.id,key:null,note:''}); j=V.live.idx+1; }
+  if(j===V.live.idx) return;
+  V.live.idx=j; V.live.extra=0; V.live.capo=null; V.live.speed=0; if(typeof stopMetro==='function') stopMetro(); V.live.find=false; renderLive(); $('#live-body')?.scrollTo(0,0);
+  toast('📡 La cabina cambió a: '+(liveEntries()[j]?.song.title||''));
+}
 function liveTools(){ return V.live&&(V.live.tools!=null?V.live.tools:innerWidth>=900); }
 /* Buscar otra alabanza desde el modo en vivo: sugeridas en el mismo tono o cualquier otra */
 function liveFindHtml(k,shift){
@@ -1108,7 +1128,7 @@ function liveEntries(){
   const s=S.songs.get(V.live.songId); return s?[{song:s,key:null,note:''}]:[];
 }
 function renderLive(){
-  const root=$('#live-root'); if(!V.live){ root.innerHTML=''; keepAwake(false); document.body.classList.remove('live-on'); return; }
+  const root=$('#live-root'); if(!V.live){ root.innerHTML=''; keepAwake(false); document.body.classList.remove('live-on'); liveFollowStop(); return; }
   const E=liveEntries(); if(!E.length){ V.live=null; root.innerHTML=''; return; }
   V.live.idx=Math.min(V.live.idx,E.length-1); const e=E[V.live.idx]; const k=songKey(e.song);
   const base=e.key&&k?normShift(parseKey(e.key).idx-k.idx):0; const shift=base+(V.live.extra||0);
@@ -1118,7 +1138,7 @@ function renderLive(){
   root.innerHTML=`<div class="live" role="dialog" aria-label="Modo en vivo">
     <div class="live-top"><button class="btn ghost" data-act="live-close" aria-label="Salir del modo en vivo">${ICON.x}</button>
       <span class="key sm"${kc(k?{idx:k.idx+shift,minor:k.minor}:null)}>${esc(keyText(k,shift))}</span><span class="ttl">${esc(e.song.title)}</span>${E.length>1?`<span class="cnt">${V.live.idx+1} / ${E.length}</span>`:''}
-      <button class="btn ghost" data-act="live-find" title="Buscar otra alabanza" aria-label="Buscar alabanza">🔍</button><button class="btn ghost" data-act="live-tools" aria-pressed="${!!liveTools()}" title="Tono, acordes y tamaño" aria-label="Ajustes">⚙</button>
+      <button class="btn ghost live-fw${V.live.follow!==false?' on':''}" data-act="live-follow" title="${V.live.follow!==false?'Siguiendo la pantalla de la cabina: cambia sola cuando se proyecta otra alabanza. Toca para dejar de seguir.':'No sigue la pantalla. Toca para seguir a la cabina.'}" aria-pressed="${V.live.follow!==false}">📡</button><button class="btn ghost" data-act="live-find" title="Buscar otra alabanza" aria-label="Buscar alabanza">🔍</button><button class="btn ghost" data-act="live-tools" aria-pressed="${!!liveTools()}" title="Tono, acordes y tamaño" aria-label="Ajustes">⚙</button>
       ${e.note?`<span style="flex-basis:100%;color:var(--accent);font-size:14px;font-weight:600">📝 ${esc(e.note)}</span>`:''}
       ${liveTools()?`<span style="flex-basis:100%;height:0"></span>${controls(k,shift)}`:''}</div>
     <div class="live-body" id="live-body">${liveTools()?`${V.chords?verBar(e.song)+instBar(e.song,liveCapo,true):instBar({},0,true)}${chordStrip(sb(e.song),shift,k,V.inst==='piano'?0:liveCapo)}${V.chords?chordsByLine(e.song):''}`:''}${renderSheet(sb(e.song),{shift,chords:V.chords,key:k,capo:V.inst==='piano'?0:liveCapo})}</div>
@@ -1128,7 +1148,7 @@ function renderLive(){
       <div class="live-strip" id="live-strip">${E.map((x,j)=>`<button class="${j===V.live.idx?'on':''}${j===V.live.idx+1?' nx':''}${window.isSung&&isSung(x.song.id)&&j!==V.live.idx?' sg':''}" data-act="live-jump" data-i="${j}">${j+1}. ${esc(x.song.title)}</button>`).join('')}</div></div>`:''}
     ${V.live.find?liveFindHtml(k,shift):''}
   </div>`;
-  keepAwake(true); document.body.classList.add('live-on');
+  keepAwake(true); document.body.classList.add('live-on'); liveFollowConnect();
   const stp=$('#live-strip'); if(stp){ const on=stp.querySelector('.on'); if(on) stp.scrollLeft=Math.max(0,on.offsetLeft-stp.clientWidth/2+on.offsetWidth/2); }
   const lf=$('#live-q'); if(lf){ lf.addEventListener('input',()=>{ V.live.fq=lf.value; clearTimeout(V.live.fqt); V.live.fqt=setTimeout(()=>{ const ls=$('#live-ls'); if(ls){ const t=document.createElement('div'); t.innerHTML=liveFindHtml(k,shift); const n=t.querySelector('#live-ls'); if(n) ls.innerHTML=n.innerHTML; } },180); }); if(V.live.findFocus){ lf.focus(); V.live.findFocus=false; } }
   const b=$('#live-body'); let sx=null,sy=null; b.scrollTop=keepScroll;
@@ -1383,6 +1403,8 @@ document.addEventListener('click',async ev=>{
     case 'live-go': liveGo(Number(ds.d)); break;
     case 'live-jump': { const n=+ds.i; V.live.idx=n; V.live.extra=0; V.live.capo=null; V.live.speed=0; stopMetro(); renderLive(); $('#live-body')?.scrollTo(0,0); break; }
     case 'live-tools': V.live.tools=!liveTools(); renderLive(); break;
+    case 'live-follow': V.live.follow=V.live.follow===false; LF.last=null; renderLive(); toast(V.live.follow?'📡 Siguiendo la pantalla de la cabina':'Ya no sigue a la cabina: pasas tú las alabanzas');
+      if(V.live.follow) fetch('/api/proyector').then(r=>r.json()).then(d=>liveFollowApply(d,true)).catch(()=>{}); break;
     case 'live-find': V.live.find=!V.live.find; V.live.findFocus=V.live.find; renderLive(); break;
     case 'live-fall': V.live.fall=ds.v==='1'; renderLive(); break;
     case 'live-pick': { const s=S.songs.get(ds.id); if(!s) break;
