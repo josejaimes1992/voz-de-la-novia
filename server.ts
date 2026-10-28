@@ -1,6 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { makeDb, appPath, tool } from "./db.ts";
 import { librosRoute, initLibros } from "./libros.ts";
+import { mediosRoute, initMedios, medioExists } from "./medios.ts";
 import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
@@ -162,7 +163,7 @@ const LOGO = Bun.file(appPath("./public/logo.jpg"));
 const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charset=utf-8", "/chords.json": "application/json", "/chords-LICENSE.txt": "text/plain; charset=utf-8", "/vdn-logo.jpg": "image/jpeg", "/shalom-logo.jpg": "image/jpeg", "/vdn-icon.png": "image/png", "/proyeccion.js": "text/javascript; charset=utf-8", "/excel.js": "text/javascript; charset=utf-8", "/io.js": "text/javascript; charset=utf-8", "/jszip.min.js": "text/javascript; charset=utf-8", "/equipo.js": "text/javascript; charset=utf-8", "/placer.js": "text/javascript; charset=utf-8", "/himnario.js": "text/javascript; charset=utf-8", "/afinador.js": "text/javascript; charset=utf-8", "/audios.js": "text/javascript; charset=utf-8", "/reproductor.js": "text/javascript; charset=utf-8", "/seleccion.js": "text/javascript; charset=utf-8", "/cifrador.js": "text/javascript; charset=utf-8", "/qrcode.js": "text/javascript; charset=utf-8", "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png", "/apple-touch-icon.png": "image/png", "/biblia.js": "text/javascript; charset=utf-8", "/mensaje.js": "text/javascript; charset=utf-8", "/libros.js": "text/javascript; charset=utf-8", "/voz.js": "text/javascript; charset=utf-8", "/nube.png": "image/png", "/vdn-emblem.jpg": "image/jpeg", "/m-alabanzas.jpg": "image/jpeg", "/m-biblia.jpg": "image/jpeg", "/m-mensaje.jpg": "image/jpeg", "/m-material.jpg": "image/jpeg", "/profeta.jpg": "image/jpeg", "/chat.js": "text/javascript; charset=utf-8", "/auditoria.js": "text/javascript; charset=utf-8" };
 
 /* ---- Proyección en vivo: un solo estado compartido, en memoria ---- */
-type Proj = { mode: "text" | "black" | "logo"; sub?: number; subs?: number; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
+type Proj = { mode: "text" | "black" | "logo"; media?: any; sub?: number; subs?: number; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ_PREV: Proj | null = null;
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
 /* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
@@ -173,6 +174,7 @@ try {
 } catch (e) { console.error("No se pudo abrir la RVR1960", e); }
 /* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
 initLibros(AUDIO_DIR);
+initMedios(AUDIO_DIR.replace(/\/audio\/?$/, ""));
 const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 /* ---- Ajustes de la iglesia (para que cada iglesia tenga su copia con su nombre y su logo) ---- */
 const BRAND_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/marca";
@@ -233,6 +235,7 @@ function songSlides(song: any) {
 }
 async function projNav(d: number, kind: string): Promise<any | null> {
   const P: any = PROJ; if (P.mode !== "text") return null;
+  if (P.media?.id) { const n = P.media.n + d; if (n < 1 || n > P.media.total || !medioExists(P.media.id, n)) return null; return { ...P, media: { ...P.media, n }, idx: n - 1 }; }
   if (P.sermon?.id) {
     const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
     let pi = P.sermon.p, part = P.sermon.part || 0;
@@ -428,6 +431,7 @@ const SERVER = Bun.serve({
       if (DK) { const dr = await DK.desktopRoute(req, p); if (dr) return dr; }
       if (p === "/api/proyector/estilo" && req.method === "GET") return json(STYLE);
       if (p.startsWith("/libro/")) { const lr = await librosRoute(req, url, p, null, db); if (lr) return lr; }
+      if (p.startsWith("/medio/")) { const mr = await mediosRoute(req, p, null, db); if (mr) return mr; }
       const mk = p.match(/^\/marca\/(logo-[a-z0-9]{4,16}\.png)$/);
       if (mk) { const f = `${BRAND_DIR}/${mk[1]}`; return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "image/png", "cache-control": "public, max-age=31536000, immutable" } }) : new Response("", { status: 404 }); }
       const fm = p.match(/^\/fondo\/([a-f0-9]{24})\.jpg$/);
@@ -515,6 +519,7 @@ const SERVER = Bun.serve({
         const d: any = await r.json(); return json({ text: String(d.text ?? "").trim().slice(0, 200) });
       }
       if (p.startsWith("/api/libros")) { const lr = await librosRoute(req, url, p, user, db); if (lr) return lr; }
+      if (p.startsWith("/api/medios")) { const mr = await mediosRoute(req, p, user, db); if (mr) return mr; }
       /* ---- Mensajes del hermano Branham (solo equipo con sesión) ---- */
       if (p === "/api/biblia/refs" && req.method === "GET") {
         const b = +(url.searchParams.get("b") ?? -1), c = +(url.searchParams.get("c") ?? -1), vq = url.searchParams.get("v");
@@ -650,6 +655,7 @@ const SERVER = Bun.serve({
         PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
+          media: b.media && typeof b.media.id === "string" && medioExists(b.media.id, Math.max(1, Number(b.media.n) || 1)) ? { id: b.media.id, n: Math.max(1, Number(b.media.n) || 1), total: Math.max(1, Number(b.media.total) || 1), title: str(b.media.title, 160) } : undefined,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, sub: Math.min(30, Math.max(0, Number(b.sub) || 0)), subs: Math.min(30, Math.max(0, Number(b.subs) || 0)), by: user.name, at: Date.now() };
         /* Mensaje: completar título, código, fecha y lugar desde el Mensaje guardado (para la ficha de OBS) */
         const SM: any = (PROJ as any).sermon;

@@ -29,7 +29,7 @@ const PJ={min:false,q:'',open:false,programId:null,songIds:[],si:0,remote:null,w
 .pj-bot{display:grid;grid-template-columns:1fr 1fr 1.4fr 1.4fr;gap:8px;padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
 .pj-bot .btn{justify-content:center;padding:12px 8px;font-size:15px}
 .pj-bot .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.pj-empty{color:var(--muted);padding:20px 0}.pjm-in{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}.pjm-in input{flex:1;min-width:0;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.pjm-in input:focus{outline:none;border-color:var(--accent)}.pjm-inc{font-size:12px;color:var(--muted);min-width:44px;text-align:center}.pjw-v.pjm-match{background:color-mix(in srgb,var(--accent) 7%,transparent)}.pjw-v.pjm-cur{outline:2px solid var(--accent);outline-offset:-2px}.pjw-v.pjm-match mark{background:rgba(233,196,90,.6);color:inherit;border-radius:3px;padding:0 1px}.pjm-fq input{border-color:var(--accent)!important}.pjm-hits .pjm-hit{align-items:flex-start;padding:8px 10px}.pjm-hits .pjm-hit .t{display:block;white-space:normal}.pjm-hits .pjm-ti{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pjm-hits .snip{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px;line-height:1.45;color:var(--ink);margin-top:5px;font-weight:400;font-family:inherit}.pjm-hits mark,.pjm-hl mark{background:rgba(233,196,90,.55);color:inherit;border-radius:3px;padding:0 1px}.pjw-v.pjm-hl{outline:2px solid var(--accent);outline-offset:-2px}
+.pj-empty{color:var(--muted);padding:20px 0}.pjmd-up{display:grid;gap:4px}.pjmd-prog{color:var(--muted);font-size:12px}.pjmd-row{gap:8px;align-items:center}.pjmd-th{width:56px;height:32px;object-fit:cover;border-radius:4px;background:#000;flex:none}.pjmd-x{all:unset;cursor:pointer;color:var(--muted);padding:4px 6px;border-radius:6px}.pjmd-x:hover{background:var(--sunk);color:var(--danger)}.pjmd-del{display:flex;gap:4px}.pjmd-grid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:10px;align-content:start}.pjmd-sl{position:relative;border:2px solid var(--line);border-radius:8px;padding:0;background:#000;cursor:pointer;aspect-ratio:16/9;overflow:hidden}.pjmd-sl img{width:100%;height:100%;object-fit:contain;display:block}.pjmd-sl span{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.7);color:#fff;font:700 11px/1 var(--f-ui);padding:3px 6px;border-radius:5px}.pjmd-sl[aria-current=true]{border-color:#e74c3c;box-shadow:0 0 0 2px #e74c3c}.pjmd-sl:hover{border-color:var(--accent)}.pjm-in{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}.pjm-in input{flex:1;min-width:0;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.pjm-in input:focus{outline:none;border-color:var(--accent)}.pjm-inc{font-size:12px;color:var(--muted);min-width:44px;text-align:center}.pjw-v.pjm-match{background:color-mix(in srgb,var(--accent) 7%,transparent)}.pjw-v.pjm-cur{outline:2px solid var(--accent);outline-offset:-2px}.pjw-v.pjm-match mark{background:rgba(233,196,90,.6);color:inherit;border-radius:3px;padding:0 1px}.pjm-fq input{border-color:var(--accent)!important}.pjm-hits .pjm-hit{align-items:flex-start;padding:8px 10px}.pjm-hits .pjm-hit .t{display:block;white-space:normal}.pjm-hits .pjm-ti{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pjm-hits .snip{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px;line-height:1.45;color:var(--ink);margin-top:5px;font-weight:400;font-family:inherit}.pjm-hits mark,.pjm-hl mark{background:rgba(233,196,90,.55);color:inherit;border-radius:3px;padding:0 1px}.pjw-v.pjm-hl{outline:2px solid var(--accent);outline-offset:-2px}
 .pjw .pjw-grid .pjw-v[aria-current="true"]{background:#a8392f;color:#fff;box-shadow:inset 4px 0 0 #ff8a7f}.pjw .pjw-grid .pjw-v[aria-current="true"] .h,.pjw .pjw-grid .pjw-v[aria-current="true"] .h b{color:#ffe1dc}
 .pjw .pjw-grid .pjw-v[aria-current="true"] .h::after{content:"● en pantalla";font:800 9.5px var(--f-ui);letter-spacing:.08em;margin-left:8px;color:#fff;background:rgba(0,0,0,.25);border-radius:999px;padding:1px 7px}
 /* ---- Zonas del en vivo, cada una con su color: Vista previa (azul) · Pantalla (rojo) · Lista de hoy (dorado) ---- */
@@ -292,11 +292,48 @@ function pjStep(d){
   if(j>=0&&j<PJ.songIds.length){ PJ.si=j; const m=pjSlides(pjSong()).length; pjRender(true); return pjShow(d>0?0:Math.max(0,m-1),d>0?0:-1); }
 }
 async function pjNav(d){ const r=PJ.remote||{};
+  if(r.mode==='text'&&r.media){ const n=r.media.n+d; if(n>=1&&n<=r.media.total) pjSend({...r,media:{...r.media,n},idx:n-1}); return; }
   if(r.mode==='text'&&r.label==='Nota'&&PJ.tab==='txt'){ const sl=pjTxtSlides(); const i=(r.idx||0)+d; if(i>=0&&i<sl.length) pjTxtShow(i); return; }
   if(r.mode==='text'&&(r.bible||r.sermon)){ try{ PJ.remote=await api('/api/proyector/nav',{method:'POST',body:JSON.stringify({d,kind:r.bible?'item':'scroll'})}); if(r.bible&&PJ.remote.bible&&typeof BB!=='undefined'){ BB.b=PJ.remote.bible.b; BB.c=PJ.remote.bible.c; BB.v=PJ.remote.bible.v; } if(r.sermon&&PJ.remote.sermon&&typeof MS!=='undefined'){ MS.p=PJ.remote.sermon.p; MS.part=PJ.remote.sermon.part||0; } pjRender(); }catch{ toast('No se pudo cambiar.'); } return; }
   pjStep(d); }
 function pjMode(m){ const r=PJ.remote||{}; if(r.mode===m) m='text'; if(m==='text'&&!r.text){ return pjShow(0); } pjSend({...r,mode:m}); }
 
+/* ---------- Medios: PowerPoint, PDF e imágenes ---------- */
+const PJ_MD_ACCEPT='.ppt,.pptx,.pps,.ppsx,.pptm,.odp,.pdf,.jpg,.jpeg,.png,.webp,.gif,image/*,application/pdf';
+async function pjMediaLoad(){ if(PJ.mloading) return; PJ.mloading=true; try{ PJ.mlist=(await api('/api/medios')).medios||[]; }catch{ PJ.mlist=PJ.mlist||[]; } PJ.mloading=false; if(PJ.open&&PJ.tab==='media') pjRender(); }
+const pjMdIcon=k=>k==='ppt'?'📊':k==='pdf'?'📄':'🖼️';
+function pjMediaLib(){
+  if(!PJ.mlist){ pjMediaLoad(); return '<p class="pj-sug-h">Cargando…</p>'; }
+  const q=(typeof msNorm==='function'?msNorm(PJ.mdq||''):(PJ.mdq||'').toLowerCase()).trim();
+  const L=q?PJ.mlist.filter(m=>(typeof msNorm==='function'?msNorm(m.title):m.title.toLowerCase()).includes(q)):PJ.mlist;
+  return `<div class="pjw-q pjmd-up"><label class="btn pri" style="width:100%;justify-content:center;cursor:pointer">＋ Subir PPT, PDF o imagen<input type="file" id="pjmd-up" multiple accept="${PJ_MD_ACCEPT}" hidden></label>${PJ.mup?`<small class="pjmd-prog">${esc(PJ.mup)}</small>`:''}</div>
+    ${PJ.mlist.length>6?`<div class="pjw-q"><input id="pjmd-q" type="search" placeholder="Buscar archivo" value="${esc(PJ.mdq||'')}" autocomplete="off"></div>`:''}
+    <div class="pjw-scroll" id="pjmd-list">${L.map(m=>`<div class="pjw-row pjmd-row${PJ.mid===m.id?' sel':''}" data-act="pjmd-open" data-id="${esc(m.id)}" role="button" tabindex="0"><img class="pjmd-th" src="/medio/${esc(m.id)}/t/1.jpg" alt="" loading="lazy"><span class="t" style="text-transform:none">${esc(m.title)}<small>${pjMdIcon(m.kind)} ${m.kind==='ppt'?'PowerPoint':m.kind==='pdf'?'PDF':'Imagen'}${m.pages>1?` · ${m.pages} ${m.kind==='pdf'?'páginas':'diapositivas'}`:''}</small></span>${PJ.mdel===m.id?`<span class="pjmd-del"><button class="btn sm danger" data-act="pjmd-del-yes" data-id="${esc(m.id)}">Borrar</button><button class="btn sm" data-act="pjmd-del-no">No</button></span>`:`<button class="pjmd-x" data-act="pjmd-del" data-id="${esc(m.id)}" title="Borrar" aria-label="Borrar">✕</button>`}</div>`).join('')||`<p class="pj-sug-h" style="padding:12px">${PJ.mlist.length?'Sin resultados.':'Aún no hay archivos. Sube un PowerPoint, un PDF o imágenes: cada diapositiva o página se convierte en una pantalla.'}</p>`}</div>`;
+}
+function pjMediaCenter(r){
+  const m=(PJ.mlist||[]).find(x=>x.id===PJ.mid)||(PJ.mlist||[])[0]; if(m&&!PJ.mid) PJ.mid=m.id;
+  if(!m) return `<section class="pjw-sl"><div class="pjw-h">Medios</div><p class="pj-empty" style="padding:16px">Sube un archivo a la izquierda (PowerPoint, PDF, JPG o PNG).</p></section>`;
+  const on=r&&r.mode==='text'&&r.media&&r.media.id===m.id?r.media.n:0;
+  return `<section class="pjw-sl"><div class="pjw-h"><span style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">${pjMdIcon(m.kind)} ${esc(m.title)}</span><span class="sp"></span><span>${m.pages} ${m.pages===1?'pantalla':'pantallas'}</span></div>
+    <div class="pjw-scroll pjmd-grid" id="pj-body">${Array.from({length:m.pages},(_,k)=>k+1).map(n=>`<button class="pjmd-sl" data-act="pjmd-show" data-n="${n}" aria-current="${on===n}" title="Proyectar ${n}"><img src="/medio/${esc(m.id)}/t/${n}.jpg" alt="" loading="lazy"><span>${n}</span></button>`).join('')}</div></section>`;
+}
+function pjMediaShow(n){ const m=(PJ.mlist||[]).find(x=>x.id===PJ.mid); if(!m) return; n=Math.min(Math.max(1,n),m.pages);
+  pjSend({mode:'text',title:m.title,text:' ',label:'Medio',ref:'',songId:null,programId:null,idx:n-1,total:m.pages,media:{id:m.id,n,total:m.pages,title:m.title}}); }
+async function pjMediaUpload(files){
+  if(!files.length) return; let ok=0; const bad=[];
+  for(let i=0;i<files.length;i++){ const f=files[i];
+    if(f.size>200e6){ bad.push(`${f.name}: muy grande`); continue; }
+    PJ.mup=`${files.length>1?`${i+1} de ${files.length} · `:''}Subiendo ${f.name}…`; pjRender();
+    try{ const r=await fetch('/api/medios',{method:'POST',headers:{Authorization:'Bearer '+S.token,'X-File-Name':encodeURIComponent(f.name),'Content-Type':'application/octet-stream'},body:f});
+      const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.msg||'No se pudo subir.'); ok++; PJ.mlist=[d,...(PJ.mlist||[])]; PJ.mid=d.id; }
+    catch(e){ bad.push(`${f.name}: ${e.message}`); } }
+  PJ.mup=''; pjRender(true); if(ok) toast(ok===1?'Listo: ya puedes proyectarlo.':`Listo: ${ok} archivos.`); if(bad.length) setTimeout(()=>alert('No se pudieron subir:\n\n'+bad.join('\n')),50);
+}
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='pjmd-up'){ const fs=[...e.target.files]; e.target.value=''; pjMediaUpload(fs); } });
+document.addEventListener('input',e=>{ if(e.target&&e.target.id==='pjmd-q'){ PJ.mdq=e.target.value; const box=$('#pjmd-list'); if(box){ const t=document.createElement('div'); t.innerHTML=pjMediaLib(); const n=t.querySelector('#pjmd-list'); if(n) box.innerHTML=n.innerHTML; } } });
+/* Arrastrar archivos sobre la consola (pestaña Medios) */
+document.addEventListener('dragover',e=>{ if(PJ.open&&PJ.tab==='media'&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){ e.preventDefault(); } });
+document.addEventListener('drop',e=>{ if(PJ.open&&PJ.tab==='media'&&e.dataTransfer&&e.dataTransfer.files.length){ e.preventDefault(); pjMediaUpload([...e.dataTransfer.files]); } });
 function pjSide(r){
   const p=PJ.programId&&S.programs.get(PJ.programId); const its=(p&&p.items||[]).filter(it=>S.songs.has(it.songId)); const used=new Set();
   const rows=PJ.songIds.map((id,i)=>{ let k=its.findIndex((x,j)=>!used.has(j)&&x.songId===id); const it=k>=0?(used.add(k),its[k]):null; const so=S.songs.get(id); const key=it&&it.key?parseKey(it.key):songKey(so);
@@ -354,7 +391,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
   const onSong=r.mode==='text'&&s&&r.songId===s.id; const st=PJ.style||{}; const k=s?songKey(s):null;
   const lib=$('#pj-res'), keepLib=lib?lib.scrollTop:0, body=$('#pj-body'), keepBody=body&&!scrollTop?body.scrollTop:0;
   const scrBg=st.img?`url('${st.img}') center/cover,${st.bg||'#000'}`:(st.bg||'#000');
-  const scr=r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=3" alt="" style="height:78%">':`<span style="font-size:calc(clamp(11px,1.05vw,17px) * ${st.size||1});color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
+  const scr=r.mode==='black'?'':r.media?`<img src="/medio/${esc(r.media.id)}/${r.media.n}.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000">`:r.mode==='logo'?'<img src="/vdn-logo.jpg?v=3" alt="" style="height:78%">':`<span style="font-size:calc(clamp(11px,1.05vw,17px) * ${st.size||1});color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
   root.innerHTML=`<div class="pj pjw" role="dialog" aria-label="Proyección">
     <div class="pj-top"><button class="btn ghost" data-act="pj-close" aria-label="Cerrar proyección">${ICON.x}</button>
       <span class="ttl">${esc(s?s.title:'')}${k?` <small class="muted">· ${esc(keyText(k))}</small>`:''}</span>
@@ -362,9 +399,9 @@ function pjRenderWide(r,qf,qpos,scrollTop){
       <button class="btn" data-act="pj-min" title="Esconder el control para usar el resto de la app">${ICON.search}Seguir en la app</button>
       <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="obs-open" aria-pressed="${obsStepOn()}" title="${obsStepOn()?'Transmisión: avanza de 2 en 2 líneas':'Letra para OBS'}">📡 OBS${obsStepOn()?' · 2 en 2':''}</button><button class="btn" data-act="open-proj">${ICON.screen}Abrir pantalla</button></div>
     <div class="pjw-grid side${PJ.tab==='bible'?' bbmode':''}">
-      <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje'],['txt','Texto']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
-        ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():PJ.tab==='txt'?pjTxtLib():pjMsgLib()}</section>
-      ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):PJ.tab==='txt'?pjTxtCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
+      <section class="pjw-lib"><div class="pjw-tabs" role="tablist">${[['songs','Alabanzas'],['bible','Biblia'],['msg','Mensaje'],['txt','Texto'],['media','Medios']].map(([k,l])=>`<button data-act="pj-tab" data-t="${k}" aria-pressed="${(PJ.tab||'songs')===k}">${l}</button>`).join('')}</div>
+        ${PJ.tab==='bible'?'':(PJ.tab||'songs')==='songs'?`<div class="pjw-q"><input id="pj-q" type="search" placeholder="Buscar nombre, frase o tono (G, Sol, Em)…" value="${esc(PJ.q)}" autocomplete="off" aria-label="Buscar alabanza"></div><div class="pjw-scroll" id="pj-res">${pjLibHtml()}</div>`:PJ.tab==='bible'?pjBibleLib():PJ.tab==='txt'?pjTxtLib():PJ.tab==='media'?pjMediaLib():pjMsgLib()}</section>
+      ${PJ.tab==='bible'?`<section class="pjw-bb" id="pjw-bb">${typeof viewBible==='function'?viewBible():''}</section>`:PJ.tab==='msg'?pjMsgCenter(r):PJ.tab==='txt'?pjTxtCenter(r):PJ.tab==='media'?pjMediaCenter(r):`<section class="pjw-sl"><div class="pjw-h">${peek?'<span class="pv">Vista previa</span> ':''}${esc(s?s.title:'Elige una alabanza')}<span class="sp"></span>${peek?`<button class="btn pri sm" data-act="pj-peekadd">＋ Agregar a la lista</button>`:''}</div>
         <div class="pjw-scroll" id="pj-body">${sl.length?sl.map((x,i)=>`<button class="pjw-v" data-act="${peek?'pj-peekshow':'pj-show'}" data-i="${i}" aria-current="${onSong&&r.idx===i}"><span class="h">${esc(x.label||'')} <b>${i+1}</b></span>${pjSlP(x,onSong&&r.idx===i,r)}</button>`).join(''):`<p class="pj-empty" style="padding:16px">${s?'Esta alabanza no tiene letra para proyectar.':'Busca una alabanza a la izquierda.'}</p>`}</div></section>`}
       <section class="pjw-live"><div class="pjw-h"><i class="pjz-dot"></i>En pantalla · en directo <span class="sp"></span><span class="pj-st ${PJ.online?'on':''}"></span></div>
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
@@ -607,6 +644,11 @@ document.addEventListener('click',ev=>{
     case 'pj-peek': { const now=Date.now(); const dbl=PJ.lastPeek&&PJ.lastPeek.id===ds.id&&now-PJ.lastPeek.t<450; PJ.lastPeek={id:ds.id,t:now};
       if(dbl){ PJ.peek=null; pjAdd(ds.id,true); pjRender(true); } else { const i=PJ.songIds.indexOf(ds.id); if(i>=0){ PJ.si=i; PJ.peek=null; } else PJ.peek=ds.id; pjRender(true); } break; }
     case 'pj-nav': pjNav(+ds.d); break;
+    case 'pjmd-open': PJ.mid=ds.id; PJ.mdel=null; pjRender(true); break;
+    case 'pjmd-show': pjMediaShow(+ds.n); break;
+    case 'pjmd-del': PJ.mdel=ds.id; pjRender(); break;
+    case 'pjmd-del-no': PJ.mdel=null; pjRender(); break;
+    case 'pjmd-del-yes': (async()=>{ try{ await api('/api/medios/'+ds.id,{method:'DELETE'}); PJ.mlist=(PJ.mlist||[]).filter(x=>x.id!==ds.id); if(PJ.mid===ds.id) PJ.mid=null; PJ.mdel=null; pjRender(true); }catch{ toast('No se pudo borrar.'); } })(); break;
     case 'culto-vivo': openProj({live:true}); break;
     case 'pj-tab': if(ds.t==='bible'&&typeof BB!=='undefined'&&!BB.data){ bbLoad(); const w=setInterval(()=>{ if(BB.data||BB.err){ clearInterval(w); if(PJ.open&&PJ.tab==='bible') pjRender(true); } },300); setTimeout(()=>clearInterval(w),20000); }
       PJ.tab=ds.t; if(ds.t==='bible'&&V.view==='bible'){ V.tab='songs'; V.view='list'; } pjRender(true); break;
