@@ -1,7 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { makeDb, appPath, tool } from "./db.ts";
 import { librosRoute, initLibros } from "./libros.ts";
-import { mediosRoute, initMedios, medioExists } from "./medios.ts";
+import { mediosRoute, initMedios, medioExists, fixInterrupted } from "./medios.ts";
 import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
@@ -174,7 +174,7 @@ try {
 } catch (e) { console.error("No se pudo abrir la RVR1960", e); }
 /* Estilo de la pantalla (fondo, letra, color) — se guarda y se aplica en vivo */
 initLibros(AUDIO_DIR);
-initMedios(AUDIO_DIR.replace(/\/audio\/?$/, ""));
+initMedios(AUDIO_DIR.replace(/\/audio\/?$/, "")); fixInterrupted(db);
 const FONDOS_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/fondos";
 /* ---- Ajustes de la iglesia (para que cada iglesia tenga su copia con su nombre y su logo) ---- */
 const BRAND_DIR = AUDIO_DIR.replace(/\/audio\/?$/, "") + "/marca";

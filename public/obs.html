@@ -45,6 +45,8 @@ body.bv #bv{display:block} body.bv #box,body.bv #rd{display:none!important}
 #bv-frame{position:absolute;left:var(--hx);top:var(--hy);width:var(--hw);height:var(--hh);box-sizing:border-box;border:3px solid rgba(255,255,255,.22);border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.55)}
 #bv-txt{position:absolute;left:52.5%;right:4.5%;top:8%;bottom:8%;display:flex;flex-direction:column;justify-content:center;color:var(--col);opacity:0;transform:translateY(10px);transition:opacity .35s ease,transform .35s ease}
 #bv-txt.on{opacity:1;transform:none}
+#bv-md{position:absolute;left:52.5%;right:4.5%;top:10%;bottom:10%;opacity:0;transition:opacity .35s ease}#bv-md.on{opacity:1}
+#bv-md img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .3s ease;filter:drop-shadow(0 12px 30px rgba(0,0,0,.55))}#bv-md img.on{opacity:1}
 #bv-msg{position:absolute;left:52.5%;right:4.5%;top:9%;bottom:9%;overflow:hidden;opacity:0;transition:opacity .35s ease;
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 91%,transparent 100%)}
 #bv-msg.on{opacity:1}
@@ -68,7 +70,7 @@ body.up #bv-t{text-transform:uppercase}
 <div id="box"></div>
 <div id="rd"><div id="rdi"></div></div>
 <div id="bv-warn"></div>
-<div id="bv"><div id="bv-bg"><div id="bv-glow"></div><div id="bv-noise"></div><div id="bv-vig"></div><div id="bv-dim"></div></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div><div id="bv-msg"><div id="bv-mi"></div></div><div id="bv-info"></div></div>
+<div id="bv"><div id="bv-bg"><div id="bv-glow"></div><div id="bv-noise"></div><div id="bv-vig"></div><div id="bv-dim"></div></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div><div id="bv-msg"><div id="bv-mi"></div></div><div id="bv-md"><img id="bv-mda" alt=""><img id="bv-mdb" alt=""></div><div id="bv-info"></div></div>
 <div id="dot" class="show" title="Sin conexión con la app"></div>
 <script>
 /* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
@@ -119,7 +121,15 @@ function bmShow(st){ const W=document.getElementById('bv-msg'), I=document.getEl
   cancelAnimationFrame(bmAuto); bmAuto=null;
   if(st.auto>0){ let last=performance.now(); const sp=st.auto*parseFloat(I.style.fontSize)*0.6; const step=t=>{ const dt=(t-last)/1000; last=t; bmSet(bmOff+sp*dt,false); if(bmOff<bmMax()) bmAuto=requestAnimationFrame(step); }; bmAuto=requestAnimationFrame(step); }
   else requestAnimationFrame(()=>bmSet((st.sc||0)*bmMax())); }
+/* PowerPoint, PDF o imagen en la media pantalla */
+let mdKey='';
+function bvMedia(st){ const M=document.getElementById('bv-md'); if(!M) return false; const on=st&&st.mode==='text'&&st.media; const key=on?st.media.id+':'+st.media.n:'';
+  if(!on){ if(mdKey){ mdKey=''; M.classList.remove('on'); } return false; }
+  if(key!==mdKey){ mdKey=key; const a=document.getElementById('bv-mda'), b=document.getElementById('bv-mdb'); const nx=a.classList.contains('on')?b:a, pv=nx===a?b:a;
+    nx.onload=()=>{ nx.classList.add('on'); pv.classList.remove('on'); }; nx.src=`/medio/${st.media.id}/${st.media.n}.jpg`; M.classList.add('on'); }
+  return true; }
 function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getElementById('bv-t'), r=document.getElementById('bv-r');
+  if(bvMedia(st)){ if(bvKey){ bvKey=''; T.classList.remove('on'); } bmShow(null); return; }
   if(st&&st.mode==='text'&&st.sermon){ if(bvKey){ bvKey=''; T.classList.remove('on'); } return bmShow(st); } bmShow(null);
   const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
   if(key===bvKey) return; bvKey=key; T.classList.remove('on'); if(!isB) return;
@@ -130,7 +140,7 @@ function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getEl
 /* Cambiar sola de escena en OBS (la fuente necesita "Acceso avanzado a OBS" en Permisos de la página) */
 let scPrev=null, scOn=false;
 function sceneAuto(st){ if(!OPT.scene||OPT.view==='biblia'||!window.obsstudio||!obsstudio.setCurrentScene) return;
-  const isB=st&&st.mode==='text'&&(((st.bible||st.ref)&&!st.sermon)||(st.sermon&&OPT.sceneMsg));
+  const isB=st&&st.mode==='text'&&(!!st.media||((st.bible||st.ref)&&!st.sermon)||(st.sermon&&OPT.sceneMsg));
   if(isB&&!scOn){ scOn=true; try{ obsstudio.getCurrentScene(sc=>{ if(sc&&sc.name&&sc.name!==OPT.scene) scPrev=sc.name; obsstudio.setCurrentScene(OPT.scene); }); }catch{ try{ obsstudio.setCurrentScene(OPT.scene); }catch{} } }
   else if(!isB&&scOn){ scOn=false; if(scPrev) try{ obsstudio.setCurrentScene(scPrev); }catch{} } }
 const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

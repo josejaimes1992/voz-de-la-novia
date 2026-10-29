@@ -9,6 +9,12 @@ import { tool } from "./db.ts";
 type User = { id: number; name: string; role: string } | null;
 let DIR = "/data/medios";
 export function initMedios(dataDir: string) { DIR = dataDir.replace(/[\\/]+$/, "") + "/medios"; try { mkdirSync(DIR, { recursive: true }); } catch {} }
+/* Si el servidor se reinició a mitad de una conversión, ese archivo queda marcado para volver a subirlo */
+export async function fixInterrupted(db: any) {
+  try { const rows = await db`SELECT id, data FROM docs WHERE col = 'medios'`;
+    for (const r of rows) { const d = parse(r.data); if (d.status === "converting") { d.status = "error"; d.msg = "La conversión se interrumpió (el servidor se reinició). Bórralo y súbelo de nuevo.";
+      await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${Date.now()} WHERE col = 'medios' AND id = ${r.id}`; } } } catch {}
+}
 export function mediosDir() { return DIR; }
 const TMP = () => tmpdir().replace(/\\/g, "/");
 const jsonR = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -17,15 +23,18 @@ const ID_RE = /^[a-f0-9]{16}$/;
 const isWin = process.platform === "win32";
 
 async function run(cmd: string[], ms = 240000) {
+  /* La salida va a un archivo: si se leyera por "pipe" sin vaciarla, programas como LibreOffice se quedan trabados
+     cuando escriben muchos avisos (el pipe se llena y esperan para siempre) */
+  const log = `${TMP()}/vdn-run-${randomBytes(5).toString("hex")}.log`;
   try {
-    const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", windowsHide: true } as any);
-    const t = setTimeout(() => { try { p.kill(); } catch {} }, ms);
+    const p = Bun.spawn(cmd, { stdout: "ignore", stderr: Bun.file(log), stdin: "ignore", windowsHide: true, env: { ...process.env, HOME: process.env.HOME || TMP(), SAL_USE_VCLPLUGIN: "svp" } } as any);
+    let killed = false; const t = setTimeout(() => { killed = true; try { p.kill(9); } catch {} }, ms);
     const code = await p.exited; clearTimeout(t);
-    const err = await new Response(p.stderr).text().catch(() => "");
-    return { code, err };
+    let err = ""; try { err = await Bun.file(log).text(); } catch {}
+    return { code: killed ? -2 : code, err: (killed ? "tiempo agotado; " : "") + err.slice(-2000) };
   } catch (e: any) { return { code: -1, err: String(e?.message || e) }; }
+  finally { try { rmSync(log, { force: true }); } catch {} }
 }
-
 /* Qué clase de archivo es (por su contenido y su extensión) */
 function kindOf(buf: Uint8Array, name: string): "pdf" | "img" | "ppt" | null {
   const h = Buffer.from(buf.subarray(0, 12)); const ext = (name.split(".").pop() || "").toLowerCase();
