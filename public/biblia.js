@@ -124,7 +124,7 @@ window.viewBible=function(){
       <button class="btn" data-act="bb-step" data-d="1" aria-label="Versículo siguiente">▶</button>
       <button class="btn" data-act="bb-mode" data-m="black" aria-pressed="${r&&r.mode==='black'}">Negro</button>
       <button class="btn" data-act="bb-mode" data-m="logo" aria-pressed="${r&&r.mode==='logo'}">Logo</button>
-      <button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">Abrir pantalla</button>
+      <button class="btn" data-act="md-open" title="Proyectar PowerPoint, PDF o imágenes">🖼 Medios</button><button class="btn" data-act="proj-style">🎨 Fondo</button><button class="btn" data-act="open-proj">Abrir pantalla</button>
     </div>`:''}
     <p class="bb-note">${esc(BB.data.name)} · ${esc(BB.data.note||'')}</p>
   </div>`;
@@ -194,8 +194,9 @@ function bbGo(b,c,v){ BB.b=b; BB.c=c; BB.v=v; BB.q=''; render(); }
 /* Vista previa de lo que está en pantalla ahora */
 function bbLiveBox(r){
   const x=BB.style||{}; const bg=x.img?`url('${x.img}') center/cover, ${x.bg||'#000'}`:(x.bg||'#000');
-  const txt=!r?'':r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=2" alt="" style="height:70%">':esc((r.text||'').slice(0,220));
-  return `<div class="bb-live" title="En pantalla ahora"><div class="bb-scr" style="background:${bg}">${x.img?`<i style="opacity:${x.dim??.35}"></i>`:''}<span style="color:${x.color||'#fff'}">${txt}</span>${r&&r.mode==='text'&&r.ref?`<em style="color:${x.ref||'#e9c45a'}">${esc(r.ref)}</em>`:''}</div><small>${!r?'Pantalla':r.mode==='black'?'■ Negro':r.mode==='logo'?'Logo':'● En pantalla'}</small></div>`;
+  const mdImg=r&&r.mode==='text'&&r.media?`<img src="/medio/${esc(r.media.id)}/${r.media.n}.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:2">`:'';
+  const txt=!r?'':r.mode==='black'?'':r.media?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=2" alt="" style="height:70%">':esc((r.text||'').slice(0,220));
+  return `<div class="bb-live" title="En pantalla ahora"><div class="bb-scr" style="background:${bg};position:relative;overflow:hidden">${mdImg}${x.img?`<i style="opacity:${x.dim??.35}"></i>`:''}<span style="color:${x.color||'#fff'}">${txt}</span>${r&&r.mode==='text'&&r.ref?`<em style="color:${x.ref||'#e9c45a'}">${esc(r.ref)}</em>`:''}</div><small>${!r?'Pantalla':r.mode==='black'?'■ Negro':r.mode==='logo'?'Logo':'● En pantalla'}</small></div>`;
 }
 async function bbProject(){
   if(BB.v==null||!S.canWrite) return; const bk=bbBooks()[BB.b]; const text=bk[3][BB.c][BB.v]||''; const ref=bbRef(BB.b,BB.c,BB.v);
