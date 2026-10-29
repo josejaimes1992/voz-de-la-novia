@@ -1,9 +1,9 @@
-FROM oven/bun:1.2-alpine
-RUN apk add --no-cache poppler-utils ffmpeg ghostscript
-# PowerPoint → imágenes (LibreOffice Impress) y fuentes compatibles con las de Office (Calibri, Arial, Times…)
-RUN (apk add --no-cache libreoffice-impress || apk add --no-cache libreoffice || true) \
- && (apk add --no-cache ttf-liberation ttf-dejavu || true) \
- && (apk add --no-cache font-carlito || apk add --no-cache ttf-carlito || true) \
+FROM oven/bun:1.2-slim
+# Debian (no Alpine): LibreOffice en Alpine se colgaba al convertir PowerPoint
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      poppler-utils ffmpeg ghostscript libreoffice-impress \
+      fonts-liberation fonts-dejavu-core fonts-crosextra-carlito fonts-crosextra-caladea ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
  && (fc-cache -f >/dev/null 2>&1 || true)
 WORKDIR /app
 COPY . .

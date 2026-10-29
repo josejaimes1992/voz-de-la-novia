@@ -27,9 +27,13 @@ async function run(cmd: string[], ms = 240000) {
      cuando escriben muchos avisos (el pipe se llena y esperan para siempre) */
   const log = `${TMP()}/vdn-run-${randomBytes(5).toString("hex")}.log`;
   try {
-    const p = Bun.spawn(cmd, { stdout: "ignore", stderr: Bun.file(log), stdin: "ignore", windowsHide: true, env: { ...process.env, HOME: process.env.HOME || TMP(), SAL_USE_VCLPLUGIN: "svp" } } as any);
-    let killed = false; const t = setTimeout(() => { killed = true; try { p.kill(9); } catch {} }, ms);
-    const code = await p.exited; clearTimeout(t);
+    /* En Linux se envuelve con "timeout" para matar también a los procesos hijos si se cuelga */
+    const full = !isWin && Bun.which("timeout") ? ["timeout", "-s", "KILL", String(Math.ceil(ms / 1000)), ...cmd] : cmd;
+    const p = Bun.spawn(full, { stdout: "ignore", stderr: Bun.file(log), stdin: "ignore", windowsHide: true, env: { ...process.env, HOME: process.env.HOME || TMP(), SAL_USE_VCLPLUGIN: "svp" } } as any);
+    let killed = false; let t: any;
+    /* Aunque el proceso no avise que terminó, a los ms + 10 s seguimos igual (la cola nunca se queda trabada) */
+    const code = await Promise.race([p.exited, new Promise<number>(res => { t = setTimeout(() => { killed = true; try { p.kill(9); } catch {} res(-2); }, ms + 10000); })]);
+    clearTimeout(t); if (code === 137 && full !== cmd) killed = true;
     let err = ""; try { err = await Bun.file(log).text(); } catch {}
     return { code: killed ? -2 : code, err: (killed ? "tiempo agotado; " : "") + err.slice(-2000) };
   } catch (e: any) { return { code: -1, err: String(e?.message || e) }; }
@@ -85,7 +89,7 @@ async function officeToPdf(src: string, work: string): Promise<string> {
   }
   for (const bin of sofficePaths()) {
     if (bin.includes("\\") && !existsSync(bin)) continue;
-    const prof = `${TMP()}/lo-${randomBytes(6).toString("hex")}`;
+    const prof = `${TMP()}/lo-${randomBytes(6).toString("hex")}`; console.log(`Medios: convirtiendo con ${bin}…`);
     const r = await run([bin, "--headless", "--invisible", "--norestore", "--nolockcheck", "--nodefault", `-env:UserInstallation=file:///${prof.replace(/^\//, "")}`, "--convert-to", "pdf", "--outdir", work, src], 300000);
     if (r.code !== 0) console.error("Medios: soffice", bin, r.code, r.err.slice(-300));
     try { rmSync(prof, { recursive: true, force: true }); } catch {}
