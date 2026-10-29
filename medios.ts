@@ -77,7 +77,8 @@ async function officeToPdf(src: string, work: string): Promise<string> {
   for (const bin of sofficePaths()) {
     if (bin.includes("\\") && !existsSync(bin)) continue;
     const prof = `${TMP()}/lo-${randomBytes(6).toString("hex")}`;
-    const r = await run([bin, "--headless", "--norestore", "--nolockcheck", `-env:UserInstallation=file:///${prof.replace(/^\//, "")}`, "--convert-to", "pdf", "--outdir", work, src], 240000);
+    const r = await run([bin, "--headless", "--invisible", "--norestore", "--nolockcheck", "--nodefault", `-env:UserInstallation=file:///${prof.replace(/^\//, "")}`, "--convert-to", "pdf", "--outdir", work, src], 300000);
+    if (r.code !== 0) console.error("Medios: soffice", bin, r.code, r.err.slice(-300));
     try { rmSync(prof, { recursive: true, force: true }); } catch {}
     const made = readdirSync(work).find(f => f.toLowerCase().endsWith(".pdf"));
     if (r.code === 0 && made) { if (`${work}/${made}` !== out) renameSync(`${work}/${made}`, out); return out; }
@@ -86,6 +87,20 @@ async function officeToPdf(src: string, work: string): Promise<string> {
     : "No se pudo convertir el PowerPoint. Prueba guardarlo como PDF y subir el PDF.");
 }
 
+let queue: Promise<any> = Promise.resolve();
+async function convert(db: any, id: string, kind: string, src: string, work: string, data: any) {
+  const dir = `${DIR}/${id}`; mkdirSync(dir, { recursive: true }); const t0 = Date.now();
+  try {
+    let pages = 0;
+    if (kind === "img") pages = await imgPages(src, dir);
+    else if (kind === "pdf") pages = await pdfPages(src, dir);
+    else pages = await pdfPages(await officeToPdf(src, work), dir);
+    Object.assign(data, { pages, status: "ready" }); console.log(`Medios: ${data.title} listo (${pages} pantallas, ${Math.round((Date.now() - t0) / 1000)} s)`);
+  } catch (e: any) {
+    rmSync(dir, { recursive: true, force: true }); Object.assign(data, { status: "error", msg: String(e?.message || e).slice(0, 400) }); console.error(`Medios: ${data.title} falló:`, data.msg);
+  } finally { try { rmSync(work, { recursive: true, force: true }); } catch {} }
+  try { await db`UPDATE docs SET data = ${JSON.stringify(data)}::jsonb, updated_at = ${Date.now()} WHERE col = 'medios' AND id = ${id}`; } catch {}
+}
 async function list(db: any) { const rows = await db`SELECT id, data FROM docs WHERE col = 'medios'`; return rows.map((r: any) => ({ ...parse(r.data), id: r.id })).sort((a: any, b: any) => (b.at || 0) - (a.at || 0)); }
 
 export async function mediosRoute(req: Request, p: string, user: User, db: any): Promise<Response | null> {
@@ -97,27 +112,20 @@ export async function mediosRoute(req: Request, p: string, user: User, db: any):
   if (!user) return jsonR({ error: "unauthorized" }, 401);
   if (p === "/api/medios" && req.method === "GET") return jsonR({ medios: await list(db) });
   if (p === "/api/medios" && req.method === "POST") {
+    const name = decodeURIComponent(req.headers.get("x-file-name") ?? "archivo");
     const buf = new Uint8Array(await req.arrayBuffer());
     if (buf.length > 200_000_000) return jsonR({ error: "too_large", msg: "El archivo es muy grande (máximo 200 MB)." }, 413);
-    const name = decodeURIComponent(req.headers.get("x-file-name") ?? "archivo");
     const kind = kindOf(buf, name); if (!kind) return jsonR({ error: "bad_type", msg: "Ese tipo de archivo no se puede proyectar. Usa PowerPoint (PPT, PPTX), PDF o imágenes (JPG, PNG)." }, 415);
-    const id = randomBytes(8).toString("hex"); const dir = `${DIR}/${id}`; const work = `${TMP()}/vdn-md-${id}`;
-    mkdirSync(dir, { recursive: true }); mkdirSync(work, { recursive: true });
+    const id = randomBytes(8).toString("hex"); const work = `${TMP()}/vdn-md-${id}`; mkdirSync(work, { recursive: true });
     const ext = (name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
     const src = `${work}/original.${ext}`; writeFileSync(src, buf);
-    try {
-      let pages = 0;
-      if (kind === "img") pages = await imgPages(src, dir);
-      else if (kind === "pdf") pages = await pdfPages(src, dir);
-      else pages = await pdfPages(await officeToPdf(src, work), dir);
-      const title = name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim().slice(0, 160) || "Archivo";
-      const data = { title, kind, ext, pages, size: buf.length, by: user.name, at: Date.now() };
-      await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('medios', ${id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})`;
-      return jsonR({ ...data, id });
-    } catch (e: any) {
-      rmSync(dir, { recursive: true, force: true });
-      return jsonR({ error: "convert", msg: String(e?.message || e) }, 422);
-    } finally { try { rmSync(work, { recursive: true, force: true }); } catch {} }
+    const title = name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim().slice(0, 160) || "Archivo";
+    const data: any = { title, kind, ext, pages: 0, status: "converting", size: buf.length, by: user.name, at: Date.now() };
+    await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('medios', ${id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})`;
+    console.log(`Medios: recibido ${name} (${Math.round(buf.length / 1024)} KB, ${kind})`);
+    /* La conversión sigue en segundo plano (un PowerPoint grande puede tardar); la consola consulta el estado */
+    queue = queue.then(() => convert(db, id, kind, src, work, data)).catch(() => {});
+    return jsonR({ ...data, id }, 202);
   }
   const mm = p.match(/^\/api\/medios\/([a-f0-9]{16})$/);
   if (mm) {

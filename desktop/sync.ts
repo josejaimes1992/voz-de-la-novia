@@ -153,7 +153,7 @@ async function pullMedios() {
   const r = await cloud("/api/medios", {}, 60000); if (!r.ok) throw new Error("lista " + r.status);
   const list: any[] = (await r.json()).medios || []; const dir = `${C.dataDir}/medios`; ensureDir(dir);
   const local = await C.db`SELECT id FROM docs WHERE col = 'medios'`; const have = new Set<string>(local.map((x: any) => x.id)); const want = new Set(list.map(m => m.id));
-  for (const m of list) { if (!/^[a-f0-9]{16}$/.test(m.id)) continue; ensureDir(`${dir}/${m.id}/t`);
+  for (const m of list) { if (!/^[a-f0-9]{16}$/.test(m.id) || (m.status && m.status !== "ready")) continue; ensureDir(`${dir}/${m.id}/t`);
     for (let n = 1; n <= (m.pages || 0); n++) { await download(`/medio/${m.id}/${n}.jpg`, `${dir}/${m.id}/${n}.jpg`); await download(`/medio/${m.id}/t/${n}.jpg`, `${dir}/${m.id}/t/${n}.jpg`); }
     const data = { ...m }; delete data.id; await putDoc("medios", m.id, data); }
   for (const id of have) if (!want.has(id)) { await C.db`DELETE FROM docs WHERE col = 'medios' AND id = ${id}`; try { require("node:fs").rmSync(`${dir}/${id}`, { recursive: true, force: true }); } catch {} }
