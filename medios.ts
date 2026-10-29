@@ -114,7 +114,9 @@ async function convert(db: any, id: string, kind: string, src: string, work: str
   } finally { try { rmSync(work, { recursive: true, force: true }); } catch {} }
   try { await db`UPDATE docs SET data = ${JSON.stringify(data)}::jsonb, updated_at = ${Date.now()} WHERE col = 'medios' AND id = ${id}`; } catch {}
 }
-async function list(db: any) { const rows = await db`SELECT id, data FROM docs WHERE col = 'medios'`; return rows.map((r: any) => ({ ...parse(r.data), id: r.id })).sort((a: any, b: any) => (b.at || 0) - (a.at || 0)); }
+/* Orden de la lista: el que se eligió arrastrando ("ord"); lo nuevo va al final, en el orden en que se subió */
+export async function mediosList(db: any) { const rows = await db`SELECT id, data FROM docs WHERE col = 'medios'`; return rows.map((r: any) => ({ ...parse(r.data), id: r.id })).sort((a: any, b: any) => ((a.ord ?? a.at ?? 0) - (b.ord ?? b.at ?? 0)) || ((a.at || 0) - (b.at || 0))); }
+const list = mediosList;
 
 export async function mediosRoute(req: Request, p: string, user: User, db: any): Promise<Response | null> {
   /* Imágenes: públicas (la pantalla del proyector y OBS no tienen sesión) */
@@ -133,12 +135,20 @@ export async function mediosRoute(req: Request, p: string, user: User, db: any):
     const ext = (name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
     const src = `${work}/original.${ext}`; writeFileSync(src, buf);
     const title = name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim().slice(0, 160) || "Archivo";
-    const data: any = { title, kind, ext, pages: 0, status: "converting", size: buf.length, by: user.name, at: Date.now() };
+    const prev = await list(db); const last = prev[prev.length - 1]; const ordN = last ? (last.ord ?? -1) + 1 : 0;
+    const data: any = { title, kind, ext, pages: 0, status: "converting", size: buf.length, by: user.name, at: Date.now(), ...(prev.some((m: any) => m.ord != null) ? { ord: ordN } : {}) };
     await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('medios', ${id}, ${JSON.stringify(data)}::jsonb, ${Date.now()})`;
     console.log(`Medios: recibido ${name} (${Math.round(buf.length / 1024)} KB, ${kind})`);
     /* La conversión sigue en segundo plano (un PowerPoint grande puede tardar); la consola consulta el estado */
     queue = queue.then(() => convert(db, id, kind, src, work, data)).catch(() => {});
     return jsonR({ ...data, id }, 202);
+  }
+  if (p === "/api/medios/order" && req.method === "PUT") {
+    const b: any = await req.json().catch(() => ({})); const ids: string[] = Array.isArray(b.ids) ? b.ids.filter((x: any) => typeof x === "string" && ID_RE.test(x)).slice(0, 2000) : [];
+    const rows = await db`SELECT id, data FROM docs WHERE col = 'medios'`; const pos = new Map(ids.map((id, i) => [id, i])); const now = Date.now();
+    for (const r of rows) { if (!pos.has(r.id)) continue; const d = parse(r.data); const ord = pos.get(r.id)!; if (d.ord === ord) continue; d.ord = ord;
+      await db`UPDATE docs SET data = ${JSON.stringify(d)}::jsonb, updated_at = ${now} WHERE col = 'medios' AND id = ${r.id}`; }
+    return jsonR({ ok: true });
   }
   const mm = p.match(/^\/api\/medios\/([a-f0-9]{16})$/);
   if (mm) {

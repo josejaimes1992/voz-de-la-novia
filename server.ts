@@ -1,7 +1,7 @@
 // Voz de la Novia — servidor (Bun + Postgres)
 import { makeDb, appPath, tool } from "./db.ts";
 import { librosRoute, initLibros } from "./libros.ts";
-import { mediosRoute, initMedios, medioExists, fixInterrupted } from "./medios.ts";
+import { mediosRoute, initMedios, medioExists, fixInterrupted, mediosList } from "./medios.ts";
 import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
@@ -235,7 +235,11 @@ function songSlides(song: any) {
 }
 async function projNav(d: number, kind: string): Promise<any | null> {
   const P: any = PROJ; if (P.mode !== "text") return null;
-  if (P.media?.id) { const n = P.media.n + d; if (n < 1 || n > P.media.total || !medioExists(P.media.id, n)) return null; return { ...P, media: { ...P.media, n }, idx: n - 1 }; }
+  if (P.media?.id) { const n = P.media.n + d; if (n >= 1 && n <= P.media.total && medioExists(P.media.id, n)) return { ...P, media: { ...P.media, n }, idx: n - 1 };
+    /* Al terminar un archivo pasa al siguiente (o al anterior) de la lista de Medios */
+    const L = (await mediosList(db)).filter((m: any) => m.status !== "converting" && m.status !== "error" && m.pages > 0); const i = L.findIndex((m: any) => m.id === P.media.id); const m = i < 0 ? null : L[i + Math.sign(d)];
+    if (!m) return null; const k = d > 0 ? 1 : m.pages; if (!medioExists(m.id, k)) return null;
+    return { ...P, title: m.title, media: { id: m.id, n: k, total: m.pages, title: m.title }, idx: k - 1, total: m.pages }; }
   if (P.sermon?.id) {
     const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
     let pi = P.sermon.p, part = P.sermon.part || 0;
