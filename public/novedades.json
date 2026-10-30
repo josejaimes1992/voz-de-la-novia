@@ -1,4 +1,9 @@
 [
+  { "v": "1.3.5", "fecha": "2026-10-29", "items": [
+    "Copia de seguridad: todo lo de esta PC (alabanzas, programas, usuarios, medios, logo, fondos y audios) en un archivo .zip. Está en el menú del botón de abajo a la izquierda.",
+    "Copia automática una vez al día (si hubo cambios) en Documentos → Voz de la Novia → Copias de seguridad. Se guardan las 8 más recientes.",
+    "En una PC nueva, la bienvenida tiene “Restaurar una copia de seguridad” para quedar todo como antes."
+  ] },
   { "v": "1.3.4", "fecha": "2026-10-29", "items": [
     "El botón “Instalar ahora” abre el instalador y cierra el programa solo, para que la actualización no se quede en “Abriendo el instalador…”."
   ] },

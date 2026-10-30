@@ -61,10 +61,42 @@
     const r=await fetch('/api/desktop/reset',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+t},body:JSON.stringify({password:pw})});
     const d=await r.json().catch(()=>({})); if(!r.ok){ alert(d.error||'No se pudo.'); return; }
     try{ localStorage.removeItem('vdn-token'); }catch{} location.href='/'; }
+  /* ---- Copias de seguridad: todo lo de esta PC en un .zip (para cambiar de computadora) ---- */
+  const kb=n=>n>1e9?(n/1e9).toFixed(1)+' GB':n>1e6?Math.round(n/1e6)+' MB':Math.max(1,Math.round(n/1e3))+' KB';
+  const escH=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  async function doBackup(){ const t=tok(); if(!t){ alert('Ingresa con tu usuario de administrador.'); return; }
+    el.innerHTML='<span style="color:#e9c45a">●</span> Haciendo la copia de seguridad…';
+    const r=await fetch('/api/desktop/backup',{method:'POST',headers:{authorization:'Bearer '+t}}); const d=await r.json().catch(()=>({})); draw();
+    if(!r.ok){ alert(d.error||'No se pudo hacer la copia.'); return; }
+    alert(`✔ Copia de seguridad lista (${kb(d.size)}).\n\nSe guardó en:\n${d.path}\n\nCópiala a una memoria USB, Google Drive o envíatela por correo. En la otra PC: instala Voz de la Novia y en la bienvenida elige “Restaurar una copia de seguridad”.`); }
+  const box=document.createElement('div'); box.hidden=true; box.style.cssText='position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px';
+  document.body.appendChild(box); box.addEventListener('click',e=>{ if(e.target===box) box.hidden=true; });
+  async function doRestoreMenu(){ const t=tok(); if(!t){ alert('Ingresa con tu usuario de administrador.'); return; }
+    let L={backups:[]}; try{ L=await (await fetch('/api/desktop/backups',{headers:{authorization:'Bearer '+t}})).json(); }catch{}
+    box.innerHTML=`<div style="width:min(560px,100%);max-height:85vh;overflow:auto;background:#141416;color:#efece4;border:1px solid #2a2a2e;border-radius:16px;padding:18px;font:14px/1.45 system-ui,Segoe UI,sans-serif">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:17px;flex:1">♻️ Restaurar una copia de seguridad</b><button type="button" data-close style="all:unset;cursor:pointer;font-size:20px;color:#a7a395;padding:0 6px">×</button></div>
+      <p style="margin:0 0 12px;color:#cfcab9">Reemplaza las alabanzas, programas, usuarios, medios y logo de esta PC por los de la copia. La Biblia y los Mensajes se conservan. Antes de restaurar se guarda una copia de lo que hay ahora.</p>
+      <label style="display:block;border:1.5px dashed #4a4636;border-radius:12px;padding:14px;text-align:center;cursor:pointer;margin-bottom:12px"><b>📂 Elegir un archivo de copia (.zip)</b><br><span style="color:#a7a395;font-size:13px">Por ejemplo, el que traes en una memoria USB</span><input type="file" accept=".zip" hidden data-file></label>
+      <div style="color:#a7a395;font-size:13px;margin-bottom:6px">Copias guardadas en esta PC <a href="#" data-open style="color:#e9c45a">(abrir carpeta)</a>:</div>
+      ${(L.backups||[]).map(b=>`<div style="display:flex;gap:8px;align-items:center;border-top:1px solid #2a2a2e;padding:8px 0"><span style="flex:1;min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(b.name.replace(/\.zip$/i,''))}</b><small style="color:#a7a395">${new Date(b.at).toLocaleString('es')} · ${kb(b.size)}</small></span><button type="button" data-file-name="${escH(b.name)}" style="border:1px solid #3a3a3e;border-radius:9px;padding:7px 12px;background:transparent;color:#efece4;cursor:pointer">Restaurar</button></div>`).join('')||'<p style="color:#a7a395;margin:4px 0">Todavía no hay copias en esta PC.</p>'}
+    </div>`;
+    box.hidden=false;
+    box.querySelector('[data-close]').onclick=()=>box.hidden=true;
+    box.querySelector('[data-open]').onclick=e=>{ e.preventDefault(); fetch('/api/desktop/open-backups',{method:'POST'}); };
+    const go=async(body,q)=>{ const pw=prompt('Esto reemplaza lo que hay en esta PC por la copia.\n\nEscribe tu contraseña para confirmar:'); if(!pw) return;
+      box.innerHTML='<div style="background:#141416;color:#efece4;border-radius:16px;padding:22px;font:15px system-ui">⏳ Restaurando la copia… no cierres el programa.</div>';
+      const r=await fetch('/api/desktop/restore'+(q||''),{method:'POST',headers:{authorization:'Bearer '+t,'x-password':encodeURIComponent(pw),'content-type':'application/octet-stream'},body:body||''});
+      const d=await r.json().catch(()=>({})); box.hidden=true; if(!r.ok){ alert(d.error||'No se pudo restaurar.'); return; }
+      alert(`✔ Copia restaurada${d.church?` (${d.church})`:''}.\n\nAhora ingresa con el usuario y la contraseña que tenías en esa copia.`); try{ localStorage.removeItem('vdn-token'); }catch{} location.href='/'; };
+    box.querySelector('[data-file]').onchange=e=>{ const f=e.target.files[0]; if(f) go(f,''); };
+    box.querySelectorAll('[data-file-name]').forEach(b=>b.onclick=()=>go(null,'?file='+encodeURIComponent(b.dataset.fileName)));
+  }
   document.addEventListener('click',e=>{ if(!menu.hidden&&!menu.contains(e.target)&&e.target!==el) menu.hidden=true; });
   el.onclick=async()=>{
     if(S.mode==='local'||(S.mode==='cloud'&&!S.needLogin)){ menu.innerHTML='';
       mi(S.mode==='local'?'↻ Buscar Mensajes nuevos':'↻ Sincronizar ahora',doSync);
+      mi('💾 Hacer copia de seguridad ahora',doBackup);
+      mi('♻️ Restaurar una copia de seguridad…',doRestoreMenu);
       mi(S.mode==='local'?'☁ Conectar con la nube de mi iglesia (empezar de nuevo)':'⟲ Desconectar y empezar de nuevo',doReset);
       menu.hidden=!menu.hidden; return; }
     if(S.mode!=='cloud'&&S.mode!=='local') return;

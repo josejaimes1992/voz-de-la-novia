@@ -427,7 +427,7 @@ if (Bun.env.DESKTOP === "1") {
     setRvr: (gz: Uint8Array | null) => { RVR1960 = gz; delete BIBLES.RVR1960; }, setCfg: (c: any) => { CFG = { ...CHURCH_DEFAULT, ...c }; }, setStyle: (st: any) => { STYLE = { ...STYLE_DEFAULT, ...st }; } });
 }
 const SERVER = Bun.serve({
-  maxRequestBodySize: 220 * 1024 * 1024,
+  maxRequestBodySize: (Bun.env.DESKTOP ? 2048 : 220) * 1024 * 1024,
   port: Number(Bun.env.PORT ?? 3000),
   async fetch(req, server) {
     const url = new URL(req.url);

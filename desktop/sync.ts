@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { networkInterfaces } from "node:os";
+import { makeBackup, restoreBackup, backupFolder, lastChange } from "./backup.ts";
 
 type Ctx = {
   db: any; dataDir: string; brandDir: string; fondosDir: string; appDir: string;
@@ -55,13 +56,44 @@ function startLoop() {
   if (looping) return; looping = true;
   setTimeout(() => syncNow(true), 1500);
   /* Con nube: cada 30 s sube cambios y cada 5 min baja todo. Solo PC: cada 6 h revisa Biblia y Mensajes nuevos */
+  setTimeout(autoBackup, 3 * 60_000); setInterval(autoBackup, 60 * 60_000);
   setInterval(() => { if (syncing || !ST) return;
     if (ST.mode === "cloud") syncNow(Date.now() - (ST.lastPull ?? 0) > 5 * 60_000);
     else if (Date.now() - (ST.lastPull ?? 0) > (online === false ? 60_000 : 6 * 3600_000)) syncNow(true); }, 30_000);
 }
 
+/* ---------- Copias de seguridad ---------- */
+const DIRS = () => ({ data: C.dataDir, brand: C.brandDir, fondos: C.fondosDir });
+const stamp = () => { const d = new Date(); const z = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}-${z(d.getMinutes())}`; };
+async function churchName() { try { const r = await C.db`SELECT data FROM docs WHERE col = 'config' AND id = 'church'`; return String(parseJ(r[0]?.data)?.name || ""); } catch { return ""; } }
+const safe = (t: string) => t.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 50);
+async function backupNow(kind: "Manual" | "Automática") {
+  const name = await churchName(); const dir = backupFolder();
+  const out = `${dir}/Copia ${kind === "Manual" ? "" : "automática "}${safe(name) || "Voz de la Novia"} ${stamp()}.zip`.replace(/ +/g, " ");
+  return makeBackup(C.db, DIRS(), ST, out, { church: name, mode: ST?.mode ?? "local", version: VERSION, kind });
+}
+function listBackups() { const dir = backupFolder(); const fs = require("node:fs");
+  return fs.readdirSync(dir).filter((f: string) => /\.zip$/i.test(f)).map((f: string) => { const st = fs.statSync(`${dir}/${f}`); return { name: f, size: st.size, at: st.mtimeMs, auto: /automática/i.test(f) }; }).sort((a: any, b: any) => b.at - a.at); }
+let autoBusy = false;
+async function autoBackup() {
+  if (!ST || autoBusy) return; autoBusy = true;
+  try { const f = `${C.dataDir}/copias.json`; let s: any = {}; try { s = JSON.parse(readFileSync(f, "utf8")); } catch {}
+    const ch = await lastChange(C.db); if (ch <= (s.change || 0) || Date.now() - (s.at || 0) < 20 * 3600_000) return;
+    const r = await backupNow("Automática"); writeFileSync(f, JSON.stringify({ at: Date.now(), change: ch, path: r.path }));
+    /* Se guardan las 8 automáticas más recientes */
+    const fs = require("node:fs"); for (const b of listBackups().filter((x: any) => x.auto).slice(8)) try { fs.rmSync(`${backupFolder()}/${b.name}`, { force: true }); } catch {}
+    console.log("Copia automática:", r.path);
+  } catch (e) { console.error("copia automática", e); } finally { autoBusy = false; }
+}
+async function afterRestore() {
+  await loadState(); C.resetIndex();
+  try { const r = await C.db`SELECT data FROM docs WHERE col = 'config' AND id = 'church'`; if (r[0]) C.setCfg(parseJ(r[0].data)); } catch {}
+  try { const r = await C.db`SELECT data FROM docs WHERE col = 'settings' AND id = 'proj-style'`; if (r[0]) C.setStyle(parseJ(r[0].data)); } catch {}
+  if (ST) startLoop();
+}
+
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=6" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=7" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -306,6 +338,29 @@ export async function desktopRoute(req: Request, p: string): Promise<Response | 
     });
     ST = null; C.setCfg({}); online = null; lastError = "";
     return J({ ok: true });
+  }
+  if (p === "/api/desktop/backup" && req.method === "POST") {
+    const u = await localUser(req); if (!u || u.role !== "admin") return J({ error: "Solo el administrador puede hacer la copia." }, 403);
+    try { const r = await backupNow("Manual");
+      if (process.platform === "win32") try { Bun.spawn(["explorer", `/select,${r.path.replace(/\//g, "\\")}`], { stdout: "ignore", stderr: "ignore", windowsHide: true } as any); } catch {}
+      return J({ ...r, folder: backupFolder() }); }
+    catch (e: any) { return J({ error: "No se pudo hacer la copia: " + String(e?.message || e) }, 500); }
+  }
+  if (p === "/api/desktop/backups" && req.method === "GET") {
+    const u = configured ? await localUser(req) : null; if (configured && (!u || u.role !== "admin")) return J({ error: "forbidden" }, 403);
+    return J({ folder: backupFolder(), backups: listBackups() });
+  }
+  if (p === "/api/desktop/open-backups" && req.method === "POST") { if (process.platform === "win32") openExternal(backupFolder()); return J({ ok: true }); }
+  /* Restaurar una copia: desde un archivo elegido o desde la carpeta de copias. En la pantalla de bienvenida no pide usuario. */
+  if (p === "/api/desktop/restore" && req.method === "POST") {
+    if (configured) { const u = await localUser(req); if (!u || u.role !== "admin") return J({ error: "Solo el administrador puede restaurar una copia." }, 403);
+      if (!(await Bun.password.verify(decodeURIComponent(req.headers.get("x-password") || ""), u.pass_hash))) return J({ error: "Contraseña incorrecta." }, 400); }
+    try { const file = new URL(req.url).searchParams.get("file"); let buf: Uint8Array;
+      if (file) { if (!/^[^\\/]+\.zip$/i.test(file)) return J({ error: "bad" }, 400); buf = new Uint8Array(readFileSync(`${backupFolder()}/${file}`)); }
+      else buf = new Uint8Array(await req.arrayBuffer());
+      if (configured) try { await backupNow("Automática"); } catch {}   /* por si acaso: copia de lo que había antes */
+      const r = await restoreBackup(C.db, DIRS(), buf); await afterRestore(); return J({ ok: true, ...r });
+    } catch (e: any) { return J({ error: String(e?.message || e) }, 400); }
   }
   if (p === "/api/desktop/relogin" && req.method === "POST") {
     const u = await localUser(req); if (!u || !ST || ST.mode !== "cloud") return J({ error: "unauthorized" }, 401);

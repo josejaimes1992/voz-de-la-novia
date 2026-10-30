@@ -38,6 +38,8 @@ button.go:disabled{opacity:.6;cursor:wait}
   <button type="button" class="opt" data-m="cloud"><span class="ic">☁️</span><b>Conectar con la nube de mi iglesia</b><span>Baja las alabanzas, programas, mensajes y la Biblia de tu iglesia. Lo que cambies sin internet se sube solo cuando vuelva la conexión.</span></button>
   <button type="button" class="opt" data-m="local"><span class="ic">💻</span><b>Usar solo en esta PC</b><span>Para tu iglesia: empieza sin alabanzas para que subas las tuyas. Incluye la Biblia RVR1960 y los Mensajes, que se bajan solos.</span></button>
 </div>
+<label class="opt" style="display:block;margin-top:12px;cursor:pointer"><span class="ic">♻️</span><b>Restaurar una copia de seguridad</b><span>¿Vienes de otra PC? Elige el archivo de copia (.zip) y queda todo como lo tenías: alabanzas, programas, usuarios, medios y logo.</span><input type="file" id="rest" accept=".zip" hidden></label>
+<p class="err" id="rerr" hidden></p>
 
 <form id="f" hidden autocomplete="off">
   <div id="cloud-f" hidden>
@@ -70,4 +72,9 @@ $('#f').onsubmit=async e=>{ e.preventDefault(); const err=$('#err'); err.hidden=
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Error');
     localStorage.setItem('vdn-token',JSON.stringify(d.token)); location.href='/';
   }catch(x){ err.textContent=x.message||'No se pudo configurar.'; err.hidden=false; go.disabled=false; go.textContent=t; } };
+$('#rest').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const er=$('#rerr'); er.hidden=true;
+  const lab=e.target.closest('label'); const old=lab.innerHTML; lab.querySelector('b').textContent='⏳ Restaurando la copia… no cierres el programa';
+  try{ const r=await fetch('/api/desktop/restore',{method:'POST',headers:{'content-type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'No se pudo restaurar.');
+    alert('✔ Copia restaurada'+(d.church?' ('+d.church+')':'')+'.\n\nAhora ingresa con tu usuario y contraseña de siempre.'); location.href='/';
+  }catch(x){ er.textContent=x.message; er.hidden=false; lab.querySelector('b').textContent='Restaurar una copia de seguridad'; e.target.value=''; } };
 </script></body></html>
