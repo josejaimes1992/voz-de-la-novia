@@ -76,6 +76,10 @@ jobs:
       - name: Versión
         id: v
         run: echo "v=$(tr -d '\r\n ' < desktop/VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Notas de la versión
+        run: |
+          bun -e "const v=(await Bun.file('desktop/VERSION').text()).trim();const N=JSON.parse(await Bun.file('public/novedades.json').text());const e=N.find(x=>x.v===v)||{items:[]};let t='## Novedades\n'+e.items.map(i=>'- '+i).join('\n')+'\n\n---\n';t+='Programa de Windows de Voz de la Novia: funciona sin internet.\nRecomendado: VozDeLaNovia-Setup.exe (instalador, ventana propia, ícono en el menú Inicio).\nVozDeLaNovia.exe es la versión portátil (se abre en el navegador, sin instalar). Si Windows muestra \"Windows protegió su PC\", toca \"Más información\" → \"Ejecutar de todas formas\".\n';await Bun.write('notas.md',t)"
+          cat notas.md
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -86,7 +90,4 @@ jobs:
             dist/VozDeLaNovia.exe
           make_latest: true
           name: Voz de la Novia para Windows ${{ steps.v.outputs.v }}
-          body: |
-            Programa de Windows de Voz de la Novia: funciona sin internet.
-            Recomendado: VozDeLaNovia-Setup.exe (instalador, ventana propia, ícono en el menú Inicio).
-            VozDeLaNovia.exe es la versión portátil (se abre en el navegador, sin instalar). Si Windows muestra "Windows protegió su PC", toca "Más información" → "Ejecutar de todas formas".
+          body_path: notas.md

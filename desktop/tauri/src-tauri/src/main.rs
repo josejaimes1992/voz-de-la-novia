@@ -55,7 +55,7 @@ struct Screen { i: usize, name: String, w: u32, h: u32, x: i32, y: i32, primary:
 
 /* Pantallas conectadas (1 = la principal) y si ya tienen el proyector abierto */
 #[tauri::command]
-fn list_screens(app: tauri::AppHandle) -> Vec<Screen> {
+async fn list_screens(app: tauri::AppHandle) -> Vec<Screen> {
     let primary = app.primary_monitor().ok().flatten().map(|p| (p.position().x, p.position().y));
     app.available_monitors().unwrap_or_default().iter().enumerate().map(|(i, m)| {
         let p = m.position(); let s = m.size();
@@ -73,8 +73,9 @@ fn view_path(view: &Option<String>) -> &'static str {
 }
 
 /* Abre el proyector en una pantalla (sin número: la primera pantalla secundaria) con la vista elegida */
+/* async: en Windows, crear una ventana desde un comando que no es async traba el programa (ventana negra que no se cierra) */
 #[tauri::command]
-fn open_projector(app: tauri::AppHandle, screen: Option<usize>, view: Option<String>) -> Result<(), String> {
+async fn open_projector(app: tauri::AppHandle, screen: Option<usize>, view: Option<String>) -> Result<(), String> {
     let monitors = app.available_monitors().unwrap_or_default();
     let primary = app.primary_monitor().ok().flatten();
     let is_primary = |m: &tauri::Monitor| match &primary { Some(p) => p.position() == m.position(), None => false };
@@ -116,17 +117,19 @@ fn open_projector(app: tauri::AppHandle, screen: Option<usize>, view: Option<Str
 
 /* Cierra el proyector de una pantalla (sin número: todos) */
 #[tauri::command]
-fn close_projector(app: tauri::AppHandle, screen: Option<usize>) {
+async fn close_projector(app: tauri::AppHandle, screen: Option<usize>) -> Result<(), String> {
     for (label, w) in app.webview_windows() {
         let hit = match screen { Some(i) => label == format!("proyector-{i}"), None => label.starts_with("proyector") };
         if hit { let _ = w.close(); }
     }
+    Ok(())
 }
 
 #[tauri::command]
-fn toggle_fullscreen(window: tauri::WebviewWindow) {
+async fn toggle_fullscreen(window: tauri::WebviewWindow) -> Result<(), String> {
     let fs = window.is_fullscreen().unwrap_or(false);
     let _ = window.set_fullscreen(!fs);
+    Ok(())
 }
 
 fn main() {

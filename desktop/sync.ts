@@ -15,12 +15,15 @@ type State = { mode: "cloud" | "local"; cloud?: string; token?: string; cloudUse
 /* De dónde baja la Biblia y los Mensajes una iglesia que usa el programa "solo en esta PC" */
 /* Aviso de versión nueva del programa (se revisa en GitHub cada 6 horas) */
 const VERSION = Bun.env.VDN_VERSION || "";
-let latest = "", latestAt = 0;
+let latest = "", latestAt = 0, latestNotes: string[] = [];
 const vnum = (v: string) => v.split(".").map(n => parseInt(n) || 0).reduce((a, n) => a * 1000 + n, 0);
 async function checkUpdate() {
-  if (!VERSION || Date.now() - latestAt < 6 * 3600_000) return; latestAt = Date.now();
+  if (!VERSION || Date.now() - latestAt < 2 * 3600_000) return; latestAt = Date.now();
   try { const r = await fetch("https://api.github.com/repos/josejaimes1992/voz-de-la-novia/releases/latest", { headers: { "user-agent": "voz-de-la-novia", accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(10000) });
-    const d: any = await r.json(); const v = String(d.tag_name || "").replace(/^escritorio-v/, ""); if (/^\d+\.\d+\.\d+$/.test(v)) latest = v; } catch { latestAt = 0; }
+    const d: any = await r.json(); const v = String(d.tag_name || "").replace(/^escritorio-v/, ""); if (/^\d+\.\d+\.\d+$/.test(v)) latest = v;
+    /* Lo que trae la versión nueva: las líneas "- …" debajo de "## Novedades" en la publicación */
+    const body = String(d.body || ""); const i = body.indexOf("## Novedades"); latestNotes = [];
+    if (i >= 0) for (const l of body.slice(i).split(/\r?\n/).slice(1)) { if (/^\s*(---|##)/.test(l)) break; const m = l.match(/^\s*[-*]\s+(.+)$/); if (m) latestNotes.push(m[1].trim()); } } catch { latestAt = 0; }
 }
 const SOURCE = (Bun.env.VDN_SOURCE || "https://web-production-2c736.up.railway.app").replace(/\/+$/, "");
 
@@ -58,7 +61,7 @@ function startLoop() {
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=5" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=6" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */
@@ -237,7 +240,7 @@ async function status() {
   const nUsers = Number((await C.db`SELECT count(*) AS n FROM users`)[0].n);
   const pend = ST?.mode === "cloud" ? (await pendingRows()).items.length : 0;
   return { configured: nUsers > 0, mode: ST?.mode ?? null, cloud: ST?.cloud ?? null, user: ST?.cloudUser?.username ?? null,
-    version: VERSION, update: latest && vnum(latest) > vnum(VERSION) ? latest : null, native: Bun.env.VDN_NATIVE === "1",
+    version: VERSION, update: latest && vnum(latest) > vnum(VERSION) ? latest : null, updateNotes: latest && vnum(latest) > vnum(VERSION) ? latestNotes.slice(0, 20) : [], native: Bun.env.VDN_NATIVE === "1",
     online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: [lastError, ...partErrors].filter(Boolean).join(" · "), libros: librosProgress, needLogin: !!ST?.needLogin, sermons: sermonsProgress,
     lan: Object.values(networkInterfaces()).flat().filter((n: any) => n && n.family === "IPv4" && !n.internal).map((n: any) => `http://${n.address}:${Bun.env.PORT || 4747}`) };
 }

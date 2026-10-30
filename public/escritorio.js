@@ -28,7 +28,26 @@
     up.disabled=true; const iv=setInterval(async()=>{ try{ const u=await (await fetch('/api/desktop/update')).json();
       if(u.error){ clearInterval(iv); up.disabled=false; up.textContent='⚠ '+u.error+' — reintentar'; return; }
       up.textContent=u.busy?`⬇ Descargando ${u.pct}%…`:(u.msg||'Listo'); if(!u.busy){ clearInterval(iv); } }catch{} },700); };
-  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); if(!up.disabled){ up.hidden=!S.update; if(S.update) up.textContent=`⬆ Nueva versión ${S.update} — instalar`; } }catch{} }
+  /* Aviso de versión nueva: tarjeta con lo que trae y botón para instalar */
+  const card=document.createElement('div'); card.hidden=true;
+  card.style.cssText='position:fixed;right:16px;bottom:16px;z-index:9002;width:min(380px,calc(100vw - 32px));background:#141416;color:#efece4;border:1px solid #3a3320;border-radius:16px;padding:16px 16px 14px;box-shadow:0 16px 40px rgba(0,0,0,.45);font:14px/1.45 system-ui,Segoe UI,sans-serif';
+  document.body.appendChild(card);
+  const snoozeKey=v=>'vdn-upd-later-'+v;
+  function drawCard(){ if(!S.update||up.disabled){ card.hidden=true; return; }
+    let later=0; try{ later=+localStorage.getItem(snoozeKey(S.update))||0; }catch{}
+    if(Date.now()<later){ card.hidden=true; return; }
+    if(!card.hidden&&card.dataset.v===S.update) return; card.dataset.v=S.update;
+    const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const notes=(S.updateNotes||[]).map(n=>`<li style="margin:3px 0">${esc(n)}</li>`).join('');
+    card.innerHTML=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><span style="font-size:22px">🎉</span><b style="font-size:15.5px;flex:1">Hay una mejora: versión ${esc(S.update)}</b><button type="button" data-x style="all:unset;cursor:pointer;color:#a7a395;padding:2px 6px;font-size:18px" aria-label="Cerrar">×</button></div>
+      ${notes?`<div style="color:#cfcab9;font-size:13px;margin-bottom:2px">Qué trae:</div><ul style="margin:0 0 12px;padding-left:20px">${notes}</ul>`:'<p style="margin:0 0 12px;color:#cfcab9">Trae arreglos y mejoras.</p>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-go style="border:0;border-radius:10px;padding:9px 14px;background:#e9c45a;color:#14110a;font-weight:800;cursor:pointer">⬆ Instalar ahora</button><button type="button" data-later style="border:1px solid #3a3a3e;border-radius:10px;padding:9px 14px;background:transparent;color:#efece4;cursor:pointer">Más tarde</button></div>
+      <div style="color:#8d897c;font-size:12px;margin-top:8px">Tus alabanzas, programas y mensajes no se borran. El programa se cierra y se vuelve a abrir solo.</div>`;
+    card.hidden=false;
+    card.querySelector('[data-go]').onclick=()=>{ card.hidden=true; up.hidden=false; up.click(); };
+    const snooze=()=>{ try{ localStorage.setItem(snoozeKey(S.update),String(Date.now()+12*3600_000)); }catch{} card.hidden=true; };
+    card.querySelector('[data-later]').onclick=snooze; card.querySelector('[data-x]').onclick=snooze; }
+  async function poll(){ try{ S=await (await fetch('/api/desktop/status')).json(); draw(); if(!up.disabled){ up.hidden=!S.update; if(S.update) up.textContent=`⬆ Nueva versión ${S.update} — instalar`; } drawCard(); }catch{} }
   /* Menú pequeño: sincronizar o empezar de nuevo */
   const menu=document.createElement('div'); menu.hidden=true;
   menu.style.cssText='position:fixed;left:10px;bottom:46px;z-index:9001;background:#141416;color:#efece4;border:1px solid #2a2a2e;border-radius:12px;padding:6px;display:grid;gap:4px;min-width:260px;box-shadow:0 10px 30px rgba(0,0,0,.4);font:500 13px/1.3 system-ui,Segoe UI,sans-serif';
