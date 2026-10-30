@@ -33,6 +33,8 @@ if (!existsSync(`${APP}/.ok`)) {
   for (const [rel, src] of ASSETS) {
     const out = `${APP}/${rel}`; mkdirSync(out.slice(0, out.lastIndexOf("/")), { recursive: true });
     writeFileSync(out, new Uint8Array(await Bun.file(src).arrayBuffer()));
+    /* Mac/Linux: los programas de bin/ (lector de PDF) necesitan permiso de ejecución */
+    if (!isWin && rel.startsWith("bin/")) { try { require("node:fs").chmodSync(out, 0o755); } catch {} }
   }
   writeFileSync(`${APP}/.ok`, BUILD_ID);
 }

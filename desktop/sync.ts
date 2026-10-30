@@ -396,6 +396,8 @@ function openExternal(u: string) {
 }
 const upd: { busy: boolean; pct: number; msg: string; error: string } = { busy: false, pct: 0, msg: "", error: "" };
 async function runUpdate() {
+  /* Mac: se abre la página de descarga (el .dmg se instala arrastrando a Aplicaciones) */
+  if (process.platform !== "win32") { openExternal(`${SOURCE}/descargar`); Object.assign(upd, { busy: false, pct: 100, msg: "Se abrió la página de descarga: baja la versión para Mac y reemplaza la app en Aplicaciones.", error: "" }); return; }
   Object.assign(upd, { busy: true, pct: 0, msg: "Descargando la nueva versión…", error: "" });
   try {
     const native = Bun.env.VDN_NATIVE === "1";

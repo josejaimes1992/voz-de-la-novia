@@ -72,13 +72,107 @@ jobs:
           taskkill //F //IM VozDeLaNovia.exe || true
           taskkill //F //IM vdn-server.exe || true
       - uses: actions/upload-artifact@v4
-        with: { name: VozDeLaNovia, path: "dist/*.exe" }
+        with: { name: windows, path: "dist/*.exe" }
+
+  # Mac: app con ventana propia (.dmg). Apple Silicon (M1–M4) con lector de PDF incluido; Intel compilado desde el mismo Mac.
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.13" }
+      - name: Lector de PDF (Poppler) para Apple Silicon
+        continue-on-error: true
+        run: |
+          brew install poppler dylibbundler
+          mkdir -p macbin
+          for f in pdftotext pdftoppm pdfinfo; do cp "$(brew --prefix poppler)/bin/$f" macbin/; chmod u+w macbin/$f; done
+          dylibbundler -of -b -cd -x macbin/pdftotext -x macbin/pdftoppm -x macbin/pdfinfo -d macbin -p @executable_path/
+          for f in macbin/*; do codesign --force -s - "$f" || true; done
+          ls -la macbin
+          ./macbin/pdftotext -v
+      - name: Servidor (Apple Silicon e Intel)
+        run: |
+          set -e
+          BIN=""; [ -x macbin/pdftotext ] && BIN="--bin macbin"
+          bun desktop/build.ts $BIN --target bun-darwin-arm64 --out dist/vdn-server-arm64
+          bun desktop/build.ts --target bun-darwin-x64 --out dist/vdn-server-x64
+          chmod +x dist/vdn-server-*
+          export VDN_DATA="$RUNNER_TEMP/vdn" VDN_NO_OPEN=1
+          ./dist/vdn-server-arm64 > run.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4747/api/desktop/status && break; sleep 1; done; echo
+          curl -sf localhost:4747/ | grep -q "Configurar Voz de la Novia"
+          kill $! || true; cat run.log
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/tauri/src-tauri }
+      - name: App de Mac (.dmg)
+        run: |
+          set -e
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          V=$(tr -d '\r\n ' < desktop/VERSION)
+          bun -e "const f='desktop/tauri/src-tauri/tauri.conf.json';const j=JSON.parse(await Bun.file(f).text());j.version='$V';j.bundle.icon=[...j.bundle.icon,'icons/icon.icns'];j.bundle.macOS={signingIdentity:'-',minimumSystemVersion:'11.0'};await Bun.write(f,JSON.stringify(j,null,2));const c='desktop/tauri/src-tauri/Cargo.toml';await Bun.write(c,(await Bun.file(c).text()).replace(/^version = \".*\"/m,'version = \"$V\"'))"
+          cd desktop/tauri
+          npx --yes @tauri-apps/cli@2 icon src-tauri/icons/icon.png -o src-tauri/icons
+          cp ../../dist/vdn-server-arm64 src-tauri/binaries/vdn-server-aarch64-apple-darwin
+          cp ../../dist/vdn-server-x64 src-tauri/binaries/vdn-server-x86_64-apple-darwin
+          npx --yes @tauri-apps/cli@2 build --target aarch64-apple-darwin --bundles dmg
+          npx --yes @tauri-apps/cli@2 build --target x86_64-apple-darwin --bundles dmg
+          cd ../..; mkdir -p out
+          cp desktop/tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg out/VozDeLaNovia-Mac-AppleSilicon.dmg
+          cp desktop/tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg out/VozDeLaNovia-Mac-Intel.dmg
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with: { name: mac, path: "out/*.dmg" }
+
+  # Android: app (.apk) que se conecta a la nube o a la PC de la iglesia
+  android:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: desktop/movil } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Proyecto Android
+        run: |
+          set -e
+          npm i --no-audit --no-fund @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/assets@3
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000' || echo "sin íconos generados"
+          V=$(tr -d '\r\n ' < ../VERSION)
+          CODE=$(echo "$V" | awk -F. '{print $1*10000+$2*100+$3}')
+          sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \".*\"/versionName \"$V\"/" android/app/build.gradle
+          grep -n "version" android/app/build.gradle
+      - name: Compilar y firmar el APK
+        run: |
+          set -e
+          cd android && chmod +x gradlew && ./gradlew --no-daemon assembleRelease && cd ..
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          U=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          "$BT/zipalign" -f -p 4 "$U" aligned.apk
+          "$BT/apksigner" sign --ks vdn-android.jks --ks-pass pass:vozdelanovia --key-pass pass:vozdelanovia --ks-key-alias vdn --out VozDeLaNovia-Android.apk aligned.apk
+          "$BT/apksigner" verify VozDeLaNovia-Android.apk && ls -la VozDeLaNovia-Android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: "desktop/movil/VozDeLaNovia-Android.apk" }
+
+  publicar:
+    needs: [windows, mac, android]
+    if: ${{ always() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.3.13" }
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - run: ls -la dist
       - name: Versión
         id: v
         run: echo "v=$(tr -d '\r\n ' < desktop/VERSION)" >> "$GITHUB_OUTPUT"
       - name: Notas de la versión
         run: |
-          bun -e "const v=(await Bun.file('desktop/VERSION').text()).trim();const N=JSON.parse(await Bun.file('public/novedades.json').text());const e=N.find(x=>x.v===v)||{items:[]};let t='## Novedades\n'+e.items.map(i=>'- '+i).join('\n')+'\n\n---\n';t+='Programa de Windows de Voz de la Novia: funciona sin internet.\nRecomendado: VozDeLaNovia-Setup.exe (instalador, ventana propia, ícono en el menú Inicio).\nVozDeLaNovia.exe es la versión portátil (se abre en el navegador, sin instalar). Si Windows muestra \"Windows protegió su PC\", toca \"Más información\" → \"Ejecutar de todas formas\".\n';await Bun.write('notas.md',t)"
+          bun -e "const v=(await Bun.file('desktop/VERSION').text()).trim();const N=JSON.parse(await Bun.file('public/novedades.json').text());const e=N.find(x=>x.v===v)||{items:[]};let t='## Novedades\n'+e.items.map(i=>'- '+i).join('\n')+'\n\n---\n';t+='Voz de la Novia para Windows, Mac y Android. Página de descarga: https://web-production-2c736.up.railway.app/descargar\nWindows: VozDeLaNovia-Setup.exe (o VozDeLaNovia.exe portátil). Mac: VozDeLaNovia-Mac-AppleSilicon.dmg o VozDeLaNovia-Mac-Intel.dmg. Android: VozDeLaNovia-Android.apk.\n';await Bun.write('notas.md',t)"
           cat notas.md
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
@@ -88,6 +182,9 @@ jobs:
           files: |
             dist/VozDeLaNovia-Setup.exe
             dist/VozDeLaNovia.exe
+            dist/VozDeLaNovia-Mac-AppleSilicon.dmg
+            dist/VozDeLaNovia-Mac-Intel.dmg
+            dist/VozDeLaNovia-Android.apk
           make_latest: true
-          name: Voz de la Novia para Windows ${{ steps.v.outputs.v }}
+          name: Voz de la Novia ${{ steps.v.outputs.v }} (Windows, Mac y Android)
           body_path: notas.md

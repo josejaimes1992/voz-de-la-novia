@@ -1,0 +1,7 @@
+{
+  "appId": "org.vozdelanovia.app",
+  "appName": "Voz de la Novia",
+  "webDir": "www",
+  "server": { "androidScheme": "https", "cleartext": true, "allowNavigation": ["*"] },
+  "android": { "allowMixedContent": true, "backgroundColor": "#000000" }
+}

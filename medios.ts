@@ -78,6 +78,7 @@ async function pdfPages(pdf: string, dir: string) {
 function sofficePaths() {
   const L = ["soffice", "libreoffice"];
   if (isWin) for (const b of [Bun.env.ProgramFiles, Bun.env["ProgramFiles(x86)"]]) if (b) L.unshift(`${b}\\LibreOffice\\program\\soffice.exe`);
+  if (process.platform === "darwin") L.unshift("/Applications/LibreOffice.app/Contents/MacOS/soffice");
   return L;
 }
 async function officeToPdf(src: string, work: string): Promise<string> {
@@ -88,7 +89,7 @@ async function officeToPdf(src: string, work: string): Promise<string> {
     if (r.code === 0 && existsSync(out)) return out;
   }
   for (const bin of sofficePaths()) {
-    if (bin.includes("\\") && !existsSync(bin)) continue;
+    if ((bin.includes("\\") || bin.startsWith("/Applications")) && !existsSync(bin)) continue;
     const prof = `${TMP()}/lo-${randomBytes(6).toString("hex")}`; console.log(`Medios: convirtiendo con ${bin}…`);
     const r = await run([bin, "--headless", "--invisible", "--norestore", "--nolockcheck", "--nodefault", `-env:UserInstallation=file:///${prof.replace(/^\//, "")}`, "--convert-to", "pdf", "--outdir", work, src], 300000);
     if (r.code !== 0) console.error("Medios: soffice", bin, r.code, r.err.slice(-300));

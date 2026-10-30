@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.0", "fecha": "2026-10-30", "items": [
+    "Nuevo: Voz de la Novia para Mac (Apple M1–M4 e Intel) y app para Android. Todo en la misma página de descarga.",
+    "La página de descarga reconoce tu equipo (Windows, Mac, Android o iPhone) y te muestra el botón correcto."
+  ] },
   { "v": "1.3.5", "fecha": "2026-10-29", "items": [
     "Copia de seguridad: todo lo de esta PC (alabanzas, programas, usuarios, medios, logo, fondos y audios) en un archivo .zip. Está en el menú del botón de abajo a la izquierda.",
     "Copia automática una vez al día (si hubo cambios) en Documentos → Voz de la Novia → Copias de seguridad. Se guardan las 8 más recientes.",

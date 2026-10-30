@@ -1,0 +1,51 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Voz de la Novia</title>
+<style>
+:root{--card:#141416;--line:#2a2a2e;--ink:#efece4;--muted:#a7a395;--gold:#e9c45a;--gold-ink:#14110a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 50% -10%,#1d1a12,#000 60%);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Roboto,sans-serif;padding:env(safe-area-inset-top,0) 16px env(safe-area-inset-bottom,0)}
+main{max-width:480px;margin:0 auto;padding:36px 0}
+.hero{text-align:center;margin-bottom:22px}.hero img{width:96px;height:96px;border-radius:24px}
+h1{font-family:Georgia,serif;color:var(--gold);font-size:26px;margin:12px 0 2px}.tag{color:var(--muted);font-style:italic;font-family:Georgia,serif;margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.card b{display:block;margin-bottom:4px}.card p{margin:0 0 10px;color:var(--muted);font-size:14px}
+button{font:inherit;font-weight:700;width:100%;min-height:50px;border-radius:13px;border:1px solid var(--line);background:#1d1d20;color:var(--ink);cursor:pointer}
+button.pri{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+input{font:inherit;width:100%;color:var(--ink);background:#0b0b0c;border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px;outline:none}
+input:focus{border-color:var(--gold)}
+.err{color:#ff8a7a;font-size:14px;margin:6px 0 0}.muted{color:var(--muted);font-size:13px}
+#wait{text-align:center}[hidden]{display:none!important}
+</style></head><body><main>
+<div class="hero"><img src="icon.png" alt=""><h1>Voz de la Novia</h1><p class="tag">Una fe. Un Mensaje. Una voz.</p></div>
+
+<div id="wait" class="card" hidden><b id="wt">Conectando…</b><p id="wu"></p><button id="change">Cambiar dirección</button></div>
+
+<div id="pick">
+  <div class="card"><b>☁️ Nube de Voz de la Novia</b><p>Para el Tabernáculo Shalom Adonai y quienes usan la nube.</p><button class="pri" data-url="https://web-production-2c736.up.railway.app">Entrar a la nube</button></div>
+  <div class="card"><b>💻 La PC de mi iglesia (programa de Windows o Mac)</b>
+    <p>El teléfono y la PC deben estar en el mismo Wi-Fi. La dirección sale en el programa de la PC: botón <b style="display:inline">🖥 Pantallas</b> → “Pantallas en otras computadoras”. Ejemplo: 192.168.1.20</p>
+    <input id="ip" inputmode="url" autocapitalize="none" placeholder="192.168.1.20  o  dirección completa">
+    <button id="go" class="pri">Conectar</button><p class="err" id="err" hidden></p></div>
+  <p class="muted">La dirección se recuerda. Para cambiarla, toca “Cambiar dirección” al abrir la app.</p>
+</div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const get=()=>{ try{ return localStorage.getItem('vdn-url')||''; }catch{ return ''; } };
+function norm(v){ v=String(v||'').trim(); if(!v) return ''; if(!/^https?:\/\//i.test(v)) v=(/^[\d.]+(:\d+)?$/.test(v)||/^[a-z0-9-]+(\.local)?(:\d+)?$/i.test(v)?'http://':'https://')+v;
+  try{ const u=new URL(v); if(u.protocol==='http:'&&!u.port&&/^[\d.]+$/.test(u.hostname)) u.port='4747'; return u.origin; }catch{ return ''; } }
+async function reach(u){ try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),6000); await fetch(u+'/healthz',{signal:c.signal,cache:'no-store',mode:'no-cors'}); clearTimeout(t); return true; }catch{ return false; } }
+let timer=null;
+function open(u){ try{ localStorage.setItem('vdn-url',u); }catch{} location.href=u+'/'; }
+async function tryGo(u){ const e=$('#err'); e.hidden=true; $('#go').disabled=true; $('#go').textContent='Probando…';
+  if(await reach(u)) return open(u);
+  e.textContent='No responde '+u+'. Revisa que la PC tenga Voz de la Novia abierto y que estén en el mismo Wi-Fi.'; e.hidden=false; $('#go').disabled=false; $('#go').textContent='Conectar'; }
+document.querySelectorAll('[data-url]').forEach(b=>b.onclick=()=>open(b.dataset.url));
+$('#go').onclick=()=>{ const u=norm($('#ip').value); if(!u){ $('#err').textContent='Escribe la dirección.'; $('#err').hidden=false; return; } tryGo(u); };
+$('#change').onclick=()=>{ clearTimeout(timer); $('#wait').hidden=true; $('#pick').hidden=false; };
+const saved=get();
+if(saved){ $('#pick').hidden=true; $('#wait').hidden=false; $('#wu').textContent=saved;
+  timer=setTimeout(async()=>{ if(await reach(saved)) open(saved); else { $('#wt').textContent='No se pudo conectar'; $('#wu').textContent=saved+' no responde. ¿Estás en el mismo Wi-Fi o con internet?'; $('#change').textContent='Elegir otra dirección'; const r=document.createElement('button'); r.className='pri'; r.style.marginTop='8px'; r.textContent='Reintentar'; r.onclick=()=>location.reload(); $('#wait').appendChild(r); } },900); }
+else { const ip=saved; if(ip) $('#ip').value=ip; }
+</script></body></html>
