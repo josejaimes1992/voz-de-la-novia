@@ -90,7 +90,9 @@ jobs:
           brew install --quiet poppler dylibbundler
           mkdir -p macbin
           for f in pdftotext pdftoppm pdfinfo; do cp "$(brew --prefix poppler)/bin/$f" macbin/; chmod u+w macbin/$f; done
-          dylibbundler -of -b -cd -x macbin/pdftotext -x macbin/pdftoppm -x macbin/pdfinfo -d macbin -p @executable_path/
+          # dylibbundler pregunta por teclado si no encuentra una librería: sin teclado y con límite de 5 minutos
+          P=$(brew --prefix); SP=""; for d in "$P/lib" "$P"/opt/*/lib; do SP="$SP -s $d"; done
+          perl -e 'alarm 300; exec @ARGV' dylibbundler -of -b -cd -x macbin/pdftotext -x macbin/pdftoppm -x macbin/pdfinfo -d macbin -p @executable_path/ $SP < /dev/null
           for f in macbin/*; do codesign --force -s - "$f" || true; done
           ls -la macbin
           ./macbin/pdftotext -v
