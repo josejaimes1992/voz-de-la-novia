@@ -50,35 +50,77 @@ fn open_external(app: tauri::AppHandle, url: String) {
     let _ = app.opener().open_url(url, None::<&str>);
 }
 
+#[derive(serde::Serialize)]
+struct Screen { i: usize, name: String, w: u32, h: u32, x: i32, y: i32, primary: bool, open: bool }
+
+/* Pantallas conectadas (1 = la principal) y si ya tienen el proyector abierto */
 #[tauri::command]
-fn open_projector(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("proyector") {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-        return Ok(());
+fn list_screens(app: tauri::AppHandle) -> Vec<Screen> {
+    let primary = app.primary_monitor().ok().flatten().map(|p| (p.position().x, p.position().y));
+    app.available_monitors().unwrap_or_default().iter().enumerate().map(|(i, m)| {
+        let p = m.position(); let s = m.size();
+        Screen { i, name: m.name().cloned().unwrap_or_default(), w: s.width, h: s.height, x: p.x, y: p.y,
+            primary: primary == Some((p.x, p.y)), open: app.get_webview_window(&format!("proyector-{i}")).is_some() }
+    }).collect()
+}
+
+fn view_path(view: &Option<String>) -> &'static str {
+    match view.as_deref() {
+        Some("obs") => "/obs",
+        Some("obs-biblia") => "/obs?vista=biblia",
+        _ => "/proyector",
     }
+}
+
+/* Abre el proyector en una pantalla (sin número: la primera pantalla secundaria) con la vista elegida */
+#[tauri::command]
+fn open_projector(app: tauri::AppHandle, screen: Option<usize>, view: Option<String>) -> Result<(), String> {
     let monitors = app.available_monitors().unwrap_or_default();
     let primary = app.primary_monitor().ok().flatten();
-    let second = monitors.iter().find(|m| match &primary { Some(p) => p.position() != m.position(), None => false });
-    let mut b = WebviewWindowBuilder::new(&app, "proyector", WebviewUrl::External(app_url("/proyector")))
-        .title("Voz de la Novia — Proyector")
+    let is_primary = |m: &tauri::Monitor| match &primary { Some(p) => p.position() == m.position(), None => false };
+    let idx = match screen { Some(i) if i < monitors.len() => Some(i), _ => monitors.iter().position(|m| !is_primary(m)) };
+    let label = match idx { Some(i) => format!("proyector-{i}"), None => "proyector".to_string() };
+    let path = view_path(&view);
+    if let Some(w) = app.get_webview_window(&label) {
+        if view.is_some() {
+            let cur = w.url().map(|u| format!("{}{}", u.path(), u.query().map(|q| format!("?{q}")).unwrap_or_default())).unwrap_or_default();
+            if cur != path { let _ = w.navigate(app_url(path)); }
+        }
+        let _ = w.unminimize();
+        let _ = w.show();
+        return Ok(());
+    }
+    let target = idx.and_then(|i| monitors.get(i));
+    let full = target.map(|m| !is_primary(m)).unwrap_or(false);
+    let n = idx.map(|i| i + 1).unwrap_or(2);
+    let mut b = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(app_url(path)))
+        .title(format!("Voz de la Novia — Pantalla {n}"))
         .initialization_script(INIT)
         .background_color(tauri::window::Color(0, 0, 0, 255));
-    if let Some(m) = second {
+    if let Some(m) = target {
         let sf = m.scale_factor();
         let p = m.position().to_logical::<f64>(sf);
         let s = m.size().to_logical::<f64>(sf);
-        b = b.position(p.x, p.y).inner_size(s.width, s.height).decorations(false);
+        if full { b = b.position(p.x, p.y).inner_size(s.width, s.height).decorations(false); }
+        else { b = b.position(p.x + 60.0, p.y + 60.0).inner_size(1280.0, 720.0); }
     } else {
         b = b.inner_size(1280.0, 720.0);
     }
     let w = b.build().map_err(|e| e.to_string())?;
-    if second.is_some() {
+    if full {
         let _ = w.set_fullscreen(true);
         if let Some(main) = app.get_webview_window("main") { let _ = main.set_focus(); }
     }
     Ok(())
+}
+
+/* Cierra el proyector de una pantalla (sin número: todos) */
+#[tauri::command]
+fn close_projector(app: tauri::AppHandle, screen: Option<usize>) {
+    for (label, w) in app.webview_windows() {
+        let hit = match screen { Some(i) => label == format!("proyector-{i}"), None => label.starts_with("proyector") };
+        if hit { let _ = w.close(); }
+    }
 }
 
 #[tauri::command]
@@ -98,7 +140,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(Server(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![open_external, open_projector, toggle_fullscreen])
+        .invoke_handler(tauri::generate_handler![open_external, open_projector, toggle_fullscreen, list_screens, close_projector])
         .setup(|app| {
             let main = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Voz de la Novia")

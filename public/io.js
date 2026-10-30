@@ -154,8 +154,8 @@ function openImport(){
   $('#modal-root').innerHTML=`<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-label="Importar canciones" data-stop style="width:min(760px,100%)">
     <header><h3>Importar canciones</h3><button class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" id="imp-body" style="display:grid;gap:12px">
-      <label class="drop" id="imp-drop"><input id="imp-file" type="file" multiple accept=".docx,.pdf,.txt,.cho,.chopro,.chordpro,.pro,.crd,.json" hidden>
-        <b>Elige o arrastra archivos aquí</b><span>Word (.docx), PDF, texto (.txt), ChordPro / OnSong (.cho, .chopro) JSON de Holyrics o una copia de Voz de la Novia (.json). Puedes elegir varios a la vez.</span></label>
+      <label class="drop" id="imp-drop"><input id="imp-file" type="file" multiple accept=".docx,.pdf,.txt,.cho,.chopro,.chordpro,.pro,.crd,.json,.muf,.mufl,.hbac,.zip,.xml" hidden>
+        <b>Elige o arrastra archivos aquí</b><span><b>Holyrics</b> (.mufl, .muf, copia .hbac/.zip, .xml), Word (.docx), PDF, texto (.txt), ChordPro / OnSong (.cho, .chopro), JSON o una copia de Voz de la Novia (.json). Puedes elegir varios a la vez.</span></label>
       <div id="imp-opts"></div><div id="imp-list"></div>
     </div></div></div>`;
   const inp=$('#imp-file'), drop=$('#imp-drop');
@@ -166,6 +166,16 @@ function openImport(){
 }
 async function ioRead(files){
   if(!files.length) return; const list=$('#imp-list'); list.innerHTML='<p class="muted">Leyendo archivos…</p>';
+  /* Holyrics: .mufl (lista de canciones), .muf (una canción), .zip / .hbac (copia), .xml */
+  const hol=[]; if(window.Holyrics) for(const f of files){ const e=ioExt(f.name); if(Holyrics.EXT.includes(e)) hol.push(f); else if(e==='txt'){ try{ if(Holyrics.looksText((await f.slice(0,4000).text()))) hol.push(f); }catch{} } }
+  files=files.filter(f=>!hol.includes(f));
+  if(hol.length){ list.innerHTML=`<p class="muted">Leyendo ${hol.length===1?esc(hol[0].name):hol.length+' archivos'} de Holyrics…</p>`;
+    const r=await Holyrics.readFiles(hol);
+    const songs=ioForeignSongs({songs:r.songs.map(x=>({title:x.title,author:x.author,key:x.key,bpm:x.bpm,lyrics:x.lyrics}))})||[];
+    if(!songs.length){ list.innerHTML=`<div class="banner" style="color:var(--danger)">No encontré canciones.${r.notes.length?'<br>'+r.notes.map(esc).join('<br>'):''}<br><small>En Holyrics: menú <b>Archivo → Exportar</b> → elige las canciones (o todas) y guarda el archivo <b>.mufl</b>. Luego súbelo aquí.</small></div>`; return; }
+    IO.files=songs.map(x=>({name:x.title,ext:'cho',pages:[x.text]})); IO.errors=r.notes; IO.hymnal=false; IO.numbered=false; IO.mode='file'; IO.fromJson=hol.map(f=>f.name).join(', ');
+    if(files.length) r.notes.push(`Los otros ${files.length} archivos (no de Holyrics) impórtalos aparte.`);
+    if(IO.lower===undefined) IO.lower=true; toast(`Holyrics: encontré ${songs.length} ${songs.length===1?'canción':'canciones'}.`); return ioBuild(); }
   const jsons=files.filter(f=>ioExt(f.name)==='json');
   if(jsons.length){
     /* ¿Es una copia de Voz de la Novia o canciones de otro programa (Holyrics, etc.)? */

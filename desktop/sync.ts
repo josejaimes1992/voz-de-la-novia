@@ -3,6 +3,7 @@
    cambios hechos en esta PC y baja lo nuevo de la nube de la iglesia. */
 import { randomBytes } from "node:crypto";
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 
 type Ctx = {
   db: any; dataDir: string; brandDir: string; fondosDir: string; appDir: string;
@@ -236,7 +237,8 @@ async function status() {
   const pend = ST?.mode === "cloud" ? (await pendingRows()).items.length : 0;
   return { configured: nUsers > 0, mode: ST?.mode ?? null, cloud: ST?.cloud ?? null, user: ST?.cloudUser?.username ?? null,
     version: VERSION, update: latest && vnum(latest) > vnum(VERSION) ? latest : null, native: Bun.env.VDN_NATIVE === "1",
-    online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: [lastError, ...partErrors].filter(Boolean).join(" · "), libros: librosProgress, needLogin: !!ST?.needLogin, sermons: sermonsProgress };
+    online, syncing, pending: pend, rvr: existsSync(`${C.dataDir}/rvr1960.json.gz`), nSermons: Number((await C.db`SELECT count(*) AS n FROM docs WHERE col = 'sermons'`)[0].n), lastPull: ST?.lastPull ?? null, lastPush: ST?.lastPush ?? null, lastTry, error: [lastError, ...partErrors].filter(Boolean).join(" · "), libros: librosProgress, needLogin: !!ST?.needLogin, sermons: sermonsProgress,
+    lan: Object.values(networkInterfaces()).flat().filter((n: any) => n && n.family === "IPv4" && !n.internal).map((n: any) => `http://${n.address}:${Bun.env.PORT || 4747}`) };
 }
 
 async function newSession(uid: number) {
