@@ -21,7 +21,7 @@ const MS_WORDS=55;
 
 function msNorm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 async function msLoadList(force){
-  if(MS.loading||(MS.list&&!force)) return;
+  if(MS.loading||(MS.list&&MS.list.length&&!force)) return;
   MS.loading=true; MS.err=''; fetch('/api/proyector/estilo').then(x=>x.json()).then(x=>{ MS.style=x; if(typeof BB!=='undefined'&&!BB.style) BB.style=x; }).catch(()=>{});
   try{ MS.list=(await api('/api/sermons')).sermons; }catch(e){ if(e.message==='auth'){ lostAuth(); } MS.err='No se pudo cargar la lista de mensajes.'; }
   MS.loading=false; if(V.view==='mensaje') render();
@@ -79,6 +79,7 @@ window.viewMensaje=function(){
     ${MS.imp?`<p style="margin:8px 0 0">${esc(MS.imp)}</p>`:`<p class="muted" style="margin:6px 0 0;font-size:13px">Descarga los mensajes en PDF (por ejemplo desde Message Hub) y súbelos aquí: puedes elegir muchos a la vez o un .zip. Se guardan solo para el equipo.</p>`}</div>`;
   if(MS.err) h+=`<div class="banner">${esc(MS.err)}</div>`;
   if(!MS.list) h+='<div class="loading">Cargando mensajes…</div>';
+  else if(!MS.list.length&&document.getElementById('dk-sync')){ clearTimeout(MS.rt); MS.rt=setTimeout(()=>{ if(V.view==='mensaje') msLoadList(true); },5000); h+=`<div class="empty"><b>⏳ Bajando los Mensajes a esta PC…</b>La primera vez necesita internet. Aparecen aquí solos en cuanto terminen.</div>`; }
   else if(!MS.list.length) h+=`<div class="empty"><b>Aún no hay mensajes</b>${can?'Usa “Importar mensajes” para agregarlos.':'El equipo todavía no ha subido mensajes.'}</div>`;
   else h+=`<div class="ms-list">${MS.list.map(s=>`<button class="ms-row" data-act="ms-open" data-id="${esc(s.id)}"><code>${esc(s.code||'—')}</code><span>${esc(s.title)}${s.place?`<small>${esc(s.place)}</small>`:''}</span></button>`).join('')}</div>`;
   return h+'</div>';

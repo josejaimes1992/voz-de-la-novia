@@ -569,7 +569,11 @@ function pjFoundHtml(){ const F=PJ.found||[]; if(!F.length) return '';
       ${open?`<div class="pjf-cmp"><div><h5>Lo que pegaste</h5><p>${d.a}</p></div><div><h5>Párrafo ${esc(c.n)} del Mensaje <span class="pjf-sim ${d.pct>=85?'ok':d.pct>=60?'mid':'bad'}">${d.pct}% igual</span></h5><p>${d.b}</p></div>
         <div class="pjf-nav"><button class="btn sm" data-act="pjf-mv" data-k="${k}" data-d="-1">‹ Párrafo anterior</button><small><mark class="dx-a">rojo</mark> = solo en lo pegado · <mark class="dx-b">amarillo</mark> = solo en el Mensaje</small><button class="btn sm" data-act="pjf-mv" data-k="${k}" data-d="1">Párrafo siguiente ›</button></div></div>`:''}</div>`; }).join('')}${F.length>1?`<button class="btn sm" data-act="pjf-all">＋ Agregar las ${F.length} a citas</button>`:''}</div>`; }
 function pjMsgLib(){
-  if(typeof MS==='undefined') return ''; if(!MS.list){ msLoadList().then(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); }); return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
+  if(typeof MS==='undefined') return ''; if(!MS.list||!MS.list.length){ const was=MS.list; msLoadList(true).then(()=>{ if(PJ.open&&PJ.tab==='msg'&&MS.list&&(MS.list.length||!was)) pjRender(); });
+    if(MS.list&&!MS.list.length&&document.getElementById('dk-sync')){ clearTimeout(PJ.msRetry); PJ.msRetry=setTimeout(()=>{ if(PJ.open&&PJ.tab==='msg') pjRender(); },5000);
+      return `<p class="pj-sug-h" style="padding:12px">⏳ Los Mensajes todavía se están bajando a esta PC (necesita internet la primera vez). Aparecen aquí solos en cuanto terminen.</p>`; }
+    if(MS.list&&!MS.list.length) return '<p class="pj-sug-h" style="padding:12px">Aún no hay mensajes. Impórtalos desde la sección Mensaje.</p>';
+    return '<p class="pj-sug-h">Cargando mensajes…</p>'; }
   const q=msNorm(PJ.mq||'').trim(); const L=q?MS.list.filter(x=>msNorm(`${x.code} ${x.title} ${x.place||''}`).includes(q)):MS.list;
   const fq=(PJ.mf||'').trim();
   return `<div class="pjw-q"><input id="pjm-q" type="search" placeholder="Buscar mensaje por título o código" value="${esc(PJ.mq||'')}" autocomplete="off" aria-label="Buscar mensaje"></div>
@@ -817,6 +821,13 @@ function styleDraw(){
     <header><h3>🎨 Fondo y letra de la pantalla</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" style="display:grid;gap:14px">
       <div id="pjs-prev">${stylePrev()}</div>
+      <div><b style="font-size:14px">Logo de la pantalla <span class="muted" style="font-weight:400">(lo que sale con el botón Logo)</span></b>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center">
+          <div style="width:96px;height:54px;border-radius:8px;border:1px solid var(--line);background:#000;display:grid;place-items:center;overflow:hidden">${x.logo?`<img src="${x.logo}" alt="" style="max-width:90%;max-height:90%">`:'<img src="/vdn-logo.jpg?v=3" alt="" style="max-height:90%">'}</div>
+          <label class="btn" style="cursor:pointer">＋ ${x.logo?'Cambiar logo':'Subir logo de la iglesia'}<input type="file" id="pjs-logo" accept="image/png,image/jpeg,image/webp,image/*" hidden></label>
+          ${x.logo?`<button type="button" class="btn ghost" data-act="pjs-nologo">Usar el de siempre</button>`:''}
+        </div>
+        ${x.logo?`<div class="grid2" style="margin-top:8px"><label class="f">Tamaño del logo: ${Math.round((x.logoSize||0.7)*100)}%<input type="range" min="0.3" max="1" step="0.05" value="${x.logoSize||0.7}" id="pjs-logoSize"></label><label style="display:flex;gap:8px;align-items:center;align-self:end"><input type="checkbox" id="pjs-logoBoth" ${x.logoBoth?'checked':''}> Mostrar también el logo de Voz de la Novia</label></div>`:'<p class="muted" style="margin:6px 0 0;font-size:12.5px">Mejor un PNG con fondo transparente.</p>'}</div>
       <div><b style="font-size:14px">Fondo de color</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${PJ_BG.map(([n,v],i)=>`<span title="${n}">${sw(v,!x.img&&x.bg===v,'pjs-bg',`data-i="${i}"`)}</span>`).join('')}</div></div>
       <div><b style="font-size:14px">Fondo con imagen</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">${PJF.map(f=>sw(`url('${f.url}')`,x.img===f.url,'pjs-img',`data-u="${f.url}"`)).join('')}
         <label class="btn" style="cursor:pointer">＋ Subir imagen<input type="file" id="pjs-up" accept="image/*" hidden></label>${x.img?`<button type="button" class="btn ghost" data-act="pjs-noimg">Quitar imagen</button><button type="button" class="btn ghost danger" data-act="pjs-delimg" data-u="${x.img}">Borrar esta imagen</button>`:''}</div>
@@ -846,6 +857,10 @@ function styleDraw(){
   on('#pjs-upper','change',e=>styleSet({upper:e.target.checked}));
   on('#pjs-upr','change',e=>styleSet({upperRead:e.target.checked}));
   on('#pjs-shadow','change',e=>styleSet({shadow:e.target.checked}));
+  on('#pjs-logoSize','input',e=>styleSet({logoSize:+e.target.value},true));
+  on('#pjs-logoBoth','change',e=>styleSet({logoBoth:e.target.checked}));
+  on('#pjs-logo','change',async e=>{ const f=e.target.files[0]; if(!f) return; toast('Subiendo logo…');
+    try{ const r=await fetch('/api/proyector/logo',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJS=d; if(typeof BB!=='undefined') BB.style={...PJS}; styleDraw(); toast('Logo listo. Pulsa “Logo” para verlo en pantalla.'); }catch{ toast('No se pudo subir ese logo (usa PNG o JPG).'); } });
   on('#pjs-up','change',async e=>{ const f=e.target.files[0]; if(!f) return; toast('Subiendo imagen…');
     try{ const r=await fetch('/api/fondos',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJF.unshift({url:d.url}); styleSet({img:d.url}); }catch{ toast('No se pudo subir esa imagen.'); } });
 }
@@ -857,6 +872,7 @@ document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]')
   else if(a==='pjs-bg') styleSet({bg:PJ_BG[+d.i][1],img:''});
   else if(a==='pjs-img') styleSet({img:d.u});
   else if(a==='pjs-noimg') styleSet({img:''});
+  else if(a==='pjs-nologo') styleSet({logo:''});
   else if(a==='pjs-delimg'){ (async()=>{ try{ await api('/api/fondos/'+d.u.split('/').pop(),{method:'DELETE'}); PJF=PJF.filter(f=>f.url!==d.u); styleSet({img:''}); }catch{ toast('No se pudo borrar.'); } })(); }
   else if(a==='pjs-color') styleSet({color:d.c});
   else if(a==='pjs-ref') styleSet({ref:d.c});

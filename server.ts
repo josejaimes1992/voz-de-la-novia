@@ -195,9 +195,10 @@ function cleanStyle(b: any) {
   const col = (v: any, d: string) => typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v) ? v : d;
   const bg = typeof b.bg === "string" && (/^#[0-9a-f]{3,8}$/i.test(b.bg) || /^(linear|radial)-gradient\([#0-9a-z%,.()\s-]{4,300}\)$/i.test(b.bg)) ? b.bg : STYLE.bg;
   const img = typeof b.img === "string" && (b.img === "" || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.img)) ? b.img : STYLE.img;
+  const logo = typeof b.logo === "string" && (b.logo === "" || /^\/marca\/logo-[a-z0-9]{4,16}\.png$/.test(b.logo)) ? b.logo : (STYLE.logo || "");
   const num = (v: any, lo: number, hi: number, d: number) => Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d;
   return { bg, img, dim: num(b.dim, 0, 0.85, STYLE.dim), color: col(b.color, STYLE.color), ref: col(b.ref, STYLE.ref), font: FONTS.has(b.font) ? b.font : STYLE.font,
-    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), sizeBible: num(b.sizeBible, 0.5, 2.2, STYLE.sizeBible ?? 1), sizeMsg: num(b.sizeMsg, 0.5, 2.2, STYLE.sizeMsg ?? 1), margin: num(b.margin, 0, 12, STYLE.margin), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow, obsBg: typeof b.obsBg === "string" && (/^[a-z]{3,12}$/.test(b.obsBg) || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.obsBg)) ? b.obsBg : ((STYLE as any).obsBg ?? "aurora"), obsDim: num(b.obsDim, 0, 0.85, (STYLE as any).obsDim ?? 0.45) };
+    upper: typeof b.upper === "boolean" ? b.upper : STYLE.upper, upperRead: typeof b.upperRead === "boolean" ? b.upperRead : !!STYLE.upperRead, size: num(b.size, 0.6, 1.8, STYLE.size), sizeBible: num(b.sizeBible, 0.5, 2.2, STYLE.sizeBible ?? 1), sizeMsg: num(b.sizeMsg, 0.5, 2.2, STYLE.sizeMsg ?? 1), margin: num(b.margin, 0, 12, STYLE.margin), logo, logoBoth: typeof b.logoBoth === "boolean" ? b.logoBoth : !!STYLE.logoBoth, logoSize: num(b.logoSize, 0.3, 1, STYLE.logoSize ?? 0.7), shadow: typeof b.shadow === "boolean" ? b.shadow : STYLE.shadow, obsBg: typeof b.obsBg === "string" && (/^[a-z]{3,12}$/.test(b.obsBg) || /^\/fondo\/[a-f0-9]{24}\.jpg$/.test(b.obsBg)) ? b.obsBg : ((STYLE as any).obsBg ?? "aurora"), obsDim: num(b.obsDim, 0, 0.85, (STYLE as any).obsDim ?? 0.45) };
 }
 /* Navegar lo que está en pantalla desde la propia ventana del proyector (flechas del teclado) */
 let BIBLES: Record<string, any> = {};
@@ -582,6 +583,18 @@ const SERVER = Bun.serve({
       if (p === "/api/proyector/estilo" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         STYLE = cleanStyle(await req.json().catch(() => ({})));
+        await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
+        SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
+        return json(STYLE);
+      }
+      /* Logo propio para el botón "Logo" de la pantalla (PNG con transparencia) */
+      if (p === "/api/proyector/logo" && req.method === "POST") {
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const buf = new Uint8Array(await req.arrayBuffer()); if (buf.length > 15_000_000) return json({ error: "too_large" }, 413); if (buf.length < 100) return json({ error: "empty" }, 400);
+        const id = randomBytes(6).toString("hex"); const tmp = `${TMPD}/plogo-${id}`; await Bun.write(tmp, buf); const out = `${BRAND_DIR}/logo-${id}.png`;
+        try { let ok = false; try { const proc = Bun.spawn([tool("ffmpeg"), "-hide_banner", "-nostdin", "-y", "-i", tmp, "-frames:v", "1", "-vf", "scale='min(1600,iw)':-2", out], { stdout: "ignore", stderr: "ignore", windowsHide: true } as any); ok = (await proc.exited) === 0 && existsSync(out); } catch {} if (!ok) ok = rawImage(buf, out);
+          if (!ok) return json({ error: "not_image" }, 415); } finally { try { unlinkSync(tmp); } catch {} }
+        STYLE = cleanStyle({ ...STYLE, logo: `/marca/logo-${id}.png` });
         await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
         SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
         return json(STYLE);
