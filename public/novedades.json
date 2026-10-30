@@ -1,4 +1,7 @@
 [
+  { "v": "1.3.4", "fecha": "2026-10-29", "items": [
+    "El botón “Instalar ahora” abre el instalador y cierra el programa solo, para que la actualización no se quede en “Abriendo el instalador…”."
+  ] },
   { "v": "1.3.3", "fecha": "2026-10-29", "items": [
     "La ventana del proyector (Pantalla 2) ya se cierra normalmente y no se queda en negro.",
     "Cuando hay una versión nueva, aparece un aviso con lo que trae y un botón para instalarla."

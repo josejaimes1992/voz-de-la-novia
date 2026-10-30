@@ -353,7 +353,14 @@ async function runUpdate() {
     const out = `${dir.replace(/\\/g, "/")}/${native ? `VozDeLaNovia-Setup-${latest || "nueva"}.exe` : "VozDeLaNovia.exe"}`;
     ensureDir(dir); writeFileSync(out, Buffer.concat(parts));
     upd.pct = 100;
-    if (native) { upd.msg = "Abriendo el instalador… acepta cerrar Voz de la Novia cuando lo pida."; openExternal(out); }
+    if (native) {
+      /* El instalador se abre aparte y este programa se cierra solo, para que Windows pueda reemplazar los archivos.
+         (Antes se quedaba en "Abriendo el instalador…" porque el programa seguía abierto.) */
+      upd.msg = "Abriendo el instalador… Voz de la Novia se cerrará en unos segundos para actualizarse.";
+      const win = out.replace(/\//g, "\\");
+      try { Bun.spawn(["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", `Start-Process -FilePath '${win.replace(/'/g, "''")}'`], { stdout: "ignore", stderr: "ignore", stdin: "ignore", windowsHide: true } as any); } catch { openExternal(out); }
+      setTimeout(() => { const pp = Number(Bun.env.VDN_PARENT_PID || 0); try { if (pp) process.kill(pp); } catch {} setTimeout(() => process.exit(0), 300); }, 4000);
+    }
     else { upd.msg = `Listo: se guardó en Descargas (${out.split("/").pop()}). Cierra este programa y ábrelo desde ahí.`; openExternal(dir); }
   } catch (e: any) { upd.error = "No se pudo descargar: " + String(e?.message || e); upd.msg = ""; }
   finally { upd.busy = false; }
