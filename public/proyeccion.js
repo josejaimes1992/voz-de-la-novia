@@ -438,7 +438,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
   const onSong=r.mode==='text'&&s&&r.songId===s.id; const st=PJ.style||{}; const k=s?songKey(s):null;
   const lib=$('#pj-res'), keepLib=lib?lib.scrollTop:0, body=$('#pj-body'), keepBody=body&&!scrollTop?body.scrollTop:0;
   const scrBg=st.img?`url('${st.img}') center/cover,${st.bg||'#000'}`:(st.bg||'#000');
-  const scr=r.mode==='black'?'':r.media?`<img src="/medio/${esc(r.media.id)}/${r.media.n}.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000">`:r.mode==='logo'?'<img src="/vdn-logo.jpg?v=3" alt="" style="height:78%">':`<span style="font-size:calc(clamp(11px,1.05vw,17px) * ${st.size||1});color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
+  const scr=r.mode==='black'?'':r.media?`<img src="/medio/${esc(r.media.id)}/${r.media.n}.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000">`:r.mode==='logo'?pjLogoHtml('height:78%;max-width:90%;object-fit:contain'):`<span style="font-size:calc(clamp(11px,1.05vw,17px) * ${st.size||1});color:${st.color||'#fff'};text-transform:${(r.bible||r.sermon)?(st.upperRead?'uppercase':'none'):(st.upper?'uppercase':'none')}">${esc(r.text||'')}</span>`;
   root.innerHTML=`<div class="pj pjw" role="dialog" aria-label="Proyección">
     <div class="pj-top"><button class="btn ghost" data-act="pj-close" aria-label="Cerrar proyección">${ICON.x}</button>
       <span class="ttl">${esc(s?s.title:'')}${k?` <small class="muted">· ${esc(keyText(k))}</small>`:''}</span>
@@ -454,7 +454,7 @@ function pjRenderWide(r,qf,qpos,scrollTop){
         <div class="pjw-scr" style="background:${scrBg}">${st.img?`<i style="opacity:${st.dim??.35}"></i>`:''}${scr}</div>
         <p class="pjw-now"><b>${r.mode==='black'?'■ Pantalla en negro':r.mode==='logo'?'Logo':esc((r.title||'')+(r.total?` · ${r.idx+1} de ${r.total}`:''))}</b>${r.by?`<small>Último cambio: ${esc(r.by)}</small>`:''}</p>
         <div class="pjw-btns"><button class="btn" data-act="pj-nav" data-d="-1">◀ Anterior</button><button class="btn pri" data-act="pj-nav" data-d="1">Siguiente ▶</button>
-          <button class="btn" data-act="pj-mode" data-m="black" aria-pressed="${r.mode==='black'}">Negro <small>(B / F9)</small></button><button class="btn" data-act="pj-mode" data-m="logo" aria-pressed="${r.mode==='logo'}">Logo <small>(L)</small></button></div>
+          <button class="btn" data-act="pj-mode" data-m="black" aria-pressed="${r.mode==='black'}">Negro <small>(B / F9)</small></button><button class="btn" data-act="pj-mode" data-m="logo" aria-pressed="${r.mode==='logo'}">Logo <small>(L)</small></button><button class="btn sm ghost" data-act="proj-style" data-to="logo" title="Subir o cambiar el logo" style="grid-column:1/-1;justify-self:end;font-size:12px">🖼 Cambiar logo</button></div>
         <p class="pjw-tip">Clic en una alabanza: ver sus estrofas · Doble clic: proyectar · Clic en una estrofa: en vivo · ← → cambian de estrofa</p></section>
       ${pjSide(r)}
     </div></div>`;
@@ -648,7 +648,7 @@ function pjRender(scrollTop){
   if(pjWide()){ pjRenderWide(r,qf,qpos,scrollTop); if(tf){ const el=document.getElementById(tf.id); if(el){ el.focus(); try{ el.setSelectionRange(tf.a,tf.b); }catch{} el.scrollTop=tf.st; } } return; }
   const body=$('#pj-body'); const keep=body&&!scrollTop?body.scrollTop:0;
   const onSong=r.mode==='text'&&s&&r.songId===s.id;
-  const scr=r.mode==='black'?'':r.mode==='logo'?'<img src="/vdn-logo.jpg?v=2" alt="">':esc(r.text||'');
+  const scr=r.mode==='black'?'':r.mode==='logo'?pjLogoHtml(''):esc(r.text||'');
   root.innerHTML=`<div class="pj" role="dialog" aria-label="Proyección">
     <div class="pj-top"><button class="btn ghost" data-act="pj-close" aria-label="Cerrar proyección">${ICON.x}</button>
       <span class="ttl">${esc(s?s.title:'')}</span>
@@ -803,6 +803,10 @@ async function openProyector(ev){
 }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act="open-proj"]'); if(el){ ev.preventDefault(); openProyector(ev); } else if(ev.target.closest('[data-act="scr-modal"]')){ ev.preventDefault(); if(window.__VDN_NATIVE__) scrModal(); } });
 
+/* Logo que se ve en la vista previa de la consola (el mismo que sale en pantalla) */
+function pjLogoHtml(css){ const st=PJ.style||PJS||(typeof BB!=='undefined'&&BB.style)||{};
+  if(!PJ.style&&!PJ._stF){ PJ._stF=1; fetch('/api/proyector/estilo').then(x=>x.json()).then(j=>{ PJ.style=j; if(j.logo&&PJ.open) pjRender(); }).catch(()=>{}); } const u=st.logo||'/vdn-logo.jpg?v=3';
+  return `<img src="${esc(u)}" alt="" style="${css}" onerror="this.onerror=null;this.src='/vdn-logo.jpg?v=3'">`; }
 /* ---------- Fondo y letra de la pantalla ---------- */
 const PJ_BG=[['Negro','#000000'],['Azul noche','linear-gradient(160deg,#0b1d3a 0%,#02060f 100%)'],['Azul real','linear-gradient(135deg,#1e3c72 0%,#2a5298 100%)'],['Morado','linear-gradient(135deg,#2b1055 0%,#7597de 140%)'],['Vino','linear-gradient(160deg,#3a0a12 0%,#120206 100%)'],['Dorado','radial-gradient(circle at 50% 30%,#5a4416 0%,#1a1206 70%)'],['Verde','linear-gradient(160deg,#0f2e1f 0%,#030b07 100%)'],['Amanecer','linear-gradient(180deg,#2c1a4a 0%,#c0574a 120%)'],['Gris','linear-gradient(160deg,#2b2f36 0%,#0d0f12 100%)'],['Celeste','linear-gradient(135deg,#0f4c75 0%,#3282b8 100%)']];
 const PJ_FONTS=['Figtree','Montserrat','Poppins','Oswald','Merriweather','Lora'];
@@ -821,7 +825,7 @@ function styleDraw(){
     <header><h3>🎨 Fondo y letra de la pantalla</h3><button type="button" class="btn ghost" data-act="close-modal" aria-label="Cerrar">${ICON.x}</button></header>
     <div class="body" style="display:grid;gap:14px">
       <div id="pjs-prev">${stylePrev()}</div>
-      <div><b style="font-size:14px">Logo de la pantalla <span class="muted" style="font-weight:400">(lo que sale con el botón Logo)</span></b>
+      <div id="pjs-logo-sec"><b style="font-size:14px">Logo de la pantalla <span class="muted" style="font-weight:400">(lo que sale con el botón Logo)</span></b>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <div style="width:96px;height:54px;border-radius:8px;border:1px solid var(--line);background:#000;display:grid;place-items:center;overflow:hidden">${x.logo?`<img src="${x.logo}" alt="" style="max-width:90%;max-height:90%">`:'<img src="/vdn-logo.jpg?v=3" alt="" style="max-height:90%">'}</div>
           <label class="btn" style="cursor:pointer">＋ ${x.logo?'Cambiar logo':'Subir logo de la iglesia'}<input type="file" id="pjs-logo" accept="image/png,image/jpeg,image/webp,image/*" hidden></label>
@@ -860,15 +864,15 @@ function styleDraw(){
   on('#pjs-logoSize','input',e=>styleSet({logoSize:+e.target.value},true));
   on('#pjs-logoBoth','change',e=>styleSet({logoBoth:e.target.checked}));
   on('#pjs-logo','change',async e=>{ const f=e.target.files[0]; if(!f) return; toast('Subiendo logo…');
-    try{ const r=await fetch('/api/proyector/logo',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJS=d; if(typeof BB!=='undefined') BB.style={...PJS}; styleDraw(); toast('Logo listo. Pulsa “Logo” para verlo en pantalla.'); }catch{ toast('No se pudo subir ese logo (usa PNG o JPG).'); } });
+    try{ const r=await fetch('/api/proyector/logo',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJS=d; PJ.style=d; if(typeof BB!=='undefined') BB.style={...PJS}; styleDraw(); if(PJ.open) pjRender(); toast('Logo listo. Pulsa “Logo” para verlo en pantalla.'); }catch{ toast('No se pudo subir ese logo (usa PNG o JPG).'); } });
   on('#pjs-up','change',async e=>{ const f=e.target.files[0]; if(!f) return; toast('Subiendo imagen…');
     try{ const r=await fetch('/api/fondos',{method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/octet-stream'},body:f}); const d=await r.json(); if(!r.ok) throw 0; PJF.unshift({url:d.url}); styleSet({img:d.url}); }catch{ toast('No se pudo subir esa imagen.'); } });
 }
 let PJS_T=null;
 function styleSet(ch,soft){ Object.assign(PJS,ch); if(typeof BB!=='undefined') BB.style={...PJS}; if(soft){ const pv=$('#pjs-prev'); if(pv) pv.innerHTML=stylePrev(); const lab=document.activeElement&&document.activeElement.closest('label'); if(lab&&lab.firstChild&&lab.firstChild.nodeType===3){ const k=document.activeElement.id; const v=PJS[({'pjs-sizeb':'sizeBible','pjs-sizem':'sizeMsg'})[k]||k.replace('pjs-','')]; lab.firstChild.nodeValue=lab.firstChild.nodeValue.replace(/\d+%/, (k==='pjs-margin'?v:Math.round(v*100))+'%'); } } else styleDraw();
-  clearTimeout(PJS_T); PJS_T=setTimeout(async()=>{ try{ PJS=await api('/api/proyector/estilo',{method:'POST',body:JSON.stringify(PJS)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar el estilo.'); } },soft?250:0); }
+  clearTimeout(PJS_T); PJS_T=setTimeout(async()=>{ try{ PJS=await api('/api/proyector/estilo',{method:'POST',body:JSON.stringify(PJS)}); PJ.style=PJS; }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo guardar el estilo.'); } },soft?250:0); }
 document.addEventListener('click',ev=>{ const el=ev.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, d=el.dataset;
-  if(a==='proj-style') styleOpen();
+  if(a==='proj-style') styleOpen().then(()=>{ if(d.to==='logo'){ const el=document.getElementById('pjs-logo-sec'); if(el){ el.scrollIntoView({block:'center'}); el.style.outline='2px solid var(--accent)'; el.style.borderRadius='10px'; } } });
   else if(a==='pjs-bg') styleSet({bg:PJ_BG[+d.i][1],img:''});
   else if(a==='pjs-img') styleSet({img:d.u});
   else if(a==='pjs-noimg') styleSet({img:''});
