@@ -76,7 +76,7 @@ jobs:
 
   # Mac: app con ventana propia (.dmg). Apple Silicon (M1–M4) con lector de PDF incluido; Intel compilado desde el mismo Mac.
   mac:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
