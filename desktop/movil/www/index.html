@@ -5,47 +5,101 @@
 :root{--card:#141416;--line:#2a2a2e;--ink:#efece4;--muted:#a7a395;--gold:#e9c45a;--gold-ink:#14110a;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 50% -10%,#1d1a12,#000 60%);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Roboto,sans-serif;padding:env(safe-area-inset-top,0) 16px env(safe-area-inset-bottom,0)}
-main{max-width:480px;margin:0 auto;padding:36px 0}
-.hero{text-align:center;margin-bottom:22px}.hero img{width:96px;height:96px;border-radius:24px}
-h1{font-family:Georgia,serif;color:var(--gold);font-size:26px;margin:12px 0 2px}.tag{color:var(--muted);font-style:italic;font-family:Georgia,serif;margin:0}
+main{max-width:480px;margin:0 auto;padding:30px 0}
+.hero{text-align:center;margin-bottom:18px}.hero img{width:88px;height:88px;border-radius:22px}
+h1{font-family:Georgia,serif;color:var(--gold);font-size:26px;margin:10px 0 2px}.tag{color:var(--muted);font-style:italic;font-family:Georgia,serif;margin:0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
 .card b{display:block;margin-bottom:4px}.card p{margin:0 0 10px;color:var(--muted);font-size:14px}
-button{font:inherit;font-weight:700;width:100%;min-height:50px;border-radius:13px;border:1px solid var(--line);background:#1d1d20;color:var(--ink);cursor:pointer}
+button{font:inherit;font-weight:700;width:100%;min-height:50px;border-radius:13px;border:1px solid var(--line);background:#1d1d20;color:var(--ink);cursor:pointer;margin-top:6px}
 button.pri{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
-input{font:inherit;width:100%;color:var(--ink);background:#0b0b0c;border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px;outline:none}
+input{font:inherit;width:100%;color:var(--ink);background:#0b0b0c;border:1px solid var(--line);border-radius:11px;padding:12px;outline:none}
 input:focus{border-color:var(--gold)}
-.err{color:#ff8a7a;font-size:14px;margin:6px 0 0}.muted{color:var(--muted);font-size:13px}
+.err{color:#ff8a7a;font-size:14px;margin:8px 0 0}.muted{color:var(--muted);font-size:13px}
+.found{display:flex;gap:10px;align-items:center;background:#1a1810;border:1px solid #4a4020;border-radius:12px;padding:10px 12px;margin-top:8px;cursor:pointer}
+.found b{margin:0}.found small{color:var(--muted);display:block}
+#cam{position:fixed;inset:0;background:#000;z-index:10;display:flex;flex-direction:column}
+#cam video{flex:1;width:100%;object-fit:cover}
+#cam .bar{padding:14px 16px calc(14px + env(safe-area-inset-bottom,0));background:#000;text-align:center}
+#cam .frame{position:absolute;left:50%;top:42%;width:64vw;height:64vw;max-width:320px;max-height:320px;transform:translate(-50%,-50%);border:3px solid var(--gold);border-radius:18px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 #wait{text-align:center}[hidden]{display:none!important}
+.prog{height:4px;background:#2a2a2e;border-radius:4px;overflow:hidden;margin-top:10px}.prog i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
 </style></head><body><main>
 <div class="hero"><img src="icon.png" alt=""><h1>Voz de la Novia</h1><p class="tag">Una fe. Un Mensaje. Una voz.</p></div>
 
-<div id="wait" class="card" hidden><b id="wt">Conectando…</b><p id="wu"></p><button id="change">Cambiar dirección</button></div>
+<div id="wait" class="card" hidden><b id="wt">Conectando…</b><p id="wu"></p><button id="retry" class="pri" hidden>Reintentar</button><button id="change">Conectar con otra iglesia</button></div>
 
 <div id="pick">
-  <div class="card"><b>☁️ Nube de Voz de la Novia</b><p>Para el Tabernáculo Shalom Adonai y quienes usan la nube.</p><button class="pri" data-url="https://web-production-2c736.up.railway.app">Entrar a la nube</button></div>
-  <div class="card"><b>💻 La PC de mi iglesia (programa de Windows o Mac)</b>
-    <p>El teléfono y la PC deben estar en el mismo Wi-Fi. La dirección sale en el programa de la PC: botón <b style="display:inline">🖥 Pantallas</b> → “Pantallas en otras computadoras”. Ejemplo: 192.168.1.20</p>
-    <input id="ip" inputmode="url" autocapitalize="none" placeholder="192.168.1.20  o  dirección completa">
-    <button id="go" class="pri">Conectar</button><p class="err" id="err" hidden></p></div>
-  <p class="muted">La dirección se recuerda. Para cambiarla, toca “Cambiar dirección” al abrir la app.</p>
+  <div class="card"><b>⛪ Conecta con tu iglesia</b>
+    <p>Abre Voz de la Novia en la PC de tu iglesia y conecta el teléfono al <b style="display:inline">mismo Wi-Fi</b>. En la PC: botón de abajo a la izquierda → <b style="display:inline">📱 Conectar teléfonos</b>.</p>
+    <button id="scan" class="pri">📷 Escanear el código QR de la PC</button>
+    <button id="find">🔎 Buscar la PC en este Wi-Fi</button>
+    <div class="prog" id="prog" hidden><i></i></div><p class="muted" id="fmsg" hidden></p><div id="flist"></div>
+  </div>
+  <div class="card"><b>⌨️ Escribir la dirección</b>
+    <p>La de la PC (ej. <b style="display:inline">192.168.1.20</b>) o la de la nube de tu iglesia, si tiene una.</p>
+    <input id="ip" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="192.168.1.20  o  mi-iglesia.up.railway.app">
+    <button id="go" class="pri">Conectar</button></div>
+  <p class="err" id="err" hidden></p>
+  <p class="muted">La app recuerda tu iglesia. Para cambiarla, toca “Conectar con otra iglesia” al abrirla.</p>
 </div>
+
+<div id="cam" hidden><video id="vid" playsinline muted></video><div class="frame"></div><div class="bar"><p class="muted" style="margin:0 0 8px">Apunta al código QR que muestra la PC</p><button id="camx">Cancelar</button></div></div>
+<canvas id="cv" hidden></canvas>
 </main>
+<script src="jsQR.js"></script>
 <script>
 const $=s=>document.querySelector(s);
 const get=()=>{ try{ return localStorage.getItem('vdn-url')||''; }catch{ return ''; } };
-function norm(v){ v=String(v||'').trim(); if(!v) return ''; if(!/^https?:\/\//i.test(v)) v=(/^[\d.]+(:\d+)?$/.test(v)||/^[a-z0-9-]+(\.local)?(:\d+)?$/i.test(v)?'http://':'https://')+v;
+const err=t=>{ const e=$('#err'); e.textContent=t||''; e.hidden=!t; };
+function norm(v){ v=String(v||'').trim(); if(!v) return ''; if(!/^https?:\/\//i.test(v)) v=(/^[\d.]+(:\d+)?(\/.*)?$/.test(v)||/^[a-z0-9-]+\.local(:\d+)?/i.test(v)?'http://':'https://')+v;
   try{ const u=new URL(v); if(u.protocol==='http:'&&!u.port&&/^[\d.]+$/.test(u.hostname)) u.port='4747'; return u.origin; }catch{ return ''; } }
-async function reach(u){ try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),6000); await fetch(u+'/healthz',{signal:c.signal,cache:'no-store',mode:'no-cors'}); clearTimeout(t); return true; }catch{ return false; } }
-let timer=null;
+/* ¿Es Voz de la Novia? Pregunta /api/hola (devuelve el nombre de la iglesia) */
+async function hola(u,ms=6000){ const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms);
+  try{ const r=await fetch(u+'/api/hola',{signal:c.signal,cache:'no-store'}); clearTimeout(t); if(!r.ok) return null; const d=await r.json(); return d&&d.app==='voz-de-la-novia'?d:null; }
+  catch{ clearTimeout(t); try{ await fetch(u+'/healthz',{mode:'no-cors',cache:'no-store'}); return {church:''}; }catch{ return null; } } }
 function open(u){ try{ localStorage.setItem('vdn-url',u); }catch{} location.href=u+'/'; }
-async function tryGo(u){ const e=$('#err'); e.hidden=true; $('#go').disabled=true; $('#go').textContent='Probando…';
-  if(await reach(u)) return open(u);
-  e.textContent='No responde '+u+'. Revisa que la PC tenga Voz de la Novia abierto y que estén en el mismo Wi-Fi.'; e.hidden=false; $('#go').disabled=false; $('#go').textContent='Conectar'; }
-document.querySelectorAll('[data-url]').forEach(b=>b.onclick=()=>open(b.dataset.url));
-$('#go').onclick=()=>{ const u=norm($('#ip').value); if(!u){ $('#err').textContent='Escribe la dirección.'; $('#err').hidden=false; return; } tryGo(u); };
-$('#change').onclick=()=>{ clearTimeout(timer); $('#wait').hidden=true; $('#pick').hidden=false; };
+async function tryGo(u){ err(''); if(!u) return err('Escribe la dirección.');
+  const b=$('#go'); b.disabled=true; b.textContent='Probando…'; const d=await hola(u); b.disabled=false; b.textContent='Conectar';
+  if(d) return open(u); err('No responde '+u+'. Revisa que la PC tenga Voz de la Novia abierto y que el teléfono esté en el mismo Wi-Fi.'); }
+$('#go').onclick=()=>tryGo(norm($('#ip').value));
+
+/* ---- Buscar en el Wi-Fi: prueba las redes de casa/iglesia más comunes (Perú y Latinoamérica) ---- */
+const NETS=['192.168.1','192.168.0','192.168.100','192.168.18','192.168.2','192.168.10','192.168.8','192.168.88','192.168.31','192.168.3','192.168.50','192.168.20','10.0.0','10.0.1','192.168.4','192.168.5','192.168.11','192.168.15','192.168.68','192.168.43','172.16.0'];
+let finding=false;
+async function find(){ if(finding) return; finding=true; err(''); const fl=$('#flist'); fl.innerHTML=''; $('#prog').hidden=false; const bar=$('#prog i'); const msg=$('#fmsg'); msg.hidden=false;
+  const hosts=[]; for(const n of NETS) for(let i=1;i<255;i++) hosts.push(n+'.'+i);
+  let done=0, found=0, foundNet=-1; const seen=new Set(); let stop=false;
+  const probe=async ip=>{ const u='http://'+ip+':4747'; const c=new AbortController(); const t=setTimeout(()=>c.abort(),1400);
+    try{ const r=await fetch(u+'/api/hola',{signal:c.signal,cache:'no-store'}); const d=await r.json(); if(d&&d.app==='voz-de-la-novia'&&!seen.has(u)){ seen.add(u); found++; if(foundNet<0) foundNet=Math.floor(hosts.indexOf(ip)/254);
+        const el=document.createElement('div'); el.className='found'; el.innerHTML='<span style="font-size:24px">💻</span><span style="flex:1"><b></b><small></small></span><span style="color:#e9c45a;font-weight:700">Entrar ›</span>';
+        el.querySelector('b').textContent=d.church||'PC con Voz de la Novia'; el.querySelector('small').textContent=ip; el.onclick=()=>open(u); fl.appendChild(el); } }catch{} finally{ clearTimeout(t); } };
+  let i=0; const worker=async()=>{ while(!stop&&i<hosts.length){ const h=hosts[i++]; await probe(h); done++; if(done%20===0){ bar.style.width=Math.round(done*100/hosts.length)+'%'; msg.textContent=found?`Encontré ${found}. Sigo buscando…`:`Buscando… (${hosts[Math.min(i,hosts.length-1)].split('.').slice(0,3).join('.')}.x)`; }
+      /* cuando ya encontró algo y terminó esa red, no sigue con las demás */
+      if(found&&Math.floor(i/254)>foundNet) stop=true; } };
+  await Promise.all(Array.from({length:48},worker));
+  $('#prog').hidden=true; finding=false;
+  msg.textContent=found?(found===1?'Toca tu iglesia para entrar.':'Toca la PC de tu iglesia.'):'No encontré ninguna PC con Voz de la Novia en este Wi-Fi. Mejor escanea el código QR o escribe la dirección.';
+  if(found===1&&fl.firstChild) fl.firstChild.click(); }
+$('#find').onclick=find;
+
+/* ---- Escanear el código QR de la PC ---- */
+let stream=null, raf=0;
+async function scan(){ err('');
+  if(!navigator.mediaDevices||!window.jsQR) return err('Este teléfono no permite escanear aquí. Escribe la dirección que muestra la PC.');
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false}); }catch(e){ return err('Sin permiso para la cámara. Actívalo en Ajustes → Apps → Voz de la Novia → Permisos, o escribe la dirección.'); }
+  const v=$('#vid'); v.srcObject=stream; await v.play().catch(()=>{}); $('#cam').hidden=false;
+  const cv=$('#cv'), x=cv.getContext('2d',{willReadFrequently:true});
+  const tick=()=>{ if(!stream) return; if(v.readyState>=2){ const w=Math.min(720,v.videoWidth), h=Math.round(v.videoHeight*w/v.videoWidth); cv.width=w; cv.height=h; x.drawImage(v,0,0,w,h);
+      const q=jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:'dontInvert'}); if(q&&q.data){ const u=norm(q.data); if(u){ stopCam(); $('#ip').value=u.replace(/^https?:\/\//,''); return tryGo(u); } } }
+    raf=requestAnimationFrame(tick); };
+  tick(); }
+function stopCam(){ cancelAnimationFrame(raf); if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } $('#cam').hidden=true; }
+$('#scan').onclick=scan; $('#camx').onclick=stopCam;
+
+/* ---- Al abrir: entra directo a la iglesia guardada ---- */
+$('#change').onclick=()=>{ $('#wait').hidden=true; $('#pick').hidden=false; const s=get(); if(s) $('#ip').value=s.replace(/^https?:\/\//,''); };
+$('#retry').onclick=()=>location.reload();
 const saved=get();
-if(saved){ $('#pick').hidden=true; $('#wait').hidden=false; $('#wu').textContent=saved;
-  timer=setTimeout(async()=>{ if(await reach(saved)) open(saved); else { $('#wt').textContent='No se pudo conectar'; $('#wu').textContent=saved+' no responde. ¿Estás en el mismo Wi-Fi o con internet?'; $('#change').textContent='Elegir otra dirección'; const r=document.createElement('button'); r.className='pri'; r.style.marginTop='8px'; r.textContent='Reintentar'; r.onclick=()=>location.reload(); $('#wait').appendChild(r); } },900); }
-else { const ip=saved; if(ip) $('#ip').value=ip; }
+if(saved){ $('#pick').hidden=true; $('#wait').hidden=false; $('#wu').textContent=saved.replace(/^https?:\/\//,'');
+  setTimeout(async()=>{ const d=await hola(saved); if(d) open(saved); else { $('#wt').textContent='No se pudo conectar'; $('#wu').textContent=saved.replace(/^https?:\/\//,'')+' no responde. ¿La PC está encendida con Voz de la Novia abierto y estás en el mismo Wi-Fi?'; $('#retry').hidden=false; } },700); }
 </script></body></html>

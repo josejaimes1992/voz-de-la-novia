@@ -93,7 +93,7 @@ async function afterRestore() {
 }
 
 export function desktopHtml(h: string) {
-  return h.replace("</body>", '<script src="/escritorio.js?v=7" defer></script></body>');
+  return h.replace("</body>", '<script src="/escritorio.js?v=8" defer></script></body>');
 }
 
 /* ---- Llamadas a la nube ---- */

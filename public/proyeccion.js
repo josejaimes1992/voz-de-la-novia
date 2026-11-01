@@ -768,6 +768,7 @@ async function scrModal(){
       <p class="muted" style="margin:0;font-size:13.5px">Elige qué muestra cada pantalla conectada (proyector, TV, monitor de transmisión). Todas cambian juntas cuando proyectas.</p>
       <div class="scr-list">${L.map(row).join('')||'<p class="muted">No se detectaron pantallas.</p>'}</div>
       ${sec.length?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" data-act="scr-all">▶ Abrir en todas</button><button class="btn" data-act="scr-close" data-i="">Cerrar todas</button></div>`:'<div class="banner">Solo hay una pantalla. Conecta el proyector o la TV (cable HDMI) y en Windows elige <b>Extender</b> (tecla Windows + P).</div>'}
+      ${window.vdnPhones?`<button class="btn" type="button" onclick="closeModal();vdnPhones()">📱 Conectar teléfonos (código QR)</button>`:''}
       <details><summary style="cursor:pointer;font-weight:600">Pantallas en otras computadoras o TVs de la red</summary><div style="font-size:13.5px;line-height:1.5;padding-top:6px">En cualquier PC, TV con navegador o tablet conectada al mismo Wi-Fi o red, abre:<br>${lan.map(u=>`<code style="user-select:all">${esc(u)}/proyector</code>`).join('<br>')||'<code>http://(IP de esta PC):4747/proyector</code>'}<br>Para OBS en otra PC: <code>${esc((lan[0]||'http://IP:4747'))}/obs</code>. Si Windows pregunta por el Firewall, permite redes privadas.</div></details>
     </div></div></div>`;
 }

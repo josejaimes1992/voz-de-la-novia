@@ -143,8 +143,12 @@ jobs:
       - name: Proyecto Android
         run: |
           set -e
-          npm i --no-audit --no-fund @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/assets@3
+          npm i --no-audit --no-fund @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/assets@3 jsqr@1.4.0
+          cp node_modules/jsqr/dist/jsQR.js www/jsQR.js
           npx cap add android
+          # Cámara (para escanear el código QR de la PC)
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' android/app/src/main/AndroidManifest.xml
+          grep -n "permission\|feature" android/app/src/main/AndroidManifest.xml
           npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000' || echo "sin íconos generados"
           V=$(tr -d '\r\n ' < ../VERSION)
           CODE=$(echo "$V" | awk -F. '{print $1*10000+$2*100+$3}')

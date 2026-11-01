@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.1", "fecha": "2026-11-01", "items": [
+    "La app del teléfono ya no entra por defecto a la nube de Shalom: cada iglesia se conecta a su propia PC por Wi-Fi.",
+    "Nuevo “📱 Conectar teléfonos”: la PC muestra un código QR y el teléfono lo escanea (o busca la PC solo en el Wi-Fi)."
+  ] },
   { "v": "1.4.0", "fecha": "2026-10-30", "items": [
     "Nuevo: Voz de la Novia para Mac (Apple M1–M4 e Intel) y app para Android. Todo en la misma página de descarga.",
     "La página de descarga reconoce tu equipo (Windows, Mac, Android o iPhone) y te muestra el botón correcto."

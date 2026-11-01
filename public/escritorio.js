@@ -61,6 +61,22 @@
     const r=await fetch('/api/desktop/reset',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+t},body:JSON.stringify({password:pw})});
     const d=await r.json().catch(()=>({})); if(!r.ok){ alert(d.error||'No se pudo.'); return; }
     try{ localStorage.removeItem('vdn-token'); }catch{} location.href='/'; }
+  /* ---- Conectar teléfonos: código QR con la dirección de esta PC en el Wi-Fi ---- */
+  window.vdnPhones=()=>phonesModal();
+  async function phonesModal(){
+    if(!window.qrcode) await new Promise(r=>{ const sc=document.createElement('script'); sc.src='/qrcode.js'; sc.onload=r; sc.onerror=r; document.head.appendChild(sc); });
+    let lan=[]; try{ lan=(await (await fetch('/api/desktop/status')).json()).lan||[]; }catch{}
+    const esc2=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const qr=u=>{ try{ const q=qrcode(0,'M'); q.addData(u); q.make(); const n=q.getModuleCount(), sc=Math.max(4,Math.floor(240/(n+2))); const c=document.createElement('canvas'); c.width=c.height=sc*(n+2); const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.fillStyle='#000'; for(let r=0;r<n;r++) for(let k=0;k<n;k++) if(q.isDark(r,k)) x.fillRect((k+1)*sc,(r+1)*sc,sc,sc); return c.toDataURL(); }catch{ return ''; } };
+    box.innerHTML=`<div style="width:min(560px,100%);max-height:88vh;overflow:auto;background:#141416;color:#efece4;border:1px solid #2a2a2e;border-radius:16px;padding:18px;font:14px/1.5 system-ui,Segoe UI,sans-serif">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:17px;flex:1">📱 Conectar teléfonos</b><button type="button" data-close style="all:unset;cursor:pointer;font-size:20px;color:#a7a395;padding:0 6px">×</button></div>
+      ${lan.length?`<p style="margin:0 0 12px;color:#cfcab9">El teléfono debe estar en el <b>mismo Wi-Fi</b> que esta PC. En la app de Android toca <b>Escanear código QR</b>; en iPhone, apunta con la cámara y abre el enlace en Safari.</p>
+        ${lan.map((u,i)=>`<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;${i?'border-top:1px solid #2a2a2e;padding-top:12px;margin-top:12px':''}"><img alt="Código QR" src="${qr(u+'/')}" style="width:190px;height:190px;border-radius:10px;background:#fff;image-rendering:pixelated"><div style="flex:1;min-width:180px"><div style="color:#a7a395;font-size:12.5px">${lan.length>1?`Red ${i+1}`:'Dirección de esta PC'}</div><code style="font-size:18px;color:#e9c45a;user-select:all">${esc2(u)}</code><div style="color:#a7a395;font-size:12.5px;margin-top:6px">También puedes escribirla en la app o en el navegador del teléfono.</div></div></div>`).join('')}
+        <p style="margin:12px 0 0;color:#8d897c;font-size:12.5px">Si no conecta: en Windows, cuando pregunte el Firewall, permite <b>redes privadas</b>; y revisa que el Wi-Fi no sea de “invitados”.</p>`
+      :'<p style="color:#ff8a7a">Esta PC no está conectada a ninguna red Wi-Fi o cable. Conéctala al mismo Wi-Fi que los teléfonos.</p>'}
+    </div>`;
+    box.hidden=false; box.querySelector('[data-close]').onclick=()=>box.hidden=true;
+  }
   /* ---- Copias de seguridad: todo lo de esta PC en un .zip (para cambiar de computadora) ---- */
   const kb=n=>n>1e9?(n/1e9).toFixed(1)+' GB':n>1e6?Math.round(n/1e6)+' MB':Math.max(1,Math.round(n/1e3))+' KB';
   const escH=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -95,6 +111,7 @@
   el.onclick=async()=>{
     if(S.mode==='local'||(S.mode==='cloud'&&!S.needLogin)){ menu.innerHTML='';
       mi(S.mode==='local'?'↻ Buscar Mensajes nuevos':'↻ Sincronizar ahora',doSync);
+      mi('📱 Conectar teléfonos (código QR)',phonesModal);
       mi('💾 Hacer copia de seguridad ahora',doBackup);
       mi('♻️ Restaurar una copia de seguridad…',doRestoreMenu);
       mi(S.mode==='local'?'☁ Conectar con la nube de mi iglesia (empezar de nuevo)':'⟲ Desconectar y empezar de nuevo',doReset);

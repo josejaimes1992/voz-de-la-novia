@@ -454,6 +454,8 @@ const SERVER = Bun.serve({
       if (p === "/instalar" || p === "/instalar.html" || p === "/app") return new Response(brandHtml(await Bun.file(appPath("./public/instalar.html")).text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/" || p === "/index.html") return new Response(DK ? DK.desktopHtml(brandHtml(HTML)) : brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
+      /* La app del teléfono busca la PC de la iglesia en el Wi-Fi: responde quién es (sin datos privados) */
+      if (p === "/api/hola") return new Response(JSON.stringify({ app: "voz-de-la-novia", church: CFG.name, desktop: !!DK }), { headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" } });
       if (p === "/obs") return new Response(Bun.file(appPath("./public/obs.html")), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/proyector") return new Response(brandHtml(await PROJ_HTML.text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/ws/equipo") {
