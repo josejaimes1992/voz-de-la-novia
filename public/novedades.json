@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.2", "fecha": "2026-11-08", "items": [
+    "Mensaje: Ctrl + clic en cualquier palabra de un párrafo lo proyecta desde esa palabra (“…”). Siguiente pasa al próximo párrafo completo.",
+    "El título de arriba de la consola muestra lo que estás usando (el Mensaje abierto, Biblia, Medios…) y ya no se queda con la última alabanza."
+  ] },
   { "v": "1.4.1", "fecha": "2026-11-01", "items": [
     "La app del teléfono ya no entra por defecto a la nube de Shalom: cada iglesia se conecta a su propia PC por Wi-Fi.",
     "Nuevo “📱 Conectar teléfonos”: la PC muestra un código QR y el teléfono lo escanea (o busca la PC solo en el Wi-Fi)."

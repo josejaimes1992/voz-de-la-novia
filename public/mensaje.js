@@ -59,7 +59,7 @@ window.viewMensaje=function(){
         <div class="actions"><button class="btn pri" data-act="ms-edit-save">Guardar cambios</button><button class="btn" data-act="ms-edit-cancel">Cancelar</button>${S.isAdmin?`<span style="flex:1"></span>${V.confirm==='ms-del'?`<span class="confirm">¿Borrar este mensaje? <button class="btn danger" data-act="ms-del-yes">Sí, borrar</button><button class="btn" data-act="confirm-no">No</button></span>`:`<button class="btn ghost danger" data-act="ms-del">Borrar mensaje</button>`}`:''}</div></div>`;
     }
     h+=`<div class="ms-head"><button class="btn ghost" data-act="ms-back">${ICON.back}Mensajes</button><h2>${esc(s.title)}${s.place?`<small style="display:block;font-family:var(--f-ui);font-size:13.5px;color:var(--muted);font-weight:500;margin-top:2px">${esc(s.place)}</small>`:''}</h2><code style="color:var(--accent)">${esc(s.code||'')}</code>${can?`<button class="btn" data-act="ms-edit">${ICON.edit}Editar</button>`:''}</div>
-      <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}"><b>${esc(p.n)}</b>${MS.qIn&&MS.qIn.trim().length>1?msMark(p.t,MS.qIn):esc(p.t)}</button>`).join('')}</div>`;
+      <div class="bb-vlist" id="ms-plist" style="max-height:66vh">${s.paras.map((p,i)=>`<button class="ms-p${onP&&onP.id===s.id&&onP.p===i?' onscr':''}" data-act="ms-p" data-i="${i}" aria-current="${MS.p===i}" title="Doble clic: proyectar · Ctrl+clic en una palabra: proyectar desde ahí"><b>${esc(p.n)}</b><span class="t">${MS.qIn&&MS.qIn.trim().length>1?msMark(p.t,MS.qIn):esc(p.t)}</span></button>`).join('')}</div>`;
     if(can){ const P=MS.p!=null?s.paras[MS.p]:null; const steps=P?msSteps(P.t):0; const onThis=onP&&onP.id===s.id&&onP.p===MS.p;
       h+=`<div class="bb-bar">
         ${window.bbLiveBox?bbLiveBox(r):''}
@@ -106,11 +106,20 @@ async function msSearch(){
 }
 function msScroll(){ const cur=document.querySelector('#ms-plist [aria-current="true"]'); const L=$('#ms-plist'); if(cur&&L){ const a=cur.getBoundingClientRect(), b=L.getBoundingClientRect(); if(a.top<b.top||a.bottom>b.bottom) L.scrollTop+=a.top-b.top-L.clientHeight/4; } }
 function msSteps(t){ const x=(typeof BB!=='undefined'&&BB.style)||MS.style||{}; const z=+x.sizeMsg||1; const per=Math.max(12,Math.round(40/(z*z)*(x.upperRead?0.82:1))); return Math.max(0,Math.ceil(t.split(/\s+/).length/per)-1); }
+/* Posición (en letras) donde se hizo clic dentro de un texto; se ajusta al inicio de la palabra */
+function msCaretOffset(e,box,text){ let node=null,off=0;
+  try{ if(document.caretPositionFromPoint){ const c=document.caretPositionFromPoint(e.clientX,e.clientY); if(c){ node=c.offsetNode; off=c.offset; } }
+    else if(document.caretRangeFromPoint){ const r=document.caretRangeFromPoint(e.clientX,e.clientY); if(r){ node=r.startContainer; off=r.startOffset; } } }catch{}
+  if(!node||!box.contains(node)) return 0; const r=document.createRange(); r.setStart(box,0); try{ r.setEnd(node,off); }catch{ return 0; }
+  let o=Math.min(r.toString().length,text.length); while(o>0&&!/\s/.test(text[o-1])) o--; while(o<text.length&&/\s/.test(text[o])) o++; return o>=text.length?0:o; }
 function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true; render(); setTimeout(msScroll,20); }
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
-  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const steps=msSteps(P.t); MS.part=Math.max(0,Math.min(MS.part,steps));
-  const st={mode:'text',read:true,title:s.title,text:P.t,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||''}};
+  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p];
+  /* Ctrl+clic en una palabra: el párrafo se proyecta desde esa palabra */
+  const from=MS.fromP===MS.p&&MS.from>0&&MS.from<P.t.length?MS.from:0; const T=from?'…'+P.t.slice(from):P.t;
+  const steps=msSteps(T); MS.part=Math.max(0,Math.min(MS.part,steps));
+  const st={mode:'text',read:true,title:s.title,text:T,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||'',from}};
   MS.remote=st; MS.live=true; render(); setTimeout(msScroll,20);
   try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo poner en pantalla. Revisa el internet.'); }
   if(V.view==='mensaje') render();
@@ -126,7 +135,7 @@ function msStep(d,noProj){
 function msScrollLive(d){
   const s=MS.cur; if(!s||MS.p==null) return; const r=MS.remote; const onThis=r&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p&&r.mode==='text';
   if(!onThis){ return msProject(); }
-  const steps=msSteps(s.paras[MS.p].t); const np=MS.part+d; MS.auto=0;
+  const P0=s.paras[MS.p].t; const f0=MS.fromP===MS.p&&MS.from>0?MS.from:0; const steps=msSteps(f0?'…'+P0.slice(f0):P0); const np=MS.part+d; MS.auto=0;
   if(np>=0&&np<=steps){ MS.part=np; return msProject(); }
   if(d>0&&MS.p+1<s.paras.length){ MS.p++; MS.part=0; return msProject(); }
   if(d<0&&MS.p>0){ MS.p--; MS.part=msSteps(s.paras[MS.p].t); return msProject(); }
@@ -177,7 +186,9 @@ document.addEventListener('click',ev=>{
   else if(a==='ms-edit-save') msSaveEdit();
   else if(a==='ms-del'){ V.confirm='ms-del'; render(); }
   else if(a==='ms-del-yes'){ (async()=>{ try{ await api('/api/sermons/'+encodeURIComponent(MS.curId),{method:'DELETE'}); toast('Mensaje borrado.'); MS.curId=null; MS.cur=null; MS.edit=false; V.confirm=null; await msLoadList(true); render(); }catch{ toast('No se pudo borrar.'); } })(); }
-  else if(a==='ms-p'){ const i=+d.i; const now=Date.now(); const dbl=MS.lastTap&&MS.lastTap.i===i&&now-MS.lastTap.t<450; MS.lastTap={i,t:now}; if(MS.p!==i){ MS.p=i; MS.part=0; } render(); if(dbl&&S.canWrite){ MS.lastTap=null; MS.part=0; msProject(); } }
+  else if(a==='ms-p'&&(ev.ctrlKey||ev.metaKey)&&S.canWrite){ const s0=MS.cur, i=+d.i; if(!s0||!s0.paras[i]) return; const o=msCaretOffset(ev,el.querySelector('.t')||el,s0.paras[i].t);
+    MS.p=i; MS.part=0; MS.auto=0; MS.from=o; MS.fromP=o>0?i:null; msProject(); }
+  else if(a==='ms-p'){ MS.fromP=null; const i=+d.i; const now=Date.now(); const dbl=MS.lastTap&&MS.lastTap.i===i&&now-MS.lastTap.t<450; MS.lastTap={i,t:now}; if(MS.p!==i){ MS.p=i; MS.part=0; } render(); if(dbl&&S.canWrite){ MS.lastTap=null; MS.part=0; msProject(); } }
   else if(a==='ms-scroll') msScrollLive(+d.d);
   else if(a==='ms-inhit') msGoPara(+d.i,false);
   else if(a==='ms-proj'){ if(MS.p==null) toast('Primero elige un párrafo.'); else if(MS.live&&MS.remote&&MS.remote.sermon&&MS.remote.mode==='text'&&MS.remote.sermon.p===MS.p){ MS.live=false; render(); toast('Modo en vivo apagado.'); } else msProject(); }

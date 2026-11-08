@@ -244,16 +244,19 @@ async function projNav(d: number, kind: string): Promise<any | null> {
   if (P.sermon?.id) {
     const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
     let pi = P.sermon.p, part = P.sermon.part || 0;
+    /* Si se empezó desde una palabra (Ctrl+clic), ese párrafo se muestra desde ahí; los demás, completos */
+    const p0 = P.sermon.p, from0 = Number(P.sermon.from) || 0; const TX = (i: number) => (i === p0 && from0 > 0 ? "…" + String(paras[i]?.t || "").slice(from0) : paras[i]?.t || "");
+    const FR = (i: number) => (i === p0 ? from0 : 0);
     if (kind === "glide") { /* bajada suave: un tercio de pantalla por movimiento de la rueda */
-      const st0 = msStepsSrv(paras[pi]?.t || ""); let sc = (P.sc || 0) + d / (Math.max(st0, 1) * 3);
+      const st0 = msStepsSrv(TX(pi)); let sc = (P.sc || 0) + d / (Math.max(st0, 1) * 3);
       if (sc > 1.001) { if (pi + 1 >= paras.length) return null; pi++; sc = 0; } else if (sc < -0.001) { if (pi - 1 < 0) return null; pi--; sc = 1; }
-      sc = Math.max(0, Math.min(1, sc)); const st1 = msStepsSrv(paras[pi].t);
-      return { ...P, text: paras[pi].t, num: paras[pi].n, sc, auto: 0, idx: pi, glide: true, sermon: { ...P.sermon, id: s.id || P.sermon.id, p: pi, part: Math.round(sc * st1) } };
+      sc = Math.max(0, Math.min(1, sc)); const st1 = msStepsSrv(TX(pi));
+      return { ...P, text: TX(pi), num: paras[pi].n, sc, auto: 0, idx: pi, glide: true, sermon: { ...P.sermon, id: s.id || P.sermon.id, p: pi, part: Math.round(sc * st1), from: FR(pi) } };
     }
-    if (kind === "scroll") { const steps = msStepsSrv(paras[pi]?.t || ""); if (part + d >= 0 && part + d <= steps) part += d; else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = d > 0 ? 0 : msStepsSrv(paras[pi].t); } }
+    if (kind === "scroll") { const steps = msStepsSrv(TX(pi)); if (part + d >= 0 && part + d <= steps) part += d; else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = d > 0 ? 0 : msStepsSrv(TX(pi)); } }
     else { pi += d; if (pi < 0 || pi >= paras.length) return null; part = 0; }
-    const steps = msStepsSrv(paras[pi].t);
-    return { ...P, text: paras[pi].t, num: paras[pi].n, sc: steps ? part / steps : 0, auto: 0, idx: pi, sermon: { ...P.sermon, id: s.id || P.sermon.id, p: pi, part } };
+    const steps = msStepsSrv(TX(pi));
+    return { ...P, text: TX(pi), num: paras[pi].n, sc: steps ? part / steps : 0, auto: 0, idx: pi, sermon: { ...P.sermon, id: s.id || P.sermon.id, p: pi, part, from: FR(pi) } };
   }
   if (P.bible && Number.isInteger(P.bible.b)) {
     const B = bibleData(P.label === "RV1909" ? "RV1909" : "RVR1960") || bibleData("RV1909"); if (!B) return null; const books = B.books;
@@ -675,7 +678,7 @@ const SERVER = Bun.serve({
         const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
         const BEFORE = PROJ;
         const bib = b.bible && Number.isInteger(b.bible.b) && Number.isInteger(b.bible.c) && Number.isInteger(b.bible.v) ? { b: b.bible.b, c: b.bible.c, v: b.bible.v } : undefined;
-        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
+        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), from: Math.max(0, Math.min(100000, Number(b.sermon.from) || 0)), date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
           media: b.media && typeof b.media.id === "string" && medioExists(b.media.id, Math.max(1, Number(b.media.n) || 1)) ? { id: b.media.id, n: Math.max(1, Number(b.media.n) || 1), total: Math.max(1, Number(b.media.total) || 1), title: str(b.media.title, 160) } : undefined,
