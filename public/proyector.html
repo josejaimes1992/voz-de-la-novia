@@ -23,6 +23,7 @@ body.upper .txt p{text-transform:uppercase}
 .layer.md{background:#000;z-index:3}.layer.md img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .3s ease}.layer.md img.on{opacity:1}
 .layer.on{opacity:1}
 .txt{width:92vw;height:86vh;display:flex;align-items:center;justify-content:center;text-align:center}
+.hl{color:var(--hlc,#ffd54a);font-weight:800}
 .txt p{margin:0;font-weight:700;line-height:1.22;white-space:pre-line;text-wrap:balance;text-shadow:0 2px 12px rgba(0,0,0,.6);letter-spacing:.005em}
 .logos{display:flex;align-items:center;justify-content:center;gap:6vw;height:100%}
 .logos img{height:min(52vh,40vw);width:auto;display:block}.logos img.own{height:auto;width:auto;object-fit:contain}
@@ -140,6 +141,11 @@ function applyStyle(x){
 }
 /* Modo lectura (Mensaje): párrafo grande que se desplaza con transparencia arriba y abajo */
 let rdAuto=null, rdOff=0;
+/* Texto con partes resaltadas (citas del Mensaje con negrita, o *así* en texto libre) */
+function vdnRich(t,hl){ t=String(t||''); const E=x=>x.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let R=(Array.isArray(hl)?hl:[]).filter(r=>Array.isArray(r)&&r[1]>r[0]).map(r=>[Math.max(0,r[0]|0),Math.min(t.length,r[1]|0)]).filter(r=>r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
+  if(!R.length&&/\*[^*\n]+\*/.test(t)){ let o='',k=0,m; const re=/\*([^*\n]+)\*/g; while((m=re.exec(t))){ o+=t.slice(k,m.index); R.push([o.length,o.length+m[1].length]); o+=m[1]; k=re.lastIndex; } t=o+t.slice(k); }
+  let h='',k=0; for(const [a,b] of R){ if(a<k) continue; h+=E(t.slice(k,a))+'<b class="hl">'+E(t.slice(a,b))+'</b>'; k=b; } return h+E(t.slice(k)); }
 function rdMax(){ const box=$('#rd-box'), inn=$('#rd-in'); return Math.max(0,inn.scrollHeight-box.clientHeight); }
 function rdSet(px,anim){ const inn=$('#rd-in'); rdOff=Math.max(0,Math.min(rdMax(),px)); inn.style.transition=anim===false?'none':''; inn.style.transform=`translateY(${-rdOff}px)`; }
 function rdApply(st){ cancelAnimationFrame(rdAuto); rdAuto=null; if(typeof gRaf!=='undefined'&&gRaf){ cancelAnimationFrame(gRaf); gRaf=null; }
@@ -158,7 +164,7 @@ function show(st){
     return; }
   M.classList.remove('on');
   if(st.mode==='text'&&st.read){ A.classList.remove('on'); B.classList.remove('on');
-    const inn=$('#rd-in'); inn.innerHTML=(st.num?`<sup>${String(st.num).replace(/[<>&]/g,'')}</sup>`:'')+String(st.text).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    const inn=$('#rd-in'); inn.innerHTML=(st.num?`<sup>${String(st.num).replace(/[<>&]/g,'')}</sup>`:'')+vdnRich(st.text,st.sermon&&st.sermon.hl);
     inn.style.fontSize=(7.4*szMult(st))+'vh'; inn.style.color=ST.color||'#fff'; inn.style.fontFamily=`"${ST.font||'Figtree'}",system-ui,sans-serif`; inn.style.textTransform=ST.upperRead?'uppercase':'none';
     const rf=$('#rd-ref'); rf.textContent=st.ref||''; rf.style.color=ST.ref||'#e9c45a'; rf.style.fontFamily=inn.style.fontFamily;
     document.documentElement.style.setProperty('--rdm',(ST.margin!=null?Math.max(3,ST.margin+2):6)+'vw');
@@ -166,7 +172,7 @@ function show(st){
   R.classList.remove('on'); cancelAnimationFrame(rdAuto);
   if(st.mode!=='text'){ A.classList.remove('on'); B.classList.remove('on'); return; }
   const next=front==='a'?B:A, prev=front==='a'?A:B;
-  next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); p.textContent=st.text;
+  next.classList.toggle('has-ref',!!st.ref); next.querySelector('.ref').textContent=st.ref||''; const p=next.querySelector('p'); if(/\*[^*\n]+\*/.test(st.text||'')||(st.sermon&&st.sermon.hl&&st.sermon.hl.length)) p.innerHTML=vdnRich(st.text,st.sermon&&st.sermon.hl); else p.textContent=st.text;
   const isRead=!!st.bible||!!st.sermon; next.classList.toggle('rd-up',isRead&&!!ST.upperRead); next.classList.toggle('rd-low',isRead&&!ST.upperRead);
   if(st.songId&&SL.id!==st.songId){ const id=st.songId; SL={id,texts:null,size:0,k:''}; fetch('/api/proyector/slides?song='+encodeURIComponent(id)).then(r=>r.json()).then(d=>{ if(SL.id!==id) return; SL.texts=d.texts||[]; SL.size=0; document.querySelectorAll('.layer.on .txt p').forEach(fit); }).catch(()=>{}); }
   fit(p);

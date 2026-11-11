@@ -64,6 +64,7 @@ body.up #bv-mi{text-transform:uppercase}
 body.up #bv-t{text-transform:uppercase}
 #dot{position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#e5484d;display:none}
 #dot.show{display:block}
+.hl{color:var(--hlc,#ffd54a);font-weight:800}
 </style>
 </head>
 <body>
@@ -73,6 +74,12 @@ body.up #bv-t{text-transform:uppercase}
 <div id="bv"><div id="bv-bg"><div id="bv-glow"></div><div id="bv-noise"></div><div id="bv-vig"></div><div id="bv-dim"></div></div><div id="bv-frame"></div><div id="bv-txt"><div id="bv-t"></div><div id="bv-r"></div></div><div id="bv-msg"><div id="bv-mi"></div></div><div id="bv-md"><img id="bv-mda" alt=""><img id="bv-mdb" alt=""></div><div id="bv-info"></div></div>
 <div id="dot" class="show" title="Sin conexión con la app"></div>
 <script>
+/* Texto con partes resaltadas (citas del Mensaje con negrita, o *así* en texto libre) */
+function vdnRich(t,hl){ t=String(t||''); const E=x=>x.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let R=(Array.isArray(hl)?hl:[]).filter(r=>Array.isArray(r)&&r[1]>r[0]).map(r=>[Math.max(0,r[0]|0),Math.min(t.length,r[1]|0)]).filter(r=>r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
+  if(!R.length&&/\*[^*\n]+\*/.test(t)){ let o='',k=0,m; const re=/\*([^*\n]+)\*/g; while((m=re.exec(t))){ o+=t.slice(k,m.index); R.push([o.length,o.length+m[1].length]); o+=m[1]; k=re.lastIndex; } t=o+t.slice(k); }
+  let h='',k=0; for(const [a,b] of R){ if(a<k) continue; h+=E(t.slice(k,a))+'<b class="hl">'+E(t.slice(a,b))+'</b>'; k=b; } return h+E(t.slice(k)); }
+
 /* Opciones por la dirección: ?t=1.2 (tamaño) &pos=arriba &may=0 (minúsculas) &franja=1 &biblia=0 &mensaje=1 &fuente=Oswald &color=ffffff */
 const Q=new URLSearchParams(location.search);
 const OPT={sceneMsg:Q.get('escmsg')==='1',view:Q.get('vista')||'',scene:(Q.get('escena')||'').trim(),ml:Math.min(6,Math.max(2,+Q.get('ml')||3)),mt:Math.min(2,Math.max(.5,+Q.get('mt')||1)),t:Math.min(2,Math.max(.5,+Q.get('t')||1)),top:Q.get('pos')==='arriba',up:Q.get('may')!=='0',band:Q.get('franja')==='1',bible:Q.get('biblia')!=='0',msg:Q.get('mensaje')==='1',font:Q.get('fuente')||'Barlow Semi Condensed',color:/^[0-9a-f]{6}$/i.test(Q.get('color')||'')?'#'+Q.get('color'):'#ffffff'};
@@ -116,8 +123,8 @@ function bvInfo(st){ const el=document.getElementById('bv-info'); if(!el) return
   el.innerHTML=`<div class="ti">${esc(title)}</div>${meta?`<div class="me">${esc(meta)}</div>`:''}${st.num?`<div class="pa">Párrafo ${esc(st.num)}</div>`:''}`; el.classList.add('on'); }
 function bmShow(st){ const W=document.getElementById('bv-msg'), I=document.getElementById('bv-mi'); bvInfo(st);
   if(!st){ if(bmKey){ bmKey=''; W.classList.remove('on'); cancelAnimationFrame(bmAuto); } return; }
-  const key=st.text+'|'+(st.num||''); I.style.fontSize=Math.round(document.getElementById('bv').clientHeight*0.058*OPT.mt)+'px';
-  if(key!==bmKey){ bmKey=key; I.innerHTML=(st.num?`<sup>${esc(st.num)}</sup>`:'')+esc(st.text); bmSet(0,false); W.classList.add('on'); }
+  const key=st.text+'|'+(st.num||'')+'|'+JSON.stringify(st.sermon&&st.sermon.hl||[]); I.style.fontSize=Math.round(document.getElementById('bv').clientHeight*0.058*OPT.mt)+'px';
+  if(key!==bmKey){ bmKey=key; I.innerHTML=(st.num?`<sup>${esc(st.num)}</sup>`:'')+vdnRich(st.text,st.sermon&&st.sermon.hl); bmSet(0,false); W.classList.add('on'); }
   cancelAnimationFrame(bmAuto); bmAuto=null;
   if(st.auto>0){ let last=performance.now(); const sp=st.auto*parseFloat(I.style.fontSize)*0.6; const step=t=>{ const dt=(t-last)/1000; last=t; bmSet(bmOff+sp*dt,false); if(bmOff<bmMax()) bmAuto=requestAnimationFrame(step); }; bmAuto=requestAnimationFrame(step); }
   else requestAnimationFrame(()=>bmSet((st.sc||0)*bmMax())); }
@@ -169,8 +176,8 @@ function rdMax(){ return Math.max(0,rdi.scrollHeight-rd.clientHeight); }
 function rdSet(px,anim){ rdOff=Math.max(0,Math.min(rdMax(),px)); rdi.style.transition=anim===false?'none':''; rdi.style.transform=`translateY(${-rdOff}px)`; }
 function rdShow(st){
   document.body.style.setProperty('--rfs',rdFs()+'px'); document.body.style.setProperty('--rl',OPT.ml);
-  const key=st.text+'|'+(st.num||'');
-  if(key!==rdKey){ rdKey=key; rdi.innerHTML=(st.num?`<sup>${esc(st.num)}</sup>`:'')+esc(st.text); rdSet(0,false); rd.classList.add('on'); }
+  const key=st.text+'|'+(st.num||'')+'|'+JSON.stringify(st.sermon&&st.sermon.hl||[]);
+  if(key!==rdKey){ rdKey=key; rdi.innerHTML=(st.num?`<sup>${esc(st.num)}</sup>`:'')+vdnRich(st.text,st.sermon&&st.sermon.hl); rdSet(0,false); rd.classList.add('on'); }
   cancelAnimationFrame(rdAuto); rdAuto=null;
   if(st.auto>0){ let last=performance.now(); const sp=st.auto*rdFs()*0.6; const step=t=>{ const dt=(t-last)/1000; last=t; rdSet(rdOff+sp*dt,false); if(rdOff<rdMax()) rdAuto=requestAnimationFrame(step); }; rdAuto=requestAnimationFrame(step); }
   else requestAnimationFrame(()=>rdSet((st.sc||0)*rdMax()));
@@ -185,7 +192,7 @@ function show(st){
   if(st&&st.mode==='text'){
     if(st.sermon){ /* el Mensaje se muestra en la ventana de lectura */ }
     else if(st.ref||st.bible){ if(OPT.bible&&!OPT.scene) html=`${st.ref?`<span class="rf">${esc(st.ref)}</span>`:''}<span class="ln wr">${esc(String(st.text||'').replace(/\s*\n\s*/g,' '))}</span>`; }
-    else { let L; if(st.subs>0){ const ch=chunks(st.text); L=ch[Math.min(st.sub||0,ch.length-1)]; } else L=twoLines(st.text); html=L.map(l=>`<span class="ln">${esc(l)}</span>`).join(''); }
+    else { let L; if(st.subs>0){ const ch=chunks(st.text); L=ch[Math.min(st.sub||0,ch.length-1)]; } else L=twoLines(st.text); html=L.map(l=>`<span class="ln">${/\*[^*\n]+\*/.test(l)?vdnRich(l):esc(l.replace(/\*/g,''))}</span>`).join(''); }
   }
   if(html===cur) return; cur=html;
   box.classList.remove('on');

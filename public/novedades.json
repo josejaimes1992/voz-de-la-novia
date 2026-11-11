@@ -1,4 +1,9 @@
 [
+  { "v": "1.4.3", "fecha": "2026-11-11", "items": [
+    "Citas del Mensaje con negrita: si pegas en Texto una cita con negritas (de WhatsApp o Word), al proyectarla esas partes salen resaltadas en amarillo y en negrita.",
+    "Nuevo botón “✨ Resaltar” en cada párrafo del Mensaje: toca o arrastra sobre las palabras para marcarlas. Se guardan en las Citas del culto.",
+    "En Texto libre, lo que escribas entre *asteriscos* sale resaltado en pantalla."
+  ] },
   { "v": "1.4.2", "fecha": "2026-11-08", "items": [
     "Mensaje: Ctrl + clic en cualquier palabra de un párrafo lo proyecta desde esa palabra (“…”). Siguiente pasa al próximo párrafo completo.",
     "El título de arriba de la consola muestra lo que estás usando (el Mensaje abierto, Biblia, Medios…) y ya no se queda con la última alabanza."

@@ -112,6 +112,26 @@ function msCaretOffset(e,box,text){ let node=null,off=0;
     else if(document.caretRangeFromPoint){ const r=document.caretRangeFromPoint(e.clientX,e.clientY); if(r){ node=r.startContainer; off=r.startOffset; } } }catch{}
   if(!node||!box.contains(node)) return 0; const r=document.createRange(); r.setStart(box,0); try{ r.setEnd(node,off); }catch{ return 0; }
   let o=Math.min(r.toString().length,text.length); while(o>0&&!/\s/.test(text[o-1])) o--; while(o<text.length&&/\s/.test(text[o])) o++; return o>=text.length?0:o; }
+/* ---- Resaltado (negrita) en citas del Mensaje ----
+   Rangos [inicio,fin] de letras dentro del párrafo. Se calculan desde las *negritas* de una cita pegada (WhatsApp)
+   o resaltando a mano en la consola. */
+function msHlNorm(R,len){ const L=(Array.isArray(R)?R:[]).filter(r=>Array.isArray(r)&&r.length===2).map(r=>[Math.max(0,r[0]|0),Math.min(len,r[1]|0)]).filter(r=>r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
+  const out=[]; for(const r of L){ const l=out[out.length-1]; if(l&&r[0]<=l[1]) l[1]=Math.max(l[1],r[1]); else out.push(r.slice()); } return out.slice(0,60); }
+/* Texto → HTML con las partes resaltadas. Sin rangos, también entiende *así* (negrita de WhatsApp) */
+function msRich(t,hl,cls){ t=String(t||''); const E=x=>x.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); cls=cls||'hl';
+  let R=msHlNorm(hl,t.length);
+  if(!R.length&&/\*[^*\n]+\*/.test(t)){ let o='',k=0,m; const re=/\*([^*\n]+)\*/g; while((m=re.exec(t))){ o+=t.slice(k,m.index); R.push([o.length,o.length+m[1].length]); o+=m[1]; k=re.lastIndex; } t=o+t.slice(k); }
+  let h='',k=0; for(const [a,b] of R){ h+=E(t.slice(k,a))+`<b class="${cls}">${E(t.slice(a,b))}</b>`; k=b; } return h+E(t.slice(k)); }
+/* Ubica cada frase en negrita (de lo pegado) dentro del párrafo del Mensaje, aunque cambien tildes o signos */
+function msHlFind(para,phrases){ const toks=[]; const re=/[\p{L}\p{N}]+/gu; let m; while((m=re.exec(para))) toks.push({s:m.index,e:m.index+m[0].length,w:msNorm(m[0])});
+  const out=[]; for(const ph of phrases||[]){ const W=(String(ph).match(/[\p{L}\p{N}]+/gu)||[]).map(msNorm); if(!W.length) continue;
+    let best=null; for(let i=0;i<toks.length;i++){ if(toks[i].w!==W[0]&&(W.length<2||toks[i].w!==W[1])) continue;
+      let j=i, k=toks[i].w===W[0]?0:1, hit=0, last=i, miss=0; while(j<toks.length&&k<W.length){ if(toks[j].w===W[k]){ hit++; last=j; j++; k++; miss=0; } else { let f=-1; for(let q=1;q<=2&&j+q<toks.length;q++) if(toks[j+q].w===W[k]){ f=q; break; } if(f>0){ j+=f; } else { k++; miss++; if(miss>2) break; } } }
+      const sc=hit/W.length; if(sc>=0.6&&(!best||sc>best.sc)) best={sc,a:toks[i].s,b:toks[last].e}; }
+    if(best) out.push([best.a,best.b]); }
+  return msHlNorm(out,para.length); }
+/* Rangos de resaltado guardados para un párrafo (citas del culto o la cita recién pegada) */
+function msHlFor(sid,n){ try{ if(MS.hlTmp&&MS.hlTmp.sid===sid&&String(MS.hlTmp.n)===String(n)) return MS.hlTmp.hl||[]; if(typeof pjCites==='function'){ const c=pjCites().find(x=>x.sid===sid&&String(x.n)===String(n)); if(c&&c.hl) return c.hl; } }catch{} return []; }
 function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true; render(); setTimeout(msScroll,20); }
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
@@ -119,7 +139,9 @@ async function msProject(){
   /* Ctrl+clic en una palabra: el párrafo se proyecta desde esa palabra */
   const from=MS.fromP===MS.p&&MS.from>0&&MS.from<P.t.length?MS.from:0; const T=from?'…'+P.t.slice(from):P.t;
   const steps=msSteps(T); MS.part=Math.max(0,Math.min(MS.part,steps));
-  const st={mode:'text',read:true,title:s.title,text:T,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||'',from}};
+  /* Resaltados de esta cita (se corren si se empezó desde una palabra) */
+  let hl=msHlFor(s.id,P.n); if(from) hl=hl.map(([a,b])=>[a-from+1,b-from+1]).filter(([a,b])=>b>1).map(([a,b])=>[Math.max(1,a),b]); hl=msHlNorm(hl,T.length);
+  const st={mode:'text',read:true,title:s.title,text:T,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||'',from,hl}};
   MS.remote=st; MS.live=true; render(); setTimeout(msScroll,20);
   try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo poner en pantalla. Revisa el internet.'); }
   if(V.view==='mensaje') render();
