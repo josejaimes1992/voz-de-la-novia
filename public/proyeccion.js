@@ -497,7 +497,10 @@ function pjCitaParse(text){ const T=String(text||'').replace(/\r/g,'').trim(); i
   return {id:'cita-'+(hh>>>0).toString(36),code:x?x.code:code,title:x?x.title:(title||'Mensaje'),place:x?x.place||'':'',paras}; }
 function pjCitaShow(C,i){ const P=C.paras[i]; if(!P) return; pjSend({mode:'text',read:true,title:C.title,text:P.t,num:P.n,label:'Mensaje',ref:`${C.code}\n${C.title}`,sc:0,auto:0,idx:i,total:C.paras.length,songId:null,programId:null,
   sermon:{id:C.id,p:i,part:0,title:C.title,code:C.code,date:'',place:C.place||'',hl:P.hl,paras:C.paras.map(x=>({n:x.n,t:x.t,hl:x.hl}))}}); }
-function pjTxtShow(i){ const n=pjTxt(); const C=pjCitaParse(n.text); if(C){ /* la cita entera: la diapositiva 0 es el título, así que se empieza en el primer párrafo */ return pjCitaShow(C,Math.max(0,Math.min(C.paras.length-1,i>0?i-1:0))); }
+function pjTxtShow(i){ const n=pjTxt(); const C=pjCitaParse(n.text);
+  /* si la cita se ubicó en la biblioteca, se proyecta el Mensaje del sistema (sigue con la rueda por todo el Mensaje) */
+  const F=PJ.found||[]; if(C&&F.length){ const c=F[Math.max(0,Math.min(F.length-1,i>0?i-1:0))]; MS.hlTmp={sid:c.sid,n:c.n,hl:c.hl||[]}; return pjCiteGo(c); }
+  if(C){ /* la cita entera: la diapositiva 0 es el título, así que se empieza en el primer párrafo */ return pjCitaShow(C,Math.max(0,Math.min(C.paras.length-1,i>0?i-1:0))); }
   const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
 function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();
   return `<div style="padding:8px"><button class="btn pri" data-act="pjt-new" style="width:100%">＋ Nueva nota</button></div>
@@ -564,31 +567,40 @@ const pjW=t=>msNorm(t).replace(/[^a-z0-9ñ ]+/g,' ').split(/\s+/).filter(w=>w.le
 function pjBestPara(s,txt){ const A=new Set(pjW(txt)); if(A.size<4) return -1; let bi=-1,bs=0; s.paras.forEach((p,i)=>{ const B=new Set(pjW(p.t)); let k=0; for(const w of A) if(B.has(w)) k++; const sc=k/A.size; if(sc>bs){ bs=sc; bi=i; } }); return bs>=0.6?bi:-1; }
 /* Frases en negrita de lo pegado: *así* (WhatsApp) */
 function pjBolds(t){ const L=[]; const re=/\*([^*\n]{2,})\*/g; let m; while((m=re.exec(String(t||'')))) L.push(m[1]); return L; }
+/* Ubica un bloque pegado: primero por el número de párrafo, si el texto coincide; si no, por lo que dice el texto,
+   dentro del mismo Mensaje y, si hace falta, en toda la biblioteca (aunque sea otra traducción) */
+async function pjLocate(s,txt,num,code,push){
+  if(s){ let i=num?s.paras.findIndex(p=>String(p.n)===String(num)):-1; if(i>=0&&pjSim(txt,s.paras[i].t)>=0.5) return push(s,i,txt,num);
+    const j=pjBestPara(s,txt); if(j>=0) return push(s,j,txt,num); }
+  try{ const r=await api('/api/sermons/match',{method:'POST',body:JSON.stringify({text:txt,code:code||(s&&s.code)||''})}); const h=(r.hits||[])[0];
+    if(h){ const s2=s&&s.id===h.id?s:await pjSermon(h.id); const k=s2.paras.findIndex(p=>String(p.n)===String(h.n)); if(k>=0) return push(s2,k,txt,num,h.score); } }catch{}
+  if(s&&num){ const i=s.paras.findIndex(p=>String(p.n)===String(num)); if(i>=0) return push(s,i,txt,num); } }
 async function pjDetect(text){
   const out=[]; PJ.miss=[]; const T=String(text||'').replace(/\r/g,''); if(T.trim().length<12) return out;
   if(!MS.list||!MS.list.length) await msLoadList(true); const list=MS.list||[];
   /* código del Mensaje: 63-1216, 63-1216M, 63–1216 (cualquier guion) */
   const re=/(?<!\d)(\d{2})\s?[-‐‑‒–—]\s?(\d{4})([A-Za-z]{0,2})(?![\d])/g; const hits=[]; let m; while((m=re.exec(T))){ let sf=m[3].toUpperCase(); if(sf==='AM'||sf==='A'||sf==='MA') sf='M'; else if(sf==='PM'||sf==='P'||sf==='N') sf='E'; else if(!/^[ME]?$/.test(sf)) sf=''; hits.push({at:m.index,end:re.lastIndex,code:`${m[1]}-${m[2]}${sf}`}); }
   const seenP=new Set();
-  const push=(s,i,pasted,reqN)=>{ const k=s.id+'#'+i; if(seenP.has(k)) return; seenP.add(k); out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t,pasted,reqN,sim:pjSim(pasted,s.paras[i].t),hl:msHlFind(s.paras[i].t,pjBolds(pasted))}); };
+  const push=(s,i,pasted,reqN,score)=>{ const k=s.id+'#'+i; if(seenP.has(k)) return; seenP.add(k); const sim=pjSim(pasted,s.paras[i].t); out.push({sid:s.id,code:s.code,title:s.title,place:s.place,i,n:s.paras[i].n,snip:s.paras[i].t,pasted,reqN,sim:score!=null?Math.max(sim,Math.min(1,score)):sim,hl:msHlFind(s.paras[i].t,pjBolds(pasted))}); };
   for(let h=0;h<hits.length;h++){ const H=hits[h]; const seg=T.slice(H.end,h+1<hits.length?hits[h+1].at:T.length); const line=seg.split('\n')[0];
     let cands=list.filter(x=>(x.code||'').toUpperCase().startsWith(H.code.slice(0,7))); if(H.code.length>7){ const ex=cands.filter(x=>x.code.toUpperCase()===H.code); if(ex.length) cands=ex; }
     const tw=new Set(pjW(line));
     /* si el código no está, se busca por el título escrito en la misma línea */
     if(!cands.length&&tw.size>=2){ const sc=x=>{ const w=pjW(x.title); return w.length?w.filter(v=>tw.has(v)).length/w.length:0; }; const best=list.map(x=>[x,sc(x)]).sort((a,b)=>b[1]-a[1])[0]; if(best&&best[1]>=0.7) cands=[best[0]]; }
     if(cands.length>1) cands.sort((a,b)=>pjW(b.title).filter(w=>tw.has(w)).length-pjW(a.title).filter(w=>tw.has(w)).length);
-    const x=cands[0]; if(!x){ PJ.miss=(PJ.miss||[]).concat({code:H.code,why:'no'}); continue; } let s; try{ s=await pjSermon(x.id); }catch{ PJ.miss=(PJ.miss||[]).concat({code:H.code,why:'err'}); continue; } const n0=out.length;
+    const x=cands[0]; if(!x){ /* el código no está: se busca por el texto en toda la biblioteca */ const n1=out.length; const body0=seg.slice(line.length);
+      for(const blk of (body0.trim()?body0:seg).split(/\n\s*\n/)){ const b=blk.trim(); if(pjW(b).length<6) continue; const nm=/^(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/.exec(b); await pjLocate(null,nm?b.slice(nm[0].length):b,nm?nm[1]:null,H.code,push); }
+      if(out.length===n1) PJ.miss=(PJ.miss||[]).concat({code:H.code,why:'no'}); continue; } let s; try{ s=await pjSermon(x.id); }catch{ PJ.miss=(PJ.miss||[]).concat({code:H.code,why:'err'}); continue; } const n0=out.length;
     /* cada número de párrafo al inicio de una línea es un párrafo distinto (112 …, 113 …) */
     const body=seg.slice(line.length); const P=[]; const pr=/(?:^|\n)[ \t]*(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/g; let q; while((q=pr.exec(body))) P.push({n:q[1],at:q.index,st:pr.lastIndex});
-    if(P.length){ for(let k=0;k<P.length;k++){ const txt=body.slice(P[k].st,k+1<P.length?P[k+1].at:body.length).trim(); if(!txt) continue;
-        let i=s.paras.findIndex(p=>String(p.n)===P[k].n); if(i>=0&&pjSim(txt,s.paras[i].t)<0.5){ const j=pjBestPara(s,txt); if(j>=0) i=j; } if(i<0) i=pjBestPara(s,txt); if(i>=0) push(s,i,txt,P[k].n); } }
-    else { const txt=body.trim()||seg.trim(); const i=pjBestPara(s,txt); if(i>=0) push(s,i,txt,null); }
+    /* bloques separados por línea en blanco; si empiezan con número, ese es el párrafo pedido */
+    const blocks=[]; for(const blk of body.split(/\n\s*\n/)){ const b=blk.trim(); if(!b) continue; const nm=/^(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/.exec(b); blocks.push({n:nm?nm[1]:null,txt:nm?b.slice(nm[0].length):b}); }
+    if(!blocks.length&&seg.trim()) blocks.push({n:null,txt:seg.trim()});
+    for(const B of blocks){ await pjLocate(s,B.txt,B.n,H.code,push); }
     if(out.length===n0) PJ.miss=(PJ.miss||[]).concat({code:s.code||H.code,title:s.title,why:'para'});
   }
-  if(!out.length){ /* sin código: se busca por las palabras del texto (sin el encabezado) */
-    const lines=T.split('\n').filter(l=>l.trim()); const bodyT=lines.length>1?lines.slice(1).join(' '):T; const W=pjW(bodyT.replace(/^\s*\d{1,4}\s+/,''));
-    for(const st of [0,6]){ const words=W.slice(st,st+8).join(' '); if(words.split(' ').length<5) continue;
-      try{ const r=await api('/api/sermons/search?q='+encodeURIComponent(words)); const p=(r.paras||[])[0]; if(p){ const s=await pjSermon(p.id); const i=s.paras.findIndex(q=>String(q.n)===String(p.n)); if(i>=0){ push(s,i,bodyT.trim(),null); break; } } }catch{} } }
+  if(!out.length&&!hits.length){ /* sin código: se busca en todos los Mensajes por lo que dice cada bloque */
+    for(const blk of T.split(/\n\s*\n/)){ const b=blk.trim(); if(pjW(b).length<6) continue; const nm=/^(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/.exec(b); await pjLocate(null,nm?b.slice(nm[0].length):b,nm?nm[1]:null,'',push); } }
   return out; }
 function pjDetectSoon(){ PJ.cmpK=null; clearTimeout(PJ.detT); PJ.detT=setTimeout(async()=>{ const t=pjTxt().text; PJ.found=await pjDetect(t).catch(()=>[]); const box=$('#pjt-found'); if(box) box.innerHTML=pjFoundHtml(); },700); }
 function pjSim(a,b){ const A=pjW(a), B=new Set(pjW(b)); if(!A.length) return 0; let k=0; for(const w of A) if(B.has(w)) k++; return k/A.length; }
@@ -600,7 +612,7 @@ function pjDiff(a,b){ const ta=String(a).split(/(\s+)/).filter(x=>x.trim()), tb=
   const paint=(t,ok,cls)=>t.map((w,i)=>ok.has(i)||!pjW(w).length?esc(w):`<mark class="${cls}">${esc(w)}</mark>`).join(' ');
   return {a:paint(ta,okA,'dx-a'),b:paint(tb,okB,'dx-b'),pct:Math.round(100*okA.size/Math.max(1,ta.filter(w=>pjW(w).length).length))}; }
 function pjFoundHtml(){ const F=PJ.found||[]; const M=(PJ.miss||[]).filter(m=>!F.some(f=>(f.code||'').startsWith(m.code.slice(0,7))));
-  const miss=M.map(m=>`<div class="pjf-it warn"><span>⚠ ${m.why==='no'?`Veo el código <b>${esc(m.code)}</b>, pero ese Mensaje no está en tu biblioteca de Mensajes. Revisa el código, o impórtalo en la sección Mensaje.`:m.why==='para'?`Encontré el Mensaje <b>${esc(m.code)} · ${esc(m.title||'')}</b>, pero tu texto no coincide con su párrafo (puede ser otra traducción). Toca <b>📺 Proyectar</b>: sale tal como lo pegaste, igual que un Mensaje (rueda del mouse, referencia abajo y escena Biblia de OBS).`:`No se pudo abrir el Mensaje <b>${esc(m.code)}</b>. Revisa la conexión.`}</span></div>`).join('');
+  const miss=M.map(m=>`<div class="pjf-it warn"><span>⚠ ${m.why==='no'?`Veo el código <b>${esc(m.code)}</b>, pero ese Mensaje no está en tu biblioteca de Mensajes. Revisa el código, o impórtalo en la sección Mensaje.`:m.why==='para'?`Encontré el Mensaje <b>${esc(m.code)} · ${esc(m.title||'')}</b>, pero no encontré ese texto en ninguno de sus párrafos (ni en otros Mensajes). Toca <b>📺 Proyectar</b>: sale tal como lo pegaste, igual que un Mensaje (rueda del mouse, referencia abajo y escena Biblia de OBS).`:`No se pudo abrir el Mensaje <b>${esc(m.code)}</b>. Revisa la conexión.`}</span></div>`).join('');
   if(!F.length) return miss?`<div class="pjf">${miss}</div>`:'';
   return `<div class="pjf">${F.map((c,k)=>{ const warn=c.reqN&&String(c.reqN)!==String(c.n); const open=PJ.cmpK===k; const d=open?pjDiff(c.pasted||'',c.snip||''):null;
     return `<div class="pjf-it${warn?' warn':''}"><span>📜 Es del Mensaje <b>${esc(c.code||'')} · ${esc(c.title)}</b> · Párrafo <b>${esc(c.n)}</b>${c.hl&&c.hl.length?` <small class="pjf-sim ok">✨ ${c.hl.length} resaltado${c.hl.length>1?'s':''}</small>`:''}${c.sim!=null?` <small class="pjf-sim ${c.sim>=0.85?'ok':c.sim>=0.6?'mid':'bad'}">${Math.round(c.sim*100)}% igual</small>`:''}${warn?`<br><small>⚠ Pegaste el párrafo <b>${esc(c.reqN)}</b>, pero en este Mensaje el texto coincide con el <b>${esc(c.n)}</b>. Compara antes de proyectar.</small>`:''}</span>

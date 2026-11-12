@@ -127,6 +127,30 @@ export async function sermonSearch(db: any, q: string) {
   return { titles, paras: paras.slice(0, 80), more: paras.length > 80 };
 }
 
+/* ---------- Ubicar una cita por lo que dice el texto (aunque el número de párrafo o la traducción no coincidan) ---------- */
+const STOP = new Set("que los las del por para con una uno unos unas como pero mas este esta estos estas ese esa eso esto ellos ellas ustedes usted nosotros ser fue era son estan esta estaba han hay muy sus cuando donde porque entonces ahora todo toda todos todas solo tambien sino aqui alli asi bien ver ven verdad dijo dice decir".split(" "));
+const stemsOf = (t: string) => { const out: string[] = []; for (const w of norm(t).split(/[^a-z0-9ñ]+/)) { if (w.length < 3 || STOP.has(w)) continue; out.push(w.length > 6 ? w.slice(0, 6) : w); } return out; };
+export async function sermonMatch(db: any, text: string, code = "") {
+  const A = [...new Set(stemsOf(text))].slice(0, 90); if (A.length < 4) return { hits: [] };
+  const all = await index(db); const cu = String(code || "").toUpperCase().slice(0, 7);
+  /* palabras "raras" (las más largas) para descartar rápido los párrafos que no tienen nada que ver */
+  const keys = [...A].sort((a, b) => b.length - a.length).slice(0, 6);
+  const score = (nt: string) => { let k = 0; for (const w of A) if (nt.includes(w)) k++; return k / A.length; };
+  const hits: any[] = [];
+  const scan = (list: typeof all, minKeys: number) => {
+    for (const s of list) { const P = s.paras;
+      for (let i = 0; i < P.length; i++) { const nt = P[i].nt; let kk = 0; for (const w of keys) if (nt.includes(w)) kk++;
+        const nt2 = i + 1 < P.length ? nt + " " + P[i + 1].nt : nt; let kk2 = kk; if (kk < minKeys && i + 1 < P.length) { kk2 = 0; for (const w of keys) if (nt2.includes(w)) kk2++; }
+        if (Math.max(kk, kk2) < minKeys) continue;
+        const sc1 = score(nt), sc2 = i + 1 < P.length ? score(nt2) : 0; const scN = i + 1 < P.length ? score(P[i + 1].nt) : 0; const two = sc2 > Math.max(sc1, scN) + 0.12 && sc1 >= 0.2;
+        hits.push({ id: s.id, code: s.code, title: s.title, place: s.place, i, n: P[i].n, span: two ? 2 : 1, score: Math.round((two ? sc2 : sc1) * 1000) / 1000 + (cu && s.code.toUpperCase().startsWith(cu) ? 0.15 : 0) }); } } };
+  if (cu) scan(all.filter(s => s.code.toUpperCase().startsWith(cu)), 1);
+  hits.sort((a, b) => b.score - a.score);
+  if (!hits.length || hits[0].score < 0.5) { scan(all.filter(s => !cu || !s.code.toUpperCase().startsWith(cu)), Math.min(3, keys.length)); hits.sort((a, b) => b.score - a.score); }
+  const seen = new Set<string>(); const out = hits.filter(h => { const k = h.id + "#" + h.i; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+  return { hits: out.filter(h => h.score >= 0.4) };
+}
+
 /* ---------- Catálogo público de mensajes (código → título y ciudad) ---------- */
 type Meta = { title: string; place: string };
 let CAT: { at: number; map: Map<string, Meta> } | null = null;

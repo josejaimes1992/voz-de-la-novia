@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.7", "fecha": "2026-11-11", "items": [
+    "Citas pegadas: si el número de párrafo no coincide (u otra traducción), el sistema busca el párrafo por lo que dice el texto, primero en ese Mensaje y luego en toda la biblioteca.",
+    "También encuentra citas sin código o con el código equivocado. “Proyectar” usa el párrafo del sistema y sigue con la rueda por todo el Mensaje."
+  ] },
   { "v": "1.4.6", "fecha": "2026-11-11", "items": [
     "Citas pegadas en Texto (código y título arriba, luego los párrafos): al tocar Proyectar salen igual que un Mensaje — lectura grande, rueda del mouse, número de párrafo, referencia abajo y escena Biblia/Mensaje de OBS.",
     "Funciona aunque el texto sea de otra traducción y no coincida con la biblioteca. Las negritas, resaltados y sombreados se respetan."

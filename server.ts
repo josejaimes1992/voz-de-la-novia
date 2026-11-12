@@ -2,7 +2,7 @@
 import { makeDb, appPath, tool } from "./db.ts";
 import { librosRoute, initLibros } from "./libros.ts";
 import { mediosRoute, initMedios, medioExists, fixInterrupted, mediosList } from "./medios.ts";
-import { parseSermon, pdfText, sermonList, sermonSearch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
+import { parseSermon, pdfText, sermonList, sermonSearch, sermonMatch, resetIndex, syncSermonMeta, metaFor, metaByTitle, sermonMeta, badTitle, sermonEpoch, sermonsAll } from "./sermones.ts";
 import { buildRefs, type RefIndex } from "./refs.ts";
 import { randomBytes, createDecipheriv } from "node:crypto";
 import { mkdirSync, existsSync, unlinkSync, statSync } from "node:fs";
@@ -554,6 +554,7 @@ const SERVER = Bun.serve({
         if (!user && req.method !== "GET") return json({ error: "unauthorized" }, 401);
         if (p === "/api/sermons" && req.method === "GET") return json({ sermons: await sermonList(db) });
         if (p === "/api/sermons/search" && req.method === "GET") return json(await sermonSearch(db, url.searchParams.get("q") ?? ""));
+        if (p === "/api/sermons/match" && req.method === "POST") { const b: any = await req.json().catch(() => ({})); return json(await sermonMatch(db, String(b.text || "").slice(0, 8000), String(b.code || ""))); }
         if (p === "/api/sermons/import" && req.method === "POST") {
           const name = decodeURIComponent(req.headers.get("x-file-name") ?? "mensaje").slice(0, 200);
           const buf = new Uint8Array(await req.arrayBuffer());
