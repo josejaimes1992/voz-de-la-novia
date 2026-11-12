@@ -131,11 +131,11 @@ function msRich(t,hl,cls){ const c=cls||'hl'; return vdnRich(t,hl,{h:c,b:c+'-b',
 function msHlApply(R,a,b,st,len){ let L=vdnNorm(R,len).flatMap(r=>r[1]<=a||r[0]>=b?[r]:[...(r[0]<a?[[r[0],a,r[2]]]:[]),...(r[1]>b?[[b,r[1],r[2]]]:[])]); if(st) L.push([a,b,st]); return vdnNorm(L,len); }
 /* Ubica cada frase en negrita (de lo pegado) dentro del párrafo del Mensaje, aunque cambien tildes o signos */
 function msHlFind(para,phrases){ const toks=[]; const re=/[\p{L}\p{N}]+/gu; let m; while((m=re.exec(para))) toks.push({s:m.index,e:m.index+m[0].length,w:msNorm(m[0])});
-  const out=[]; for(const ph of phrases||[]){ const W=(String(ph).match(/[\p{L}\p{N}]+/gu)||[]).map(msNorm); if(!W.length) continue;
+  const out=[]; for(const ph0 of phrases||[]){ const ph=typeof ph0==='object'&&ph0?ph0.t:ph0, st=typeof ph0==='object'&&ph0?ph0.st:'h'; const W=(String(ph).match(/[\p{L}\p{N}]+/gu)||[]).map(msNorm); if(!W.length) continue;
     let best=null; for(let i=0;i<toks.length;i++){ if(toks[i].w!==W[0]&&(W.length<2||toks[i].w!==W[1])) continue;
       let j=i, k=toks[i].w===W[0]?0:1, hit=0, last=i, miss=0; while(j<toks.length&&k<W.length){ if(toks[j].w===W[k]){ hit++; last=j; j++; k++; miss=0; } else { let f=-1; for(let q=1;q<=2&&j+q<toks.length;q++) if(toks[j+q].w===W[k]){ f=q; break; } if(f>0){ j+=f; } else { k++; miss++; if(miss>2) break; } } }
       const sc=hit/W.length; if(sc>=0.6&&(!best||sc>best.sc)) best={sc,a:toks[i].s,b:toks[last].e}; }
-    if(best) out.push([best.a,best.b]); }
+    if(best) out.push([best.a,best.b,st]); }
   return msHlNorm(out,para.length); }
 /* Rangos de resaltado guardados para un párrafo (citas del culto o la cita recién pegada) */
 /* Texto del párrafo para proyectar: el editado en la cita del culto, o el original */

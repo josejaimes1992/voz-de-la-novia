@@ -1,4 +1,9 @@
 [
+  { "v": "1.4.8", "fecha": "2026-11-11", "items": [
+    "Pegar desde WhatsApp: reconoce las negritas tanto si vienen con *asteriscos* (Copiar del menú del mensaje) como copiadas con formato. Avisa cuántas reconoció.",
+    "En Texto eliges si la negrita de WhatsApp sale como ✨ Resaltado (amarillo) o como B Negrita.",
+    "Se limpian las marcas de cursiva y tachado de WhatsApp (_ _ y ~ ~) para que no salgan en pantalla."
+  ] },
   { "v": "1.4.7", "fecha": "2026-11-11", "items": [
     "Citas pegadas: si el número de párrafo no coincide (u otra traducción), el sistema busca el párrafo por lo que dice el texto, primero en ese Mensaje y luego en toda la biblioteca.",
     "También encuentra citas sin código o con el código equivocado. “Proyectar” usa el párrafo del sistema y sigue con la rueda por todo el Mensaje."
