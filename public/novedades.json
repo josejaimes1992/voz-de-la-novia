@@ -1,4 +1,9 @@
 [
+  { "v": "1.4.5", "fecha": "2026-11-11", "items": [
+    "Citas pegadas: reconoce mejor el Mensaje (cualquier guion en el código, o por el título) y cada número de párrafo (112, 113…) como una cita aparte. Si no lo encuentra, te dice por qué.",
+    "Cada cita guardada tiene ✏️ Editar: selecciona palabras y ponlas en Resaltar, Negrita o Sombrear, con vista previa de cómo se verá en pantalla.",
+    "En lo pegado también aparece “✏️ Editar” para guardar la cita y darle formato de una vez."
+  ] },
   { "v": "1.4.4", "fecha": "2026-11-11", "items": [
     "Clic derecho en un párrafo del Mensaje: resaltar en amarillo, poner en negrita o sombrear la palabra, marcar varias palabras, quitar formato o editar el texto para proyectar.",
     "“Editar texto para proyectar”: acorta o corrige el párrafo solo para el culto; el Mensaje original no cambia.",
