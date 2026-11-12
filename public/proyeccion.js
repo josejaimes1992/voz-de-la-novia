@@ -529,9 +529,23 @@ function pjWaText(t){ const mk=pjWaPref()==='b'?'**':'*'; let n=0;
   t=String(t).replace(/```([\s\S]*?)```/g,'$1').replace(/(^|[\s(¡¿"“])~([^~\n]+?)~(?=[\s.,;:!?)"”]|$)/gm,'$1$2').replace(/(^|[\s(¡¿"“])_([^_\n]+?)_(?=[\s.,;:!?)"”]|$)/gm,'$1$2');
   /* *texto* de WhatsApp (sin tocar ** ni ==) */
   t=t.replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/gm,(m0,pre,x)=>{ n++; return pre+mk+x+mk; }); return {t,n}; }
+/* Del formato propio de WhatsApp saca el texto original del mensaje (con sus *asteriscos*) */
+function pjWaRaw(wa,plain){ let strs=[]; const take=v=>{ if(typeof v==='string'){ if(v.length>15) strs.push(v); } else if(Array.isArray(v)) v.forEach(take); else if(v&&typeof v==='object') Object.values(v).forEach(take); };
+  try{ take(JSON.parse(wa)); }catch{ strs=[String(wa)]; }
+  const key=pjW(plain).slice(0,8).join(' '); const norm=t=>pjW(t.replace(/[*_~`]/g,'')).join(' ');
+  /* el que más se parece a lo copiado y trae marcas de formato */
+  let best='', bs=-1; for(const x of strs){ const nx=norm(x); const sc=(key&&nx.includes(key.split(' ').slice(0,4).join(' '))?2:0)+(/\*[^*\n]+\*/.test(x)?1:0)+Math.min(1,x.length/Math.max(1,plain.length)); if(sc>bs){ bs=sc; best=x; } }
+  if(!best||!/\*[^*\n]+\*|_[^_\n]+_/.test(best)) return '';
+  /* si se copió solo una parte, se recorta al mismo inicio y fin que lo copiado */
+  if(plain&&plain.length<best.replace(/[*_~]/g,'').length*0.9){ const P=plain.trim(); const a0=P.slice(0,20), b0=P.slice(-20); const map=[]; let flat=''; for(let i=0;i<best.length;i++){ if('*_~'.includes(best[i])) continue; map.push(i); flat+=best[i]; }
+    const ia=flat.indexOf(a0), ib=flat.lastIndexOf(b0); if(ia>=0&&ib>=ia){ let A=map[ia], B=map[ib+b0.length-1]+1; while(A>0&&'*_~'.includes(best[A-1])) A--; while(B<best.length&&'*_~'.includes(best[B])) B++; return best.slice(A,B); } }
+  return best; }
 /* Pegar: reconoce las negritas venga como venga (texto de WhatsApp con *asteriscos*, o copiado con formato de WhatsApp Web, Word, Docs) */
 document.addEventListener('paste',e=>{ const t=e.target; if(!t||(t.id!=='pjt-text'&&t.id!=='pje-t')) return; const cd=e.clipboardData; if(!cd) return;
-  const html=cd.getData('text/html')||'', plain=cd.getData('text/plain')||''; const mk=pjWaPref()==='b'?'**':'*'; let txt='', n=0, how='';
+  const html=cd.getData('text/html')||''; let plain=cd.getData('text/plain')||''; const mk=pjWaPref()==='b'?'**':'*'; let txt='', n=0, how='';
+  /* WhatsApp Web guarda además su propio formato ("application/whatsapp") con el texto original, que trae las *negritas* */
+  let wa=''; try{ wa=cd.getData('application/whatsapp')||''; }catch{}
+  if(wa){ const raw=pjWaRaw(wa,plain); if(raw) plain=raw; }
   if(html&&/<(b|strong)\b|font-weight\s*:\s*(bold|[6-9]00)/i.test(html)){
     const d=new DOMParser().parseFromString(html,'text/html'); const out=[];
     const isBold=c=>{ const tg=c.tagName; if(tg==='B'||tg==='STRONG') return true; const fw=(c.getAttribute('style')||'').match(/font-weight\s*:\s*(bold|\d+)/i); return !!(fw&&(fw[1]==='bold'||+fw[1]>=600)); };
@@ -542,7 +556,7 @@ document.addEventListener('paste',e=>{ const t=e.target; if(!t||(t.id!=='pjt-tex
   }
   else if(plain){ const r=pjWaText(plain); txt=r.t; n=r.n; how='wa'; }
   /* Diagnóstico: si no llegaron negritas, se guarda en el registro del servidor qué mandó el portapapeles (para ajustar el reconocimiento) */
-  if(!n){ try{ api('/api/diag',{method:'POST',body:JSON.stringify({k:'paste',types:[...(cd.types||[])],html:html.slice(0,6000),plain:plain.slice(0,600)})}).catch(()=>{}); }catch{} }
+  if(!n){ try{ api('/api/diag',{method:'POST',body:JSON.stringify({k:'paste',types:[...(cd.types||[])],html:(wa?'WA:'+wa:html).slice(0,6000),plain:plain.slice(0,600)})}).catch(()=>{}); }catch{} }
   if(!txt) return; e.preventDefault(); const a=t.selectionStart, b=t.selectionEnd; t.value=t.value.slice(0,a)+txt+t.value.slice(b); t.selectionStart=t.selectionEnd=a+txt.length; t.dispatchEvent(new Event('input',{bubbles:true}));
   PJ.pasteInfo=n?`✓ Se pegó con ${n} parte${n>1?'s':''} en negrita → saldrán ${pjWaPref()==='b'?'en negrita':'resaltadas en amarillo'}.`:(/\d{2}\s?[-–]\s?\d{4}/.test(txt)?'Lo que copiaste no traía negritas. En WhatsApp: toca la flechita ▾ del mensaje → “Copiar”, y pégalo aquí; o márcalas con clic derecho.':'');
   const pi=document.getElementById('pjt-pinfo'); if(pi){ pi.textContent=PJ.pasteInfo; pi.hidden=!PJ.pasteInfo; } });
