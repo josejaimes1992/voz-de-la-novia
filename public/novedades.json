@@ -1,4 +1,9 @@
 [
+  { "v": "1.4.4", "fecha": "2026-11-11", "items": [
+    "Clic derecho en un párrafo del Mensaje: resaltar en amarillo, poner en negrita o sombrear la palabra, marcar varias palabras, quitar formato o editar el texto para proyectar.",
+    "“Editar texto para proyectar”: acorta o corrige el párrafo solo para el culto; el Mensaje original no cambia.",
+    "En Texto libre: selecciona y haz clic derecho para Resaltar, Negrita o Sombrear."
+  ] },
   { "v": "1.4.3", "fecha": "2026-11-11", "items": [
     "Citas del Mensaje con negrita: si pegas en Texto una cita con negritas (de WhatsApp o Word), al proyectarla esas partes salen resaltadas en amarillo y en negrita.",
     "Nuevo botón “✨ Resaltar” en cada párrafo del Mensaje: toca o arrastra sobre las palabras para marcarlas. Se guardan en las Citas del culto.",

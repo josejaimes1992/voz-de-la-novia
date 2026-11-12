@@ -115,13 +115,20 @@ function msCaretOffset(e,box,text){ let node=null,off=0;
 /* ---- Resaltado (negrita) en citas del Mensaje ----
    Rangos [inicio,fin] de letras dentro del párrafo. Se calculan desde las *negritas* de una cita pegada (WhatsApp)
    o resaltando a mano en la consola. */
-function msHlNorm(R,len){ const L=(Array.isArray(R)?R:[]).filter(r=>Array.isArray(r)&&r.length===2).map(r=>[Math.max(0,r[0]|0),Math.min(len,r[1]|0)]).filter(r=>r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
-  const out=[]; for(const r of L){ const l=out[out.length-1]; if(l&&r[0]<=l[1]) l[1]=Math.max(l[1],r[1]); else out.push(r.slice()); } return out.slice(0,60); }
-/* Texto → HTML con las partes resaltadas. Sin rangos, también entiende *así* (negrita de WhatsApp) */
-function msRich(t,hl,cls){ t=String(t||''); const E=x=>x.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); cls=cls||'hl';
-  let R=msHlNorm(hl,t.length);
-  if(!R.length&&/\*[^*\n]+\*/.test(t)){ let o='',k=0,m; const re=/\*([^*\n]+)\*/g; while((m=re.exec(t))){ o+=t.slice(k,m.index); R.push([o.length,o.length+m[1].length]); o+=m[1]; k=re.lastIndex; } t=o+t.slice(k); }
-  let h='',k=0; for(const [a,b] of R){ h+=E(t.slice(k,a))+`<b class="${cls}">${E(t.slice(a,b))}</b>`; k=b; } return h+E(t.slice(k)); }
+/* Formato del texto proyectado: rangos [inicio, fin, estilo] — estilo 'h' resaltado (amarillo), 'b' negrita, 's' sombreado.
+   En texto libre también: *resaltado*  **negrita**  ==sombreado== */
+function vdnParse(t){ const R=[]; let o='',k=0,m; const re=/\*\*([^*\n]+?)\*\*|==([^=\n]+?)==|\*([^*\n]+?)\*/g;
+  while((m=re.exec(t))){ o+=t.slice(k,m.index); const st=m[1]!=null?'b':m[2]!=null?'s':'h'; const g=m[1]!=null?m[1]:m[2]!=null?m[2]:m[3]; R.push([o.length,o.length+g.length,st]); o+=g; k=re.lastIndex; }
+  return {t:o+t.slice(k),R}; }
+function vdnNorm(R,len){ const L=(Array.isArray(R)?R:[]).filter(r=>Array.isArray(r)&&r.length>=2).map(r=>[Math.max(0,r[0]|0),Math.min(len,r[1]|0),/^[hbs]$/.test(r[2])?r[2]:'h']).filter(r=>r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
+  const out=[]; for(const r of L){ const l=out[out.length-1]; if(l&&r[0]<l[1]){ if(r[2]===l[2]){ l[1]=Math.max(l[1],r[1]); continue; } r[0]=l[1]; if(r[1]<=r[0]) continue; } if(l&&r[0]===l[1]&&r[2]===l[2]){ l[1]=r[1]; continue; } out.push(r); } return out.slice(0,80); }
+function vdnRich(t,hl,cls){ t=String(t||''); cls=cls||{h:'hl',b:'hb',s:'hs'}; const E=x=>x.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let R=vdnNorm(hl,t.length); if(!R.length&&/\*[^*\n]+\*|==[^=\n]+==/.test(t)){ const p=vdnParse(t); t=p.t; R=p.R; }
+  let h='',k=0; for(const [a,b,st] of R){ if(a<k) continue; const tag=st==='s'?'mark':'b'; h+=E(t.slice(k,a))+`<${tag} class="${cls[st]||cls.h}">${E(t.slice(a,b))}</${tag}>`; k=b; } return h+E(t.slice(k)); }
+function msHlNorm(R,len){ return vdnNorm(R,len); }
+function msRich(t,hl,cls){ const c=cls||'hl'; return vdnRich(t,hl,{h:c,b:c+'-b',s:c+'-s'}); }
+/* Aplica un estilo a [a,b] (o lo quita con estilo null): lo que había ahí se reemplaza */
+function msHlApply(R,a,b,st,len){ let L=vdnNorm(R,len).flatMap(r=>r[1]<=a||r[0]>=b?[r]:[...(r[0]<a?[[r[0],a,r[2]]]:[]),...(r[1]>b?[[b,r[1],r[2]]]:[])]); if(st) L.push([a,b,st]); return vdnNorm(L,len); }
 /* Ubica cada frase en negrita (de lo pegado) dentro del párrafo del Mensaje, aunque cambien tildes o signos */
 function msHlFind(para,phrases){ const toks=[]; const re=/[\p{L}\p{N}]+/gu; let m; while((m=re.exec(para))) toks.push({s:m.index,e:m.index+m[0].length,w:msNorm(m[0])});
   const out=[]; for(const ph of phrases||[]){ const W=(String(ph).match(/[\p{L}\p{N}]+/gu)||[]).map(msNorm); if(!W.length) continue;
@@ -131,16 +138,18 @@ function msHlFind(para,phrases){ const toks=[]; const re=/[\p{L}\p{N}]+/gu; let 
     if(best) out.push([best.a,best.b]); }
   return msHlNorm(out,para.length); }
 /* Rangos de resaltado guardados para un párrafo (citas del culto o la cita recién pegada) */
+/* Texto del párrafo para proyectar: el editado en la cita del culto, o el original */
+function msParaText(s,i){ const p=s&&s.paras[i]; if(!p) return ''; try{ if(typeof pjCites==='function'){ const c=pjCites().find(x=>x.sid===s.id&&String(x.n)===String(p.n)); if(c&&typeof c.txt==='string'&&c.txt.trim()) return c.txt; } }catch{} return p.t; }
 function msHlFor(sid,n){ try{ if(MS.hlTmp&&MS.hlTmp.sid===sid&&String(MS.hlTmp.n)===String(n)) return MS.hlTmp.hl||[]; if(typeof pjCites==='function'){ const c=pjCites().find(x=>x.sid===sid&&String(x.n)===String(n)); if(c&&c.hl) return c.hl; } }catch{} return []; }
 function msGoPara(i,keepFocus){ MS.p=i; MS.part=0; if(keepFocus) MS.focusQ=true; render(); setTimeout(msScroll,20); }
 function msOnScreen(){ const s=MS.cur, r=MS.remote; return !!(MS.live&&s&&r&&r.mode==='text'&&r.sermon&&r.sermon.id===s.id&&r.sermon.p===MS.p); }
 async function msProject(){
-  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p];
+  const s=MS.cur; if(!s||MS.p==null||!S.canWrite) return; const P=s.paras[MS.p]; const PT=msParaText(s,MS.p);
   /* Ctrl+clic en una palabra: el párrafo se proyecta desde esa palabra */
-  const from=MS.fromP===MS.p&&MS.from>0&&MS.from<P.t.length?MS.from:0; const T=from?'…'+P.t.slice(from):P.t;
+  const from=MS.fromP===MS.p&&MS.from>0&&MS.from<PT.length?MS.from:0; const T=from?'…'+PT.slice(from):PT;
   const steps=msSteps(T); MS.part=Math.max(0,Math.min(MS.part,steps));
   /* Resaltados de esta cita (se corren si se empezó desde una palabra) */
-  let hl=msHlFor(s.id,P.n); if(from) hl=hl.map(([a,b])=>[a-from+1,b-from+1]).filter(([a,b])=>b>1).map(([a,b])=>[Math.max(1,a),b]); hl=msHlNorm(hl,T.length);
+  let hl=vdnNorm(msHlFor(s.id,P.n),PT.length); if(from) hl=hl.map(([a,b,st])=>[a-from+1,b-from+1,st]).filter(([a,b])=>b>1).map(([a,b,st])=>[Math.max(1,a),b,st]); hl=vdnNorm(hl,T.length);
   const st={mode:'text',read:true,title:s.title,text:T,num:P.n,label:'Mensaje',ref:`${s.code||''}${s.code?'\n':''}${s.title}`,sc:steps?MS.part/steps:0,auto:+MS.auto||0,songId:null,programId:null,idx:MS.p,total:s.paras.length,sermon:{id:s.id,p:MS.p,part:MS.part,title:s.title||'',code:s.code||'',date:s.date||'',place:s.place||'',from,hl}};
   MS.remote=st; MS.live=true; render(); setTimeout(msScroll,20);
   try{ MS.remote=await api('/api/proyector',{method:'POST',body:JSON.stringify(st)}); }catch(e){ if(e.message==='auth') lostAuth(); else toast('No se pudo poner en pantalla. Revisa el internet.'); }
