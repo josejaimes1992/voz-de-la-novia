@@ -541,6 +541,8 @@ document.addEventListener('paste',e=>{ const t=e.target; if(!t||(t.id!=='pjt-tex
     walk(d.body,false); txt=out.join(''); const esc2=mk.replace(/\*/g,'\\*'); txt=txt.replace(new RegExp(esc2+'(\\s*)'+esc2,'g'),'$1').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim(); how='html';
   }
   else if(plain){ const r=pjWaText(plain); txt=r.t; n=r.n; how='wa'; }
+  /* Diagnóstico: si no llegaron negritas, se guarda en el registro del servidor qué mandó el portapapeles (para ajustar el reconocimiento) */
+  if(!n){ try{ api('/api/diag',{method:'POST',body:JSON.stringify({k:'paste',types:[...(cd.types||[])],html:html.slice(0,6000),plain:plain.slice(0,600)})}).catch(()=>{}); }catch{} }
   if(!txt) return; e.preventDefault(); const a=t.selectionStart, b=t.selectionEnd; t.value=t.value.slice(0,a)+txt+t.value.slice(b); t.selectionStart=t.selectionEnd=a+txt.length; t.dispatchEvent(new Event('input',{bubbles:true}));
   PJ.pasteInfo=n?`✓ Se pegó con ${n} parte${n>1?'s':''} en negrita → saldrán ${pjWaPref()==='b'?'en negrita':'resaltadas en amarillo'}.`:(/\d{2}\s?[-–]\s?\d{4}/.test(txt)?'Lo que copiaste no traía negritas. En WhatsApp: toca la flechita ▾ del mensaje → “Copiar”, y pégalo aquí; o márcalas con clic derecho.':'');
   const pi=document.getElementById('pjt-pinfo'); if(pi){ pi.textContent=PJ.pasteInfo; pi.hidden=!PJ.pasteInfo; } });
