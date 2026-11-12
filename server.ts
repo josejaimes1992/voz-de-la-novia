@@ -462,6 +462,7 @@ const SERVER = Bun.serve({
       if (p === "/" || p === "/index.html") return new Response(DK ? DK.desktopHtml(brandHtml(HTML)) : brandHtml(HTML), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/healthz") return new Response("ok");
       /* La app del teléfono busca la PC de la iglesia en el Wi-Fi: responde quién es (sin datos privados) */
+      if (p === "/api/diag" && req.method === "POST") { const b: any = await req.json().catch(() => ({})); console.log("DIAG", JSON.stringify({ k: String(b.k || "").slice(0, 20), types: Array.isArray(b.types) ? b.types.slice(0, 10) : [], html: String(b.html || "").slice(0, 6000), plain: String(b.plain || "").slice(0, 600) })); return json({ ok: true }); }
       if (p === "/api/hola") return new Response(JSON.stringify({ app: "voz-de-la-novia", church: CFG.name, desktop: !!DK }), { headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" } });
       if (p === "/obs") return new Response(Bun.file(appPath("./public/obs.html")), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       if (p === "/proyector") return new Response(brandHtml(await PROJ_HTML.text()), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
@@ -554,7 +555,6 @@ const SERVER = Bun.serve({
         if (!user && req.method !== "GET") return json({ error: "unauthorized" }, 401);
         if (p === "/api/sermons" && req.method === "GET") return json({ sermons: await sermonList(db) });
         if (p === "/api/sermons/search" && req.method === "GET") return json(await sermonSearch(db, url.searchParams.get("q") ?? ""));
-        if (p === "/api/diag" && req.method === "POST") { const b: any = await req.json().catch(() => ({})); console.log("DIAG", user?.name || "", JSON.stringify({ k: String(b.k || "").slice(0, 20), types: Array.isArray(b.types) ? b.types.slice(0, 10) : [], html: String(b.html || "").slice(0, 6000), plain: String(b.plain || "").slice(0, 600) })); return json({ ok: true }); }
         if (p === "/api/sermons/match" && req.method === "POST") { const b: any = await req.json().catch(() => ({})); return json(await sermonMatch(db, String(b.text || "").slice(0, 8000), String(b.code || ""))); }
         if (p === "/api/sermons/import" && req.method === "POST") {
           const name = decodeURIComponent(req.headers.get("x-file-name") ?? "mensaje").slice(0, 200);
