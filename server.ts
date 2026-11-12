@@ -242,11 +242,15 @@ async function projNav(d: number, kind: string): Promise<any | null> {
     if (!m) return null; const k = d > 0 ? 1 : m.pages; if (!medioExists(m.id, k)) return null;
     return { ...P, title: m.title, media: { id: m.id, n: k, total: m.pages, title: m.title }, idx: k - 1, total: m.pages }; }
   if (P.sermon?.id) {
-    const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; const s = parseJ(r[0].data); const paras = s.paras || [];
+    /* Cita pegada en Texto: trae sus párrafos consigo (no está en la biblioteca) */
+    let s: any, paras: any[];
+    if (Array.isArray(P.sermon.paras) && P.sermon.paras.length) { paras = P.sermon.paras; s = { id: P.sermon.id }; }
+    else { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${P.sermon.id}`; if (!r[0]) return null; s = parseJ(r[0].data); paras = s.paras || []; }
+    const inline = Array.isArray(P.sermon.paras) && P.sermon.paras.length > 0;
     let pi = P.sermon.p, part = P.sermon.part || 0;
     /* Si se empezó desde una palabra (Ctrl+clic), ese párrafo se muestra desde ahí; los demás, completos */
     const p0 = P.sermon.p, from0 = Number(P.sermon.from) || 0; const TX = (i: number) => (i === p0 && from0 > 0 ? "…" + String(paras[i]?.t || "").slice(from0) : paras[i]?.t || "");
-    const FR = (i: number) => (i === p0 ? from0 : 0); const HL = (i: number) => (i === p0 ? P.sermon.hl : undefined);
+    const FR = (i: number) => (i === p0 ? from0 : 0); const HL = (i: number) => (inline ? paras[i]?.hl : i === p0 ? P.sermon.hl : undefined);
     if (kind === "glide") { /* bajada suave: un tercio de pantalla por movimiento de la rueda */
       const st0 = msStepsSrv(TX(pi)); let sc = (P.sc || 0) + d / (Math.max(st0, 1) * 3);
       if (sc > 1.001) { if (pi + 1 >= paras.length) return null; pi++; sc = 0; } else if (sc < -0.001) { if (pi - 1 < 0) return null; pi--; sc = 1; }
@@ -678,7 +682,7 @@ const SERVER = Bun.serve({
         const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
         const BEFORE = PROJ;
         const bib = b.bible && Number.isInteger(b.bible.b) && Number.isInteger(b.bible.c) && Number.isInteger(b.bible.v) ? { b: b.bible.b, c: b.bible.c, v: b.bible.v } : undefined;
-        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 4000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), from: Math.max(0, Math.min(100000, Number(b.sermon.from) || 0)), hl: Array.isArray(b.sermon.hl) ? b.sermon.hl.filter((r: any) => Array.isArray(r) && (r.length === 2 || r.length === 3) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.max(0, Math.floor(+r[0])), Math.min(100000, Math.floor(+r[1])), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : undefined, date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
+        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 8000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), from: Math.max(0, Math.min(100000, Number(b.sermon.from) || 0)), paras: Array.isArray(b.sermon.paras) ? b.sermon.paras.slice(0, 300).map((x: any) => ({ n: str(x?.n, 10), t: str(x?.t, 8000), hl: Array.isArray(x?.hl) ? x.hl.filter((r: any) => Array.isArray(r) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.floor(+r[0]), Math.floor(+r[1]), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : [] })).filter((x: any) => x.t) : undefined, hl: Array.isArray(b.sermon.hl) ? b.sermon.hl.filter((r: any) => Array.isArray(r) && (r.length === 2 || r.length === 3) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.max(0, Math.floor(+r[0])), Math.min(100000, Math.floor(+r[1])), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : undefined, date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
           media: b.media && typeof b.media.id === "string" && medioExists(b.media.id, Math.max(1, Number(b.media.n) || 1)) ? { id: b.media.id, n: Math.max(1, Number(b.media.n) || 1), total: Math.max(1, Number(b.media.total) || 1), title: str(b.media.title, 160) } : undefined,

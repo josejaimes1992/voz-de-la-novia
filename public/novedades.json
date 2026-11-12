@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.6", "fecha": "2026-11-11", "items": [
+    "Citas pegadas en Texto (código y título arriba, luego los párrafos): al tocar Proyectar salen igual que un Mensaje — lectura grande, rueda del mouse, número de párrafo, referencia abajo y escena Biblia/Mensaje de OBS.",
+    "Funciona aunque el texto sea de otra traducción y no coincida con la biblioteca. Las negritas, resaltados y sombreados se respetan."
+  ] },
   { "v": "1.4.5", "fecha": "2026-11-11", "items": [
     "Citas pegadas: reconoce mejor el Mensaje (cualquier guion en el código, o por el título) y cada número de párrafo (112, 113…) como una cita aparte. Si no lo encuentra, te dice por qué.",
     "Cada cita guardada tiene ✏️ Editar: selecciona palabras y ponlas en Resaltar, Negrita o Sombrear, con vista previa de cómo se verá en pantalla.",

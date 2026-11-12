@@ -484,12 +484,26 @@ function pjNotes(){ try{ return JSON.parse(localStorage.getItem('vdn-notes')||'[
 function pjNotesSave(L){ try{ localStorage.setItem('vdn-notes',JSON.stringify(L.slice(0,200))); }catch{} }
 function pjTxt(){ if(!PJ.note) PJ.note={id:'',title:'',text:''}; return PJ.note; }
 function pjTxtSlides(){ return String(pjTxt().text||'').split(/\n\s*\n/).map(x=>x.replace(/\s+$/,'').replace(/^\s*\n/,'')).filter(x=>x.trim()); }
-function pjTxtShow(i){ const n=pjTxt(); const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
+/* Una cita pegada (código + título arriba, luego párrafos) se proyecta igual que el Mensaje:
+   modo lectura, rueda del mouse, referencia abajo, y se ve en la escena Biblia/Mensaje de OBS. */
+function pjCitaParse(text){ const T=String(text||'').replace(/\r/g,'').trim(); if(!T) return null; const lines=T.split('\n'); const h=lines[0];
+  const m=/(?<!\d)(\d{2})\s?[-‐‑‒–—]\s?(\d{4})([A-Za-z]{0,2})/.exec(h); if(!m) return null;
+  const code=`${m[1]}-${m[2]}${(m[3]||'').toUpperCase()}`; const title=(h.slice(0,m.index)+' '+h.slice(m.index+m[0].length)).replace(/^[\s·\-–—:]+|[\s·\-–—:]+$/g,'').replace(/\s+/g,' ').trim();
+  const body=lines.slice(1).join('\n').trim(); if(!body) return null; const paras=[];
+  for(const blk of body.split(/\n\s*\n/)){ let b=blk.trim(); if(!b) continue; let n=''; const nm=/^(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/.exec(b); if(nm){ n=nm[1]; b=b.slice(nm[0].length); }
+    const P=vdnParse(b.replace(/\s*\n\s*/g,' ')); paras.push({n,t:P.t,hl:P.R}); }
+  if(!paras.length) return null; let hh=0; for(const c of code+title+body) hh=(hh*31+c.charCodeAt(0))|0;
+  /* si el Mensaje está en la biblioteca, se usa su título correcto */ const x=(typeof MS!=='undefined'&&MS.list||[]).find(z=>(z.code||'').toUpperCase()===code||(z.code||'').toUpperCase().startsWith(code.slice(0,7)));
+  return {id:'cita-'+(hh>>>0).toString(36),code:x?x.code:code,title:x?x.title:(title||'Mensaje'),place:x?x.place||'':'',paras}; }
+function pjCitaShow(C,i){ const P=C.paras[i]; if(!P) return; pjSend({mode:'text',read:true,title:C.title,text:P.t,num:P.n,label:'Mensaje',ref:`${C.code}\n${C.title}`,sc:0,auto:0,idx:i,total:C.paras.length,songId:null,programId:null,
+  sermon:{id:C.id,p:i,part:0,title:C.title,code:C.code,date:'',place:C.place||'',hl:P.hl,paras:C.paras.map(x=>({n:x.n,t:x.t,hl:x.hl}))}}); }
+function pjTxtShow(i){ const n=pjTxt(); const C=pjCitaParse(n.text); if(C){ /* la cita entera: la diapositiva 0 es el título, así que se empieza en el primer párrafo */ return pjCitaShow(C,Math.max(0,Math.min(C.paras.length-1,i>0?i-1:0))); }
+  const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
 function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();
   return `<div style="padding:8px"><button class="btn pri" data-act="pjt-new" style="width:100%">＋ Nueva nota</button></div>
     <div class="pjw-scroll">${L.length?`<p class="pj-sug-h">Mis notas (${L.length})</p>`+L.map(x=>`<button class="pjw-row${n.id===x.id?' sel':''}" data-act="pjt-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title||x.text.split('\n')[0].slice(0,40)||'Nota')}<small>${esc(x.text.replace(/\s+/g,' ').slice(0,60))}</small></span></button>`).join(''):''}
       <p class="pj-sug-h">Rápidas (un clic y sale en pantalla)</p>${PJ_TXT_QUICK.map(([t,x],i)=>`<button class="pjw-row" data-act="pjt-quick" data-i="${i}"><span class="t" style="text-transform:none">${esc(t)}<small>${esc(x)}</small></span></button>`).join('')}</div>`; }
-function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:-1;
+function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:(r&&r.mode==='text'&&r.sermon&&/^cita-/.test(r.sermon.id||'')?(+r.sermon.p||0)+1:-1);
   return `<section class="pjw-sl"><div class="pjw-h">Texto libre<span class="sp"></span><span style="text-transform:none;letter-spacing:0">Ctrl+Enter proyecta</span></div>
     <div class="pjw-scroll" style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;padding:10px 12px">
       <input id="pjt-title" class="input" placeholder="Título (opcional, no sale en pantalla)" value="${esc(n.title)}">
@@ -586,7 +600,7 @@ function pjDiff(a,b){ const ta=String(a).split(/(\s+)/).filter(x=>x.trim()), tb=
   const paint=(t,ok,cls)=>t.map((w,i)=>ok.has(i)||!pjW(w).length?esc(w):`<mark class="${cls}">${esc(w)}</mark>`).join(' ');
   return {a:paint(ta,okA,'dx-a'),b:paint(tb,okB,'dx-b'),pct:Math.round(100*okA.size/Math.max(1,ta.filter(w=>pjW(w).length).length))}; }
 function pjFoundHtml(){ const F=PJ.found||[]; const M=(PJ.miss||[]).filter(m=>!F.some(f=>(f.code||'').startsWith(m.code.slice(0,7))));
-  const miss=M.map(m=>`<div class="pjf-it warn"><span>⚠ ${m.why==='no'?`Veo el código <b>${esc(m.code)}</b>, pero ese Mensaje no está en tu biblioteca de Mensajes. Revisa el código, o impórtalo en la sección Mensaje.`:m.why==='para'?`Encontré el Mensaje <b>${esc(m.code)} · ${esc(m.title||'')}</b>, pero no ubiqué el párrafo. Escribe el número del párrafo al inicio de la línea (ej. <b>112 Y cuando…</b>).`:`No se pudo abrir el Mensaje <b>${esc(m.code)}</b>. Revisa la conexión.`}</span></div>`).join('');
+  const miss=M.map(m=>`<div class="pjf-it warn"><span>⚠ ${m.why==='no'?`Veo el código <b>${esc(m.code)}</b>, pero ese Mensaje no está en tu biblioteca de Mensajes. Revisa el código, o impórtalo en la sección Mensaje.`:m.why==='para'?`Encontré el Mensaje <b>${esc(m.code)} · ${esc(m.title||'')}</b>, pero tu texto no coincide con su párrafo (puede ser otra traducción). Toca <b>📺 Proyectar</b>: sale tal como lo pegaste, igual que un Mensaje (rueda del mouse, referencia abajo y escena Biblia de OBS).`:`No se pudo abrir el Mensaje <b>${esc(m.code)}</b>. Revisa la conexión.`}</span></div>`).join('');
   if(!F.length) return miss?`<div class="pjf">${miss}</div>`:'';
   return `<div class="pjf">${F.map((c,k)=>{ const warn=c.reqN&&String(c.reqN)!==String(c.n); const open=PJ.cmpK===k; const d=open?pjDiff(c.pasted||'',c.snip||''):null;
     return `<div class="pjf-it${warn?' warn':''}"><span>📜 Es del Mensaje <b>${esc(c.code||'')} · ${esc(c.title)}</b> · Párrafo <b>${esc(c.n)}</b>${c.hl&&c.hl.length?` <small class="pjf-sim ok">✨ ${c.hl.length} resaltado${c.hl.length>1?'s':''}</small>`:''}${c.sim!=null?` <small class="pjf-sim ${c.sim>=0.85?'ok':c.sim>=0.6?'mid':'bad'}">${Math.round(c.sim*100)}% igual</small>`:''}${warn?`<br><small>⚠ Pegaste el párrafo <b>${esc(c.reqN)}</b>, pero en este Mensaje el texto coincide con el <b>${esc(c.n)}</b>. Compara antes de proyectar.</small>`:''}</span>
