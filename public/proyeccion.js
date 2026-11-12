@@ -500,8 +500,10 @@ function pjCitaParse(text){ const T0=String(text||'').replace(/\r/g,'').trim(); 
 function pjCitaShow(C,i){ const P=C.paras[i]; if(!P) return; pjSend({mode:'text',read:true,title:C.title,text:P.t,num:P.n,label:'Mensaje',ref:`${C.code}\n${C.title}`,sc:0,auto:0,idx:i,total:C.paras.length,songId:null,programId:null,
   sermon:{id:C.id,p:i,part:0,title:C.title,code:C.code,date:'',place:C.place||'',hl:P.hl,paras:C.paras.map(x=>({n:x.n,t:x.t,hl:x.hl}))}}); }
 function pjTxtShow(i){ const n=pjTxt(); const C=pjCitaParse(n.text);
-  /* si la cita se ubicó en la biblioteca, se proyecta el Mensaje del sistema (sigue con la rueda por todo el Mensaje) */
-  const F=PJ.found||[]; if(C&&F.length){ const c=F[Math.max(0,Math.min(F.length-1,i>0?i-1:0))]; MS.hlTmp={sid:c.sid,n:c.n,hl:c.hl||[]}; return pjCiteGo(c); }
+  /* La cita se proyecta tal como la mandaste (con tus negritas), sin salir de Texto. Si el sistema la ubicó,
+     se usan el título, lugar y número de párrafo correctos del Mensaje. */
+  const F=PJ.found||[]; if(C&&F.length){ const f0=F[0]; C.code=f0.code||C.code; C.title=f0.title||C.title; C.place=f0.place||C.place;
+    C.paras.forEach((p,k)=>{ const f=F[k]; if(f&&f.sid===f0.sid&&f.n) p.n=String(f.n); }); }
   if(C){ /* la cita entera: la diapositiva 0 es el título, así que se empieza en el primer párrafo */ return pjCitaShow(C,Math.max(0,Math.min(C.paras.length-1,i>0?i-1:0))); }
   const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
 function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();

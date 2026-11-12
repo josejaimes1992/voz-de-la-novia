@@ -1,4 +1,8 @@
 [
+  { "v": "1.4.9", "fecha": "2026-11-11", "items": [
+    "Pegar desde WhatsApp Web ahora sí trae las negritas (se leen del formato propio de WhatsApp).",
+    "Proyectar una cita desde Texto ya no te cambia a la pestaña Mensaje: sale tal como la mandaste, con tus negritas, como lectura (rueda del mouse y referencia abajo). Si el sistema la ubicó, usa el título y número de párrafo correctos."
+  ] },
   { "v": "1.4.8", "fecha": "2026-11-11", "items": [
     "Pegar desde WhatsApp: reconoce las negritas tanto si vienen con *asteriscos* (Copiar del menú del mensaje) como copiadas con formato. Avisa cuántas reconoció.",
     "En Texto eliges si la negrita de WhatsApp sale como ✨ Resaltado (amarillo) o como B Negrita.",
