@@ -144,6 +144,11 @@ function bvMedia(st){ const M=document.getElementById('bv-md'); if(!M) return fa
   return true; }
 function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getElementById('bv-t'), r=document.getElementById('bv-r');
   if(bvMedia(st)){ if(bvKey){ bvKey=''; T.classList.remove('on'); } bmShow(null); return; }
+  /* Texto largo que no es de la Biblia (una nota o un Mensaje pegado en Texto): se muestra como el Mensaje,
+     con el título a la izquierda debajo de la cámara y el texto a la derecha con desplazamiento */
+  if(st&&st.mode==='text'&&!st.sermon&&!st.bible&&!st.media&&String(st.text||'').length>160&&(st.ref||st.title)){
+    const rl=String(st.ref||'').split('\n').map(x=>x.trim()).filter(Boolean); const cm=/(\d{2}-\d{4}[A-Z]?)/.exec(rl.join(' ')||st.title||'');
+    st={...st,sermon:{title:(rl.length>1?rl[rl.length-1]:(rl[0]||st.title||'')).replace(/\d{2}-\d{4}[A-Z]?\s*/,'').trim()||st.title||'',code:cm?cm[1]:'',place:'',date:''}}; }
   if(st&&st.mode==='text'&&st.sermon){ if(bvKey){ bvKey=''; T.classList.remove('on'); } return bmShow(st); } bmShow(null);
   const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
   if(key===bvKey){ if(isB) bvScroll(st); return; } bvKey=key; T.classList.remove('on'); if(!isB) return;

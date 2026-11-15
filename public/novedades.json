@@ -1,4 +1,7 @@
 [
+  { "v": "1.5.1", "fecha": "2026-11-15", "items": [
+    "OBS, escena Biblia: un Mensaje pegado como texto (o cualquier texto largo que no sea Biblia) ahora se ve igual que el Mensaje: título a la izquierda debajo de la cámara y el texto grande a la derecha, desplazándose."
+  ] },
   { "v": "1.5.0", "fecha": "2026-11-15", "items": [
     "OBS, escena Biblia (pantalla dividida): los textos largos ya no se achican hasta letras diminutas. Quedan en un tamaño que se lee bien y se desplazan con la rueda del mouse, Siguiente o la lectura automática, igual que el Mensaje.",
     "Las negritas y resaltados también se ven en esa escena."
