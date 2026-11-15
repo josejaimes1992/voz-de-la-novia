@@ -60,6 +60,8 @@ body.bv #bv{display:block} body.bv #box,body.bv #rd{display:none!important}
 #bv-mi sup{font-size:.55em;color:#f2c94c;margin-right:.3em}
 body.up #bv-mi{text-transform:uppercase}
 #bv-t{font-weight:600;line-height:1.22;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+#bv-t.scroll{overflow:hidden;-webkit-mask-image:linear-gradient(#000 0,#000 82%,transparent);mask-image:linear-gradient(#000 0,#000 82%,transparent)}
+#bv-ts{transition:transform .6s cubic-bezier(.2,.7,.2,1)}
 #bv-r{margin-top:.5em;font-weight:700;color:#f2c94c;text-shadow:0 2px 8px rgba(0,0,0,.6)}
 body.up #bv-t{text-transform:uppercase}
 #dot{position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#e5484d;display:none}
@@ -144,11 +146,20 @@ function bvShow(st){ const T=document.getElementById('bv-txt'), t=document.getEl
   if(bvMedia(st)){ if(bvKey){ bvKey=''; T.classList.remove('on'); } bmShow(null); return; }
   if(st&&st.mode==='text'&&st.sermon){ if(bvKey){ bvKey=''; T.classList.remove('on'); } return bmShow(st); } bmShow(null);
   const isB=st&&st.mode==='text'&&(st.bible||st.ref)&&!st.sermon; const key=isB?st.text+'|'+st.ref:'';
-  if(key===bvKey) return; bvKey=key; T.classList.remove('on'); if(!isB) return;
-  setTimeout(()=>{ t.textContent=String(st.text||'').replace(/\s*\n\s*/g,' '); r.textContent=st.ref||'';
-    let fs=Math.round(document.getElementById('bv').clientHeight*0.075*OPT.t); const H=T.clientHeight; const set=()=>{ t.style.fontSize=fs+'px'; r.style.fontSize=Math.round(fs*.8)+'px'; };
-    set(); let n=0; while((t.offsetHeight+r.offsetHeight+fs*.5)>H&&fs>16&&n++<60){ fs=Math.floor(fs*.95); set(); }
-    T.classList.add('on'); }, bvKey&&T.textContent?200:0); }
+  if(key===bvKey){ if(isB) bvScroll(st); return; } bvKey=key; T.classList.remove('on'); if(!isB) return;
+  setTimeout(()=>{ t.innerHTML='<div id="bv-ts">'+vdnRich(String(st.text||'').replace(/\s*\n\s*/g,' '))+'</div>'; r.textContent=st.ref||''; t.classList.remove('scroll'); t.style.maxHeight='';
+    const BH=document.getElementById('bv').clientHeight; let fs=Math.round(BH*0.075*OPT.t); const H=T.clientHeight; const set=()=>{ t.style.fontSize=fs+'px'; r.style.fontSize=Math.round(fs*.8)+'px'; };
+    /* se achica hasta un tamaño que se lea bien; si aún no entra, en vez de letra diminuta se desplaza (rueda del mouse / Siguiente) */
+    const minFs=Math.round(BH*0.05*OPT.t); set(); let n=0; while((t.offsetHeight+r.offsetHeight+fs*.5)>H&&fs>minFs&&n++<60){ fs=Math.max(minFs,Math.floor(fs*.95)); set(); }
+    if((t.offsetHeight+r.offsetHeight+fs*.5)>H){ t.classList.add('scroll'); t.style.maxHeight=Math.max(fs*3,H-r.offsetHeight-fs*.6)+'px'; }
+    T.classList.add('on'); bvScroll(st,false); }, bvKey&&T.textContent?200:0); }
+/* Desplazar el texto largo de la escena Biblia según la consola (rueda del mouse, Siguiente o lectura automática) */
+let bvAuto=null;
+function bvScroll(st,anim){ const t=document.getElementById('bv-t'), i=document.getElementById('bv-ts'); if(!t||!i) return; cancelAnimationFrame(bvAuto); bvAuto=null;
+  if(!t.classList.contains('scroll')){ i.style.transform=''; return; } const max=()=>Math.max(0,i.scrollHeight-t.clientHeight);
+  const go=(y,a)=>{ i.style.transition=a===false?'none':''; i.style.transform=`translateY(${-Math.max(0,Math.min(max(),y))}px)`; };
+  if(st.auto>0){ let y=(st.sc||0)*max(), last=performance.now(); const sp=st.auto*parseFloat(t.style.fontSize)*0.6; const step=tt=>{ y+=sp*(tt-last)/1000; last=tt; go(y,false); if(y<max()) bvAuto=requestAnimationFrame(step); }; bvAuto=requestAnimationFrame(step); }
+  else requestAnimationFrame(()=>go((st.sc||0)*max(),anim)); }
 /* Cambiar sola de escena en OBS (la fuente necesita "Acceso avanzado a OBS" en Permisos de la página) */
 let scPrev=null, scOn=false;
 function sceneAuto(st){ if(!OPT.scene||OPT.view==='biblia'||!window.obsstudio||!obsstudio.setCurrentScene) return;

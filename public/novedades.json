@@ -1,4 +1,8 @@
 [
+  { "v": "1.5.0", "fecha": "2026-11-15", "items": [
+    "OBS, escena Biblia (pantalla dividida): los textos largos ya no se achican hasta letras diminutas. Quedan en un tamaño que se lee bien y se desplazan con la rueda del mouse, Siguiente o la lectura automática, igual que el Mensaje.",
+    "Las negritas y resaltados también se ven en esa escena."
+  ] },
   { "v": "1.4.9", "fecha": "2026-11-11", "items": [
     "Pegar desde WhatsApp Web ahora sí trae las negritas (se leen del formato propio de WhatsApp).",
     "Proyectar una cita desde Texto ya no te cambia a la pestaña Mensaje: sale tal como la mandaste, con tus negritas, como lectura (rueda del mouse y referencia abajo). Si el sistema la ubicó, usa el título y número de párrafo correctos."
