@@ -498,20 +498,29 @@ function pjCitaParse(text){ const T0=String(text||'').replace(/\r/g,'').trim(); 
   if(!paras.length) return null; let hh=0; for(const c of code+title+body) hh=(hh*31+c.charCodeAt(0))|0;
   /* si el Mensaje está en la biblioteca, se usa su título correcto */ const x=(typeof MS!=='undefined'&&MS.list||[]).find(z=>(z.code||'').toUpperCase()===code||(z.code||'').toUpperCase().startsWith(code.slice(0,7)));
   return {id:'cita-'+(hh>>>0).toString(36),code:x?x.code:code,title:x?x.title:(title||'Mensaje'),place:x?x.place||'':'',paras}; }
-function pjCitaShow(C,i){ const P=C.paras[i]; if(!P) return; pjSend({mode:'text',read:true,title:C.title,text:P.t,num:P.n,label:'Mensaje',ref:`${C.code}\n${C.title}`,sc:0,auto:0,idx:i,total:C.paras.length,songId:null,programId:null,
+function pjCitaBody(body){ const paras=[]; for(const blk of String(body||'').replace(/\r/g,'').split(/\n\s*\n/)){ let b=blk.trim(); if(!b) continue; let n=''; const nm=/^(?:E-)?(\d{1,4})[ \t]*[.)\-–]?[ \t]+(?=\S)/.exec(b); if(nm){ n=nm[1]; b=b.slice(nm[0].length); }
+    const P=vdnParse(b.replace(/\s*\n\s*/g,' ')); paras.push({n,t:P.t,hl:P.R}); } return paras; }
+function pjCitaShow(C,i){ const P=C.paras[i]; if(!P) return; pjSend({mode:'text',read:true,title:C.title,text:P.t,num:P.n,label:C.code?'Mensaje':'Texto',ref:C.code?`${C.code}\n${C.title}`:C.title,sc:0,auto:0,idx:i,total:C.paras.length,songId:null,programId:null,
   sermon:{id:C.id,p:i,part:0,title:C.title,code:C.code,date:'',place:C.place||'',hl:P.hl,paras:C.paras.map(x=>({n:x.n,t:x.t,hl:x.hl}))}}); }
 function pjTxtShow(i){ const n=pjTxt(); const C=pjCitaParse(n.text);
   /* La cita se proyecta tal como la mandaste (con tus negritas), sin salir de Texto. Si el sistema la ubicó,
      se usan el título, lugar y número de párrafo correctos del Mensaje. */
   const F=PJ.found||[]; if(C&&F.length){ const f0=F[0]; C.code=f0.code||C.code; C.title=f0.title||C.title; C.place=f0.place||C.place;
     C.paras.forEach((p,k)=>{ const f=F[k]; if(f&&f.sid===f0.sid&&f.n) p.n=String(f.n); }); }
+  /* Sin encabezado (solo el párrafo pegado): si el sistema lo ubicó en un Mensaje, o si es un texto largo,
+     se proyecta igual en modo lectura para poder bajar con la rueda del mouse */
+  if(!C){ const B=pjCitaBody(n.text); const big=B.length&&(F.length||(B.length===1&&B[0].t.length>260));
+    if(big){ const f0=F[0]||{}; let hh=0; for(const c of n.text) hh=(hh*31+c.charCodeAt(0))|0;
+      B.forEach((p,k)=>{ const f=F[k]; if(f&&f.sid===f0.sid&&f.n) p.n=String(f.n); });
+      const X={id:'cita-_'+(hh>>>0).toString(36),code:f0.code||'',title:f0.title||n.title||'Texto',place:f0.place||'',paras:B};
+      return pjCitaShow(X,Math.max(0,Math.min(B.length-1,i))); } }
   if(C){ /* la cita entera: la diapositiva 0 es el título, así que se empieza en el primer párrafo */ return pjCitaShow(C,Math.max(0,Math.min(C.paras.length-1,i>0?i-1:0))); }
   const sl=pjTxtSlides(); if(!sl[i]) return toast('Escribe algo primero.'); pjSend({mode:'text',title:n.title||'Nota',text:sl[i],label:'Nota',idx:i,total:sl.length,songId:null,programId:null}); }
 function pjTxtLib(){ const L=pjNotes(); const n=pjTxt();
   return `<div style="padding:8px"><button class="btn pri" data-act="pjt-new" style="width:100%">＋ Nueva nota</button></div>
     <div class="pjw-scroll">${L.length?`<p class="pj-sug-h">Mis notas (${L.length})</p>`+L.map(x=>`<button class="pjw-row${n.id===x.id?' sel':''}" data-act="pjt-open" data-id="${esc(x.id)}"><span class="t" style="text-transform:none">${esc(x.title||x.text.split('\n')[0].slice(0,40)||'Nota')}<small>${esc(x.text.replace(/\s+/g,' ').slice(0,60))}</small></span></button>`).join(''):''}
       <p class="pj-sug-h">Rápidas (un clic y sale en pantalla)</p>${PJ_TXT_QUICK.map(([t,x],i)=>`<button class="pjw-row" data-act="pjt-quick" data-i="${i}"><span class="t" style="text-transform:none">${esc(t)}<small>${esc(x)}</small></span></button>`).join('')}</div>`; }
-function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:(r&&r.mode==='text'&&r.sermon&&/^cita-/.test(r.sermon.id||'')?(+r.sermon.p||0)+1:-1);
+function pjTxtCenter(r){ const n=pjTxt(); const sl=pjTxtSlides(); const live=r&&r.mode==='text'&&r.label==='Nota'?r.idx:(r&&r.mode==='text'&&r.sermon&&/^cita-/.test(r.sermon.id||'')?(+r.sermon.p||0)+(/^cita-_/.test(r.sermon.id)?0:1):-1);
   return `<section class="pjw-sl"><div class="pjw-h">Texto libre<span class="sp"></span><span style="text-transform:none;letter-spacing:0">Ctrl+Enter proyecta</span></div>
     <div class="pjw-scroll" id="pjt-scroll" style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;padding:10px 12px">
       <input id="pjt-title" class="input" placeholder="Título (opcional, no sale en pantalla)" value="${esc(n.title)}">

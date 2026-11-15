@@ -1,4 +1,7 @@
 [
+  { "v": "1.5.4", "fecha": "2026-11-15", "items": [
+    "Pestaña Texto: si pegas un solo párrafo del Mensaje (aunque no tenga el código ni el título), se proyecta en modo lectura: baja con la rueda del mouse, con el título del Mensaje si el sistema lo reconoce y con tus resaltados. Los textos largos también se pueden desplazar."
+  ] },
   { "v": "1.5.3", "fecha": "2026-11-15", "items": [
     "El resaltado ahora se ve como un resaltador de verdad: cuadro amarillo transparente detrás de las palabras (en la pantalla, en OBS y en la consola). El sombreado queda como un cuadro claro.",
     "Pestaña Texto: al hacer clic en una diapositiva para proyectarla, la lista se queda donde estaba (ya no salta arriba). Las frases en *asteriscos* se ven resaltadas en la vista previa."
