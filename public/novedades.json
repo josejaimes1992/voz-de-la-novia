@@ -1,4 +1,8 @@
 [
+  { "v": "1.5.2", "fecha": "2026-11-15", "items": [
+    "Nuevo botón “🧪 Modo prueba” en la consola: lo que proyectes (Mensaje, Biblia, citas, medios, alabanzas) se ve en la vista previa y en “Ver en grande”, pero NO sale en la pantalla en vivo ni en OBS.",
+    "Al tocar “Salir de prueba” (o al recargar) todo vuelve a la normalidad."
+  ] },
   { "v": "1.5.1", "fecha": "2026-11-15", "items": [
     "OBS, escena Biblia: un Mensaje pegado como texto (o cualquier texto largo que no sea Biblia) ahora se ve igual que el Mensaje: título a la izquierda debajo de la cámara y el texto grande a la derecha, desplazándose."
   ] },

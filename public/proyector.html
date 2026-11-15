@@ -83,6 +83,8 @@ body.cur .gear{opacity:1}
 </div>
 <div class="dot" id="dot">Reconectando…</div>
 <script>
+const TEST=new URLSearchParams(location.search).get('prueba')==='1'; if(TEST){ document.title='🧪 Prueba — Voz de la Novia'; addEventListener('DOMContentLoaded',()=>{ const b=document.createElement('div'); b.textContent='🧪 PRUEBA'; b.style.cssText='position:fixed;left:12px;top:10px;z-index:99;background:#7c3aed;color:#fff;font:800 13px system-ui,sans-serif;padding:5px 10px;border-radius:999px;opacity:.85'; document.body.appendChild(b); }); }
+
 "use strict";
 const $=s=>document.querySelector(s);
 let cur=null, front='a', ws=null, retry=0, lastKey='';
@@ -186,7 +188,7 @@ function show(st){
 addEventListener('resize',()=>{ document.querySelectorAll('.txt p').forEach(fit); });
 
 function connect(){
-  const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector';
+  const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'+(TEST?'?prueba=1':'');
   try{ ws=new WebSocket(url); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; $('#dot').classList.remove('show'); };
   ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver){ /* hay versión nueva: si está en pantalla completa NO se recarga (se saldría); se actualiza al salir */ if(document.fullscreenElement) window.PEND_RELOAD=true; else location.reload(); } return; } if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
@@ -273,13 +275,13 @@ document.addEventListener('click',async()=>{ $('#hint').classList.add('off'); wa
   full(); });
 function tok(){ try{ const t=localStorage.getItem('vdn-token'); return t&&JSON.parse(t); }catch{ return null; } }
 function nav(d,kind){ const t=tok(); if(!t){ const h=$('#hint'); h.textContent='Para navegar desde aquí, ingresa con tu usuario en la app en esta computadora.'; h.classList.remove('off'); setTimeout(()=>h.classList.add('off'),4000); return; }
-  fetch('/api/proyector/nav',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({d,kind})}).catch(()=>{}); }
+  fetch('/api/proyector/nav'+(TEST?'?prueba=1':''),{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({d,kind})}).catch(()=>{}); }
 document.addEventListener('keydown',e=>{ if(!isFull()&&e.key!=='F11'&&e.key!=='Escape'&&!(e.target.closest&&e.target.closest('input,select,textarea'))) full(); if(e.target.closest&&e.target.closest('input,select,textarea')) return;
   if(e.key==='ArrowDown'||e.key==='PageDown'||e.key===' '){ e.preventDefault(); nav(1,'scroll'); return; }
   if(e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); nav(-1,'scroll'); return; }
   if(e.key==='ArrowRight'){ e.preventDefault(); nav(1,'item'); return; }
   if(e.key==='ArrowLeft'){ e.preventDefault(); nav(-1,'item'); return; } });
-document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); let t=null; try{ t=localStorage.getItem('vdn-token'); t=t&&JSON.parse(t); }catch{} if(t) fetch('/api/proyector/negro',{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); return; } if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
+document.addEventListener('keydown',e=>{ if(e.key==='F9'){ e.preventDefault(); let t=null; try{ t=localStorage.getItem('vdn-token'); t=t&&JSON.parse(t); }catch{} if(t) fetch('/api/proyector/negro'+(TEST?'?prueba=1':''),{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); return; } if(e.key==='f'||e.key==='F') full(); else if(e.key==='p'||e.key==='P') showSetup(); });
 /* Rueda del mouse: baja o sube el texto despacio, con una transición suave */
 let wAcc=0, wT=0, gTarget=null, gRaf=null;
 function glideTo(t){ gTarget=Math.max(0,Math.min(rdMax(),t)); cancelAnimationFrame(rdAuto); rdAuto=null; if(gRaf) return;
@@ -288,7 +290,7 @@ function glideTo(t){ gTarget=Math.max(0,Math.min(rdMax(),t)); cancelAnimationFra
 let scLast=0, scT=null;
 function scReport(final){ const now=Date.now(); if(!final&&now-scLast<300) return; scLast=now; clearTimeout(scT);
   scT=setTimeout(()=>{ let t=null; try{ t=JSON.parse(localStorage.getItem('vdn-token')||'null'); }catch{} if(!t||!cur||!cur.read) return; const max=rdMax(); const sc=max>0?rdOff/max:0;
-    fetch('/api/proyector/sc',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({sc,key:String(cur.text||'').slice(0,40)})}).catch(()=>{}); }, final?0:10); }
+    fetch('/api/proyector/sc'+(TEST?'?prueba=1':''),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({sc,key:String(cur.text||'').slice(0,40)})}).catch(()=>{}); }, final?0:10); }
 document.addEventListener('wheel',e=>{ const L=$('#L-read'); const reading=L&&L.classList.contains('on')&&$('#rd-in').textContent.trim();
   e.preventDefault(); const dy=e.deltaY*(e.deltaMode===1?16:1);
   if(reading){ const max=rdMax(); const base=gRaf?gTarget:rdOff; const next=base+dy*0.45;
@@ -301,7 +303,7 @@ setTimeout(()=>$('#hint').classList.add('off'),6000);
 document.fonts&&document.fonts.ready.then(()=>document.querySelectorAll('.txt p').forEach(fit));
 show({mode:'logo',text:''});
 fetch('/api/proyector/estilo').then(r=>r.json()).then(applyStyle).catch(()=>{});
-fetch('/api/proyector').then(r=>r.json()).then(show).catch(()=>{});
+fetch('/api/proyector'+(TEST?'?prueba=1':'')).then(r=>r.json()).then(show).catch(()=>{});
 connect(); wake();
 loadScreens(false).then(ok=>{ if(ok&&SD.screens.length>1){ const h=$('#hint'); h.textContent=`Toca para proyectar en la pantalla ${selIdx+1} · tecla P para cambiar de pantalla`; h.classList.remove('off'); } else if('getScreenDetails' in window){ const h=$('#hint'); h.textContent='Toca para elegir la pantalla del proyector'; } });
 </script>

@@ -166,6 +166,10 @@ const STATIC: Record<string, string> = { "/acordes.js": "text/javascript; charse
 type Proj = { mode: "text" | "black" | "logo"; media?: any; sub?: number; subs?: number; title: string; text: string; label: string; ref?: string; bible?: any; sermon?: any; read?: boolean; sc?: number; auto?: number; num?: string; songId: string | null; programId: string | null; idx: number; total: number; by: string; at: number };
 let PROJ_PREV: Proj | null = null;
 let PROJ: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() };
+/* Modo prueba: un segundo "proyector" que solo ve quien está probando (no sale en la pantalla en vivo ni en OBS) */
+let PROJ_T: Proj = { mode: "logo", title: "", text: "", label: "", songId: null, programId: null, idx: 0, total: 0, by: "", at: Date.now() }; let PROJ_T_PREV: Proj | null = null;
+const CH_LIVE = { get P() { return PROJ; }, set P(v: Proj) { PROJ = v; }, get prev() { return PROJ_PREV; }, set prev(v: Proj | null) { PROJ_PREV = v; }, pub(full = true) { if (full) pubProj(); else SERVER.publish("proj", JSON.stringify(PROJ)); }, test: false };
+const CH_TEST = { get P() { return PROJ_T; }, set P(v: Proj) { PROJ_T = v; }, get prev() { return PROJ_T_PREV; }, set prev(v: Proj | null) { PROJ_T_PREV = v; }, pub(_full = true) { SERVER.publish("proj-test", JSON.stringify(PROJ_T)); }, test: true };
 /* Biblias: RV1909 (dominio público, en el repositorio) y RVR1960 (cifrada; se abre con BIBLE_KEY) */
 let RVR1960: Uint8Array | null = null;
 try {
@@ -234,8 +238,8 @@ function songSlides(song: any) {
     block.push(ly); }
   flush(); return out;
 }
-async function projNav(d: number, kind: string): Promise<any | null> {
-  const P: any = PROJ; if (P.mode !== "text") return null;
+async function projNav(d: number, kind: string, P0?: any): Promise<any | null> {
+  const P: any = P0 ?? PROJ; if (P.mode !== "text") return null;
   if (P.media?.id) { const n = P.media.n + d; if (n >= 1 && n <= P.media.total && medioExists(P.media.id, n)) return { ...P, media: { ...P.media, n }, idx: n - 1 };
     /* Al terminar un archivo pasa al siguiente (o al anterior) de la lista de Medios */
     const L = (await mediosList(db)).filter((m: any) => m.status !== "converting" && m.status !== "error" && m.pages > 0); const i = L.findIndex((m: any) => m.id === P.media.id); const m = i < 0 ? null : L[i + Math.sign(d)];
@@ -473,10 +477,11 @@ const SERVER = Bun.serve({
         return new Response("Se esperaba WebSocket", { status: 400 });
       }
       if (p === "/ws/proyector") {
-        if (server.upgrade(req)) return undefined as unknown as Response;
+        if (server.upgrade(req, { data: { test: url.searchParams.get("prueba") === "1" } })) return undefined as unknown as Response;
         return new Response("Se esperaba WebSocket", { status: 400 });
       }
-      if (p === "/api/proyector" && req.method === "GET") return json(PROJ);
+      const C = url.searchParams.get("prueba") === "1" ? CH_TEST : CH_LIVE;
+      if (p === "/api/proyector" && req.method === "GET") return json(C.P);
       if (p === "/logo.jpg") return new Response(LOGO, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400" } });
       if (STATIC[p]) return new Response(Bun.file(appPath("./public" + p)), { headers: { "content-type": STATIC[p], "cache-control": "public, max-age=3600" } });
 
@@ -599,7 +604,7 @@ const SERVER = Bun.serve({
         if (!user) return json({ error: "unauthorized" }, 401);
         STYLE = cleanStyle(await req.json().catch(() => ({})));
         await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
-        SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
+        { SERVER.publish("proj", JSON.stringify({ _style: STYLE })); SERVER.publish("proj-style", JSON.stringify({ _style: STYLE })); }
         return json(STYLE);
       }
       /* Logo propio para el botón "Logo" de la pantalla (PNG con transparencia) */
@@ -611,7 +616,7 @@ const SERVER = Bun.serve({
           if (!ok) return json({ error: "not_image" }, 415); } finally { try { unlinkSync(tmp); } catch {} }
         STYLE = cleanStyle({ ...STYLE, logo: `/marca/logo-${id}.png` });
         await db`INSERT INTO docs (col, id, data, updated_at) VALUES ('settings', 'proj-style', ${JSON.stringify(STYLE)}::jsonb, ${Date.now()}) ON CONFLICT (col, id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`;
-        SERVER.publish("proj", JSON.stringify({ _style: STYLE }));
+        { SERVER.publish("proj", JSON.stringify({ _style: STYLE })); SERVER.publish("proj-style", JSON.stringify({ _style: STYLE })); }
         return json(STYLE);
       }
       if (p === "/api/config" && req.method === "GET") return json(CFG);
@@ -650,16 +655,16 @@ const SERVER = Bun.serve({
       if (p === "/api/proyector/nav" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({})); const d = Number(b.d) < 0 ? -1 : 1; const kind = b.kind === "item" ? "item" : b.kind === "glide" ? "glide" : "scroll";
-        const next = await projNav(d, kind); if (!next) return json(PROJ);
-        PROJ = { ...next, src: undefined, by: user.name, at: Date.now() } as any; PROJ_PREV = null; pubProj(); return json(PROJ);
+        const next = await projNav(d, kind, C.P); if (!next) return json(C.P);
+        C.P = { ...next, src: undefined, by: user.name, at: Date.now() } as any; C.prev = null; C.pub(); return json(C.P);
       }
       /* La pantalla del proyector avisa cuánto bajó con la rueda (para que OBS y la consola la sigan) */
       if (p === "/api/proyector/sc" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
-        const b = await req.json().catch(() => ({})); const P: any = PROJ;
+        const b = await req.json().catch(() => ({})); const P: any = C.P;
         if (P.mode !== "text" || !P.read || (b.key && b.key !== String(P.text || "").slice(0, 40))) return json({ ok: false });
         const sc = Math.min(1, Math.max(0, Number(b.sc) || 0)); const steps = msStepsSrv(P.text || "");
-        PROJ = { ...P, sc, auto: 0, glide: true, src: "wheel", sermon: P.sermon ? { ...P.sermon, part: Math.round(sc * steps) } : P.sermon, at: Date.now() } as any; pubProj(); return json({ ok: true });
+        C.P = { ...P, sc, auto: 0, glide: true, src: "wheel", sermon: P.sermon ? { ...P.sermon, part: Math.round(sc * steps) } : P.sermon, at: Date.now() } as any; C.pub(); return json({ ok: true });
       }
       if (p === "/api/proyector/sung") {
         await sungLoad();
@@ -674,31 +679,31 @@ const SERVER = Bun.serve({
       }
       if (p === "/api/proyector/negro" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
-        if (PROJ.mode === "black") PROJ = { ...(PROJ_PREV ?? { ...PROJ, mode: "logo" }), by: user.name, at: Date.now() }, PROJ_PREV = null;
-        else { PROJ_PREV = PROJ; PROJ = { ...PROJ, mode: "black", by: user.name, at: Date.now() }; }
-        SERVER.publish("proj", JSON.stringify(PROJ)); return json(PROJ);
+        if (C.P.mode === "black") C.P = { ...(C.prev ?? { ...C.P, mode: "logo" }), by: user.name, at: Date.now() }, C.prev = null;
+        else { C.prev = C.P; C.P = { ...C.P, mode: "black", by: user.name, at: Date.now() }; }
+        C.pub(false); return json(C.P);
       }
       if (p === "/api/proyector" && req.method === "POST") {
         if (!user) return json({ error: "unauthorized" }, 401);
         const b = await req.json().catch(() => ({}));
         const mode = b.mode === "black" || b.mode === "logo" ? b.mode : "text";
-        const BEFORE = PROJ;
+        const BEFORE = C.P;
         const bib = b.bible && Number.isInteger(b.bible.b) && Number.isInteger(b.bible.c) && Number.isInteger(b.bible.v) ? { b: b.bible.b, c: b.bible.c, v: b.bible.v } : undefined;
-        PROJ = { mode, title: str(b.title, 200), text: str(b.text, 8000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), from: Math.max(0, Math.min(100000, Number(b.sermon.from) || 0)), paras: Array.isArray(b.sermon.paras) ? b.sermon.paras.slice(0, 300).map((x: any) => ({ n: str(x?.n, 10), t: str(x?.t, 8000), hl: Array.isArray(x?.hl) ? x.hl.filter((r: any) => Array.isArray(r) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.floor(+r[0]), Math.floor(+r[1]), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : [] })).filter((x: any) => x.t) : undefined, hl: Array.isArray(b.sermon.hl) ? b.sermon.hl.filter((r: any) => Array.isArray(r) && (r.length === 2 || r.length === 3) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.max(0, Math.floor(+r[0])), Math.min(100000, Math.floor(+r[1])), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : undefined, date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
+        C.P = { mode, title: str(b.title, 200), text: str(b.text, 8000), label: str(b.label, 60), ref: str(b.ref, 200), bible: bib, sermon: b.sermon && typeof b.sermon.id === "string" ? { id: str(b.sermon.id, 80), p: Number(b.sermon.p) || 0, part: Number(b.sermon.part) || 0, title: str(b.sermon.title, 160), code: str(b.sermon.code, 20), from: Math.max(0, Math.min(100000, Number(b.sermon.from) || 0)), paras: Array.isArray(b.sermon.paras) ? b.sermon.paras.slice(0, 300).map((x: any) => ({ n: str(x?.n, 10), t: str(x?.t, 8000), hl: Array.isArray(x?.hl) ? x.hl.filter((r: any) => Array.isArray(r) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.floor(+r[0]), Math.floor(+r[1]), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : [] })).filter((x: any) => x.t) : undefined, hl: Array.isArray(b.sermon.hl) ? b.sermon.hl.filter((r: any) => Array.isArray(r) && (r.length === 2 || r.length === 3) && Number.isFinite(+r[0]) && Number.isFinite(+r[1]) && +r[1] > +r[0]).slice(0, 80).map((r: any) => [Math.max(0, Math.floor(+r[0])), Math.min(100000, Math.floor(+r[1])), /^[hbs]$/.test(String(r[2])) ? String(r[2]) : "h"]) : undefined, date: str(b.sermon.date, 20), place: str(b.sermon.place, 120) } : undefined,
           songId: b.songId ? str(b.songId, 80) : null, programId: b.programId ? str(b.programId, 80) : null,
           read: !!b.read, sc: Math.min(1, Math.max(0, Number(b.sc) || 0)), auto: Math.min(5, Math.max(0, Number(b.auto) || 0)), num: b.num ? str(b.num, 8) : undefined,
           media: b.media && typeof b.media.id === "string" && medioExists(b.media.id, Math.max(1, Number(b.media.n) || 1)) ? { id: b.media.id, n: Math.max(1, Number(b.media.n) || 1), total: Math.max(1, Number(b.media.total) || 1), title: str(b.media.title, 160) } : undefined,
           idx: Number(b.idx) || 0, total: Number(b.total) || 0, sub: Math.min(30, Math.max(0, Number(b.sub) || 0)), subs: Math.min(30, Math.max(0, Number(b.subs) || 0)), by: user.name, at: Date.now() };
         /* Mensaje: completar título, código, fecha y lugar desde el Mensaje guardado (para la ficha de OBS) */
-        const SM: any = (PROJ as any).sermon;
+        const SM: any = (C.P as any).sermon;
         if (SM && (!SM.title || !SM.code || !SM.place)) { try { const r = await db`SELECT data FROM docs WHERE col = 'sermons' AND id = ${SM.id}`; if (r[0]) { const d = parseJ(r[0].data);
           let code = SM.code || d.code || ""; let place = SM.place || d.place || "";
           if (!code) { const t = await metaByTitle(d.title).catch(() => null); if (t) { code = t.code; if (!place) place = t.place || ""; } }
           if (code && !place) { const m = await metaFor(code).catch(() => null); if (m?.place) place = m.place; }
           SM.title = SM.title || d.title || ""; SM.code = code; SM.place = place; SM.date = SM.date || d.date || (/^\d{2}-\d{4}/.test(code) ? `19${code.slice(0, 2)}-${code.slice(3, 5)}-${code.slice(5, 7)}` : ""); } } catch {} }
-        if (mode !== "black") PROJ_PREV = null; else if (BEFORE.mode !== "black") PROJ_PREV = BEFORE;
-        pubProj();
-        return json(PROJ);
+        if (mode !== "black") C.prev = null; else if (BEFORE.mode !== "black") C.prev = BEFORE;
+        C.pub();
+        return json(C.P);
       }
       if (p === "/api/me" && req.method === "GET") {
         if (!user) return json({ user: null });
@@ -1033,9 +1038,9 @@ const SERVER = Bun.serve({
   websocket: {
     idleTimeout: 60,
     sendPings: true,
-    open(ws) { if ((ws.data as any)?.team) { ws.subscribe("team"); return; } ws.subscribe("proj"); ws.send(JSON.stringify({ _ver: BUILD })); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(PROJ)); },
+    open(ws) { if ((ws.data as any)?.team) { ws.subscribe("team"); return; } const T = !!(ws.data as any)?.test; ws.subscribe(T ? "proj-test" : "proj"); if (T) ws.subscribe("proj-style"); ws.send(JSON.stringify({ _ver: BUILD })); ws.send(JSON.stringify({ _style: STYLE })); ws.send(JSON.stringify(T ? PROJ_T : PROJ)); },
     message(ws, msg) { if (msg === "ping") ws.send("pong"); },
-    close(ws) { try { ws.unsubscribe((ws.data as any)?.team ? "team" : "proj"); } catch {} },
+    close(ws) { try { const d: any = ws.data; if (d?.team) ws.unsubscribe("team"); else if (d?.test) { ws.unsubscribe("proj-test"); ws.unsubscribe("proj-style"); } else ws.unsubscribe("proj"); } catch {} },
   },
 });
 console.log("Voz de la Novia escuchando en", Bun.env.PORT ?? 3000);
