@@ -191,7 +191,7 @@ function connect(){
   const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/proyector'+(TEST?'?prueba=1':'');
   try{ ws=new WebSocket(url); }catch{ return later(); }
   ws.onopen=()=>{ retry=0; $('#dot').classList.remove('show'); };
-  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver){ /* hay versión nueva: si está en pantalla completa NO se recarga (se saldría); se actualiza al salir */ if(document.fullscreenElement) window.PEND_RELOAD=true; else location.reload(); } return; } if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
+  ws.onmessage=ev=>{ if(ev.data==='pong') return; try{ const d=JSON.parse(ev.data); if(d._ver){ if(!window.VER) window.VER=d._ver; else if(window.VER!==d._ver){ /* hay versión nueva: si está en pantalla completa NO se recarga (se saldría); se actualiza al salir */ if(document.fullscreenElement){ window.PEND_RELOAD=true; vdnHotCss(); } else location.reload(); } return; } if(d._sung) return; if(d._style) applyStyle(d._style); else show(d); }catch{} };
   ws.onclose=()=>{ $('#dot').classList.add('show'); later(); };
   ws.onerror=()=>{ try{ ws.close(); }catch{} };
 }
@@ -240,6 +240,9 @@ function full(){
 }
 function isFull(){ return !!document.fullscreenElement||(Math.abs(window.innerHeight-screen.height)<=2&&Math.abs(window.innerWidth-screen.width)<=2); }
 function updFs(){ document.body.classList.toggle('fs',!!document.fullscreenElement); document.body.classList.toggle('notfull',!isFull()); }
+/* En pantalla completa no se recarga, pero sí se cambian los estilos nuevos al instante (colores, resaltado…) */
+async function vdnHotCss(){ try{ const h=await (await fetch(location.href,{cache:'no-store'})).text(); const d=new DOMParser().parseFromString(h,'text/html');
+  const n=d.querySelector('head style'), o=document.querySelector('head style'); if(n&&o&&o.textContent!==n.textContent) o.textContent=n.textContent; }catch{} }
 document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&window.PEND_RELOAD) location.reload(); });
 document.addEventListener('fullscreenchange',updFs); window.addEventListener('resize',updFs); setTimeout(updFs,300); setInterval(updFs,3000);
 async function showSetup(){
