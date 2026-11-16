@@ -1,4 +1,7 @@
 [
+  { "v": "1.5.5", "fecha": "2026-11-15", "items": [
+    "El resaltado vuelve a ser como antes: letras amarillas, sin cuadro detrás."
+  ] },
   { "v": "1.5.4", "fecha": "2026-11-15", "items": [
     "Pestaña Texto: si pegas un solo párrafo del Mensaje (aunque no tenga el código ni el título), se proyecta en modo lectura: baja con la rueda del mouse, con el título del Mensaje si el sistema lo reconoce y con tus resaltados. Los textos largos también se pueden desplazar."
   ] },
